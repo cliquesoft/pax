@@ -91,8 +91,8 @@ REPO_TARGET=''											# if the user passed a new target directory as the last
 LIST="$( ( chkBootcode list2 && [ -e "${REPO_PREFIX}/$(getBootcode list2)" ] ) && getBootcode list2 || echo 'optional.list')"		# obtains and tests for the existence of the bootloader 'lst' bootcode value -OR- uses a default otherwise
 FLAG="${LIST%.*}.flag"										# the flag file that blacklists included packages
 MODE="$(TEMP="$(getBootcode mode)"; ( [ "$TEMP" == 'conservative' ] || readlink $REPO_PREFIX | grep -q DATA ) && echo 'link' && exit 0; echo 'copy')"	# the install mode: (sym)link, copy	NOTE: symlink by default if we are in a 'conservative' operation mode -OR- we are using DATA as the source of the repo
-#SCHEMA_PAK='APPNAME.APPTYPE.APPARCH.APPEXTN' (XiniX); APPNAME.APPEXTN (TC)		used as the format for the packages
-#SCHEMA_URL='repo.cliquesoft.org/vanilla/1.1/APPNAME/'; tinycorelinux.net/12.x/APPARCH/tcz/		these variables such as '12.x' can be obtained via config file (e.g. /etc/os-release)
+#SCHEMA_PAK='APPNAME.APPTYPE.APPARCH.APPEXTN' (XiniX); APPNAME.APPEXTN (TC)		used as the format for the package names
+#SCHEMA_URL='repo.cliquesoft.org/vanilla/1.1/APPNAME/'; tinycorelinux.net/12.x/APPARCH/tcz/	just use REPO_REMOTE instead of this		these variables such as '12.x' can be obtained via config file (e.g. /etc/os-release)
 
 # -------------------- DO **NOT** EDIT BELOW THIS LINE --------------------
 
@@ -577,9 +577,18 @@ installPackage() {
 	}
 
 # UNTESTED
-	if [ -e "${DIR_CLOG}/${APPFILE}" ] && [ "$RESTORE" ]; then				# if we are updating the installed package, then...
-		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [restore] [creating]"
-		uninstallPackage || return 1
+# UPDATED 2025/10/08
+#	if [ -e "${DIR_CLOG}/${APPFILE}" ] && [ "$RESTORE" ]; then				# if we are updating the installed package with a restore point, then...
+#		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [restore] [creating]"
+#		uninstallPackage || return 1
+#	if
+	if [ -e "${DIR_CLOG}/${APPFILE}" ]; then						# if we are updating the installed package, then...
+		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [unloading]"
+		unloadPackage || return 1							#   unload the package first no matter what
+		[ "$RESTORE" ] && {
+			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [archiving]"
+			uninstallPackage || return 1						#   if we're creating a restore point, then we need to get rid of the package too
+		}
 	fi
 
 	# since we have to do this step no matter what, lets setup and mount the package now
@@ -592,11 +601,11 @@ installPackage() {
 # UPDATED 2018/07/14 - since TC packages do NOT adhere to this, we need a more robust solution
 #	[ "$APPTYPE" == 'lib' ] && LIBRARIES=TRUE										# if the package has dynamic libraries, then indicate we need to add those to the cache file later
 
-# TEMP CHANGE - this is for TC Compatibility - once we do our own packages, we can get rid of these lines
-	#MARKER="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}${DIR_INST}" 2>/dev/null)"						# NOTE: since XiniX uses different package names than TC, this renames the 'installed marker' to be appropriate; this can be removed once we start adjusting the contents of each package
-	#SCRIPT="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}${DIR_INIT}" 2>/dev/null)"						# same, but with the service script
-MARKER="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}/usr/local/tce.installed" 2>/dev/null)"
-SCRIPT="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}/usr/local/etc/init.d" 2>/dev/null)"
+# TEMP CHANGE - this is for TC Compatibility - use config files to differenciate between distros
+#MARKER="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}/usr/local/tce.installed" 2>/dev/null)"
+#SCRIPT="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}/usr/local/etc/init.d" 2>/dev/null)"
+	MARKER="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}${DIR_INST}" 2>/dev/null)"						# NOTE: since XiniX uses different package names than TC, this renames the 'installed marker' to be appropriate; this can be removed once we start adjusting the contents of each package
+	SCRIPT="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}${DIR_INIT}" 2>/dev/null)"						# same, but with the service script
 
 	# if '-M copy' was passed to this script -OR- the copy *everything* to RAM file exists -OR- the copy all system directories (REPO_OPTION and REPO_SYSTEM) contents to RAM file exists -and- we're using one of those directories, then...
 	if [ "$MODE" == 'copy' ] || [ -e "${REPO_PREFIX}/copy_all.flag" ] || ( [ -e "${REPO_PREFIX}/copy_sys.flag" ] && [ ! "$REPO_TARGET" ] ); then
@@ -682,15 +691,15 @@ SCRIPT="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}/usr/local/etc/init.d" 2>/dev/
 
 		[ "$MARKER" != '' ] && {											# if a marker is included in the package, then...
 			rm "${DIR_INST}/${MARKER}" >>$LOG_ERRS 2>&1								#   remove the symlink created above
-# TEMP CHANGE - this is for TC Compatibility - once we do our own packages, we can get rid of these lines
-			#ln -s$TEMP "${DIR_LOOP}/${APPNAME}.${APPTYPE}/${DIR_INST}/${MARKER}" "${DIR_INST}/${APPNAME}.${APPTYPE}" >>$LOG_ERRS 2>&1	#   re-symlink using the XiniX naming convention
-ln -s$TEMP "${DIR_LOOP}/${APPNAME}.${APPTYPE}/usr/local/tce.installed/${MARKER}" "${DIR_INST}/${APPNAME}.${APPTYPE}" >>$LOG_ERRS 2>&1
+# TEMP CHANGE - this is for TC Compatibility - use config files to differenciate between distros
+#ln -s$TEMP "${DIR_LOOP}/${APPNAME}.${APPTYPE}/usr/local/tce.installed/${MARKER}" "${DIR_INST}/${APPNAME}.${APPTYPE}" >>$LOG_ERRS 2>&1
+			ln -s$TEMP "${DIR_LOOP}/${APPNAME}.${APPTYPE}/${DIR_INST}/${MARKER}" "${DIR_INST}/${APPNAME}.${APPTYPE}" >>$LOG_ERRS 2>&1	#   re-symlink using the XiniX naming convention
 		}
 		[ "$SCRIPT" != '' ] && {											# same with the service script
 			rm "${DIR_INIT}/${SCRIPT}" >>$LOG_ERRS 2>&1
-# TEMP CHANGE - this is for TC Compatibility - once we do our own packages, we can get rid of these lines
-			#ln -s$TEMP "${DIR_LOOP}/${APPNAME}.${APPTYPE}${DIR_INIT}/${SCRIPT}" "${DIR_INIT}/${APPNAME}" >>$LOG_ERRS 2>&1
-ln -s$TEMP "${DIR_LOOP}/${APPNAME}.${APPTYPE}/usr/local/etc/init.d/${SCRIPT}" "${DIR_INIT}/${APPNAME}" >>$LOG_ERRS 2>&1
+# TEMP CHANGE - this is for TC Compatibility - use config files to differenciate between distros
+#ln -s$TEMP "${DIR_LOOP}/${APPNAME}.${APPTYPE}/usr/local/etc/init.d/${SCRIPT}" "${DIR_INIT}/${APPNAME}" >>$LOG_ERRS 2>&1
+			ln -s$TEMP "${DIR_LOOP}/${APPNAME}.${APPTYPE}${DIR_INIT}/${SCRIPT}" "${DIR_INIT}/${APPNAME}" >>$LOG_ERRS 2>&1
 		}
 	fi
 
@@ -785,7 +794,7 @@ unloadPackage() {
 
 
 # Usage syntax: uninstallPackage
-# Overview:	performs the work of the actual removal of the package files (not contents - see unloadPackage()) to a restore point
+# Overview:	performs the work of the actual removal of the package files (not contents - see unloadPackage()), optionally to a restore point
 # Notes:	this should be called after the package has been unloaded first!!!
 # 		the directory containing the file to uninstall should already be entered BEFORE calling this function!
 uninstallPackage() {
@@ -859,6 +868,8 @@ if [ "$1" == '--help' ]; then									# displays ACTION and OPTION help for this
 # LEFT OFF - implement the below
 #	echo '	-e   extract the package(s) contents'
 # LEFT OFF - implement the below; instead of adding the .list files to DIR_CLOG, use 'unsquash -ll | grep *file*' to search all the installed packages
+#		non-db queries will need to download all the manifest files and grep them to find the file
+#		db queries will need to utilize another variable REPO_QUERY specifying the URI of the script to submit the search to
 #	echo '	-f   finds which package a file belongs to'
 #	echo '	-g   '
 #	echo '	-h   '
@@ -875,6 +886,8 @@ if [ "$1" == '--help' ]; then									# displays ACTION and OPTION help for this
 	echo '	-r   restore software from a restore point'					# NOTE: this does not perform any uninstallation of newer running version or installation of the restored version, just restores the software (and deps) to the 'optional' directory (as if the package had just be downloaded)
 # LEFT OFF - implement the below; it's like apt-search; this needs to work with both directory structure and URL submissions
 #	echo '	-s   search the repo to find matches of passed term(s)'
+#		non-db queries will need to download all the manifest files and grep them to find the file
+#		db queries will need to utilize another variable REPO_QUERY specifying the URI of the script to submit the search to
 	echo '	-t   show the dependency trees of the listed package(s)'
 	echo '	-u   unloads the installed package(s)'					# NOTE: use with -U or -P to actually uninstall the package (note this in the NOTES section below)
 	echo "	-v   validate package modes: data, deps"					# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
@@ -888,7 +901,7 @@ if [ "$1" == '--help' ]; then									# displays ACTION and OPTION help for this
 	echo '  OPTIONS:'
 # LEFT OFF - implement
 #	echo '	-A   approval code/key from the server when making purchases'			# so after the software is purchased, the code/key can be passed as authentication to download the software package(s)
-	echo '	-B   indicates we are currently booting the system'			# NOTE: this currently does nothing!!!
+	echo '	-B   indicates we are currently booting the system'			# NOTE: this currently does nothing!!!		UPDATED 2025/10/06 - use this to indicate everything gets installed to root, not /Users/Public or a home directory
 	echo '	-C   specifies an alternative CPU architecture: i32, i64, r32'			# this allows for alternative CPU software downloads		r01 (raspi 0 and 1), r23 (raspi 2 and 3)
 	echo '	-D   sets the directory prefix when installing/unloading packages'		# this can be used to install to / (OS - admin permissions), /Users/.Public (everyone), $HOME (personal) while retaining the bin, sbin, lib, etc structure
 	echo '	-E   obtains any extra package files: all, info, list'				# not installed by default to keep size down
@@ -930,23 +943,24 @@ if [ "$1" == '--help' ]; then									# displays ACTION and OPTION help for this
 	echo "	The PACKAGE(S) value can be a file, directory, or list of packages."
 	echo
 	echo '  EXAMPLES:'
-# LEFT OFF - update the below comments with the updated switches above
+	echo '	Install a package:'
+	echo "	     ${0##*/} -i nano[.i32.bin.soft] [/path/to/local/file]"
 	echo '	Install packages from a file:'
 	echo "	     ${0##*/} -i /path/to/package.list"
+	echo '	Install a specific version:'
+	echo "	     ${0##*/} -i -V 1.2.3 nano[.i32.bin.soft] [/path/to/local/file]"
 	echo '	Make a package for distribution:'
 	echo "	     ${0##*/} -m nano /path/to/package[/source]"				# if there is a .make file, then it will compile from source code too
 	echo '	Only download a package from the repo:'
 	echo "	     ${0##*/} -d nano[.i32.bin.soft]"
-	echo '	Install a package:'
-	echo "	     ${0##*/} -i nano[.i32.bin.soft] [/path/to/local/file]"
-	echo '	Install a specific version:'
-	echo "	     ${0##*/} -i -V 1.2.3 nano[.i32.bin.soft] [/path/to/local/file]"
-	echo '	Update a package:'
-	echo "	     ${0##*/} -i -{F|R} nano[.i32.bin.soft]"
+	echo '	Update a package with optional restore point:'
+	echo "	     ${0##*/} -i [-R] nano[.i32.bin.soft]"
 	echo '	Unload a package:'
 	echo "	     ${0##*/} -u nano[.i32.bin.soft]"
 	echo '	Uninstall a package:'
-	echo "	     ${0##*/} -u -p nano[.i32.bin.soft]"
+	echo "	     ${0##*/} -u nano[.i32.bin.soft]"
+	echo '	Uninstall a package, purging configs too:'
+	echo "	     ${0##*/} -u -P nano[.i32.bin.soft]"
 	exit 0
 elif [ "$1" == '--version' ]; then
 	head -10 $(which pax) | grep ^'# updated' | sed "s/.*\\t//;s/ .*//;s:/:.:g"
@@ -1220,7 +1234,13 @@ for RAWFILE in $@; do
 			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [copy]"
 			copyPackage || exitGracefully 1
 		elif [ "$INSTALL" ]; then							# if we're installing package(s), then...
-			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [install]"
+			if [ -e "${DIR_CLOG}/${APPFILE}" ]; then						# if we are updating the installed package, then...
+# UPDATED 2025/10/08
+#			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [install]"
+			( [ "$SILENT" ] || [ "$QUIET" ] ) || {
+				[ ! -e "${DIR_CLOG}/${APPFILE}" ] && echo -n " [install]"
+				[ -e "${DIR_CLOG}/${APPFILE}" ] && echo -n " [update]"
+			}
 			installPackage || exitGracefully 1
 		elif [ "$RESTORE" ]; then							# if we're restoring package(s), then...
 			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [restore]"
@@ -1303,7 +1323,7 @@ exitGracefully 0
 #LEFT OFF
 # 'sudo pax -v data compiletc' does not work
 
-# ask where to install: system (/), everyone (/Users/Public/.{bin|sbin|lib|...}), personal (/Users/$USER/.{bin|sbin|lib|...})
+# ask where to install: system (/), everyone (/Users/Public/.{bin|sbin|lib|...}), personal (/Users/$USER/.{bin|sbin|lib|...})		NOTE: there are no sbin's any more; also /Users/Public is for system-wide usage WITHOUT having elevated installation credentials (compared to system installations to /)
 #	how do we address where to install during boot?		maybe utilize .list files for this?
 
 # file	description
