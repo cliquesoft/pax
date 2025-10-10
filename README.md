@@ -8,11 +8,28 @@
 	larger set of TODO, the below is a priority short-list.
 
 		TODO
-			o make package naming generic using schemas
-			o implement package building using 'builder'
-			o enable database queries alongside filenames
-			o optional automated package update checks
-			o add permission checks before installations
+		- make package naming generic using schemas
+		- implement package building using 'builder'
+		- enable database queries alongside filenames
+		- optional automated package update checks
+		- add permission checks before installations
+
+	WARNING: currently this software is limited in use to only XiniX or
+	TinyCore (using a config file) Linux distros. We will expand beyond
+	this in time - patches are welcomed from the community to expedite
+	this timeline.
+
+
+
+
+# [FOR THE IMPATIENT]
+
+	To Install:
+		1. cd /path/to/pax
+		2. sudo cp ./pax /bin
+
+	To Use:
+		1. pax --help
 
 
 
@@ -23,15 +40,15 @@
 	this script was able to pack quite a bit in! Here's a short list of
 	some rather robust actions that can be performed:
 
-		o Can install files to storage/RAM or link to read-only package contents
-		o Copying packages to another folder or (portable storage) device
-		o Create a software package, optionally compiling in the process
-		o Creates restore points allowing restoration of software packages
+		o Install or (read-only) link package contents to filesystem
+		o Copying packages to another folder or (storage) device
+		o Create a software package, with optionally compiling
+		o Create restore points allowing for restoration
 		o List package dependency tree
 		o Installation of version specific packages
 		o Unload installed packages
 		o Validate package data integrity and dependency tree
-		o Can proxy the installation of software from an offline device to an online device
+		o Can proxy installation from offline to online device
 
 
 
@@ -40,20 +57,28 @@
 
 	Install a package:
 	     pax -i nano[.i32.bin.soft] [/path/to/local/file]
+
 	Install packages from a file:
 	     pax -i /path/to/package.list
+
 	Install a specific version:
 	     pax -i -V 1.2.3 nano[.i32.bin.soft] [/path/to/local/file]
+
 	Make a package for distribution:
 	     pax -m nano /path/to/package[/source]
+
 	Only download a package from the repo:
 	     pax -d nano[.i32.bin.soft]
+
 	Update a package with optional restore point:
 	     pax -i [-R] nano[.i32.bin.soft]
+
 	Unload a package:
 	     pax -u nano[.i32.bin.soft]
+
 	Uninstall a package:
 	     pax -u nano[.i32.bin.soft]
+
 	Uninstall a package, purging configs too:
 	     pax -u -P nano[.i32.bin.soft]
 
