@@ -1,0 +1,16 @@
+2025/10/08
+- Updated the update action to unload the package before uninstalling it
+- Updated terminal output when updating a package
+
+2025/10/21
+- Added blank/no file or package name checking
+- Implemented the -e action
+- Added dynamic file extensions for broader compatibility (via EXT_* vars)
+- Moved the config file reading to right before the parameter processing
+  and allowed for XSB (~/.etc/pax) and LSB (~/.pax) checking
+- Updated the --help output
+- Added the checkBootcode() and getBootcode() functions to remove dependency
+  on /etc/software/SYSTEM/FUNCTIONS to broaden application to other distros
+- Created the etc/tc.conf sample configuration file
+- Renamed delDependency() to deleteDependency() for consistency
+
