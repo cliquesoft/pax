@@ -14,3 +14,10 @@
 - Created the etc/tc.conf sample configuration file
 - Renamed delDependency() to deleteDependency() for consistency
 
+2025/10/22
+- Updated the --help output
+- Implemented the '-f' action
+- Implemented the '-T' option
+- Merged the -P and -U options
+- Started replacing APP* variables with PAK_*
+
