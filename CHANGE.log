@@ -21,3 +21,13 @@
 - Merged the -P and -U options
 - Started replacing APP* variables with PAK_*
 
+2025/10/23
+- Merged -U option with -u action
+- Converted -L to be a negation
+- Updated to accept full package names as parameters instead of just the
+  shorthand version (e.g. bash.i32.bin.soft vs bash)
+- Updated splitName() to work with the PAK_* variables
+- Tested and resolved bugs with the -m action
+- Implemented the -N option
+- Fixed several bugs with the -X option
+- Updated the --help output
