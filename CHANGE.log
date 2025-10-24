@@ -31,3 +31,8 @@
 - Implemented the -N option
 - Fixed several bugs with the -X option
 - Updated the --help output
+
+2025/10/24
+- Replaced '-u remove' with '-u delete'
+- Started to implement the '-O' option
+
