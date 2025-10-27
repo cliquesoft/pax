@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/10/24 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/10/27 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -48,14 +48,6 @@
 #	dependency.i64.bin.soft						package requires this dependency (any version)
 #	dependency.i32.lib.soft[1.2.3]					package requires the stated version of this dependency and will install it beside any other version; useful for software requiring different lib versions (e.g. sdl)
 #	[dependency.r64.drv.soft|optional.i64.bin.soft]			package can optionally install this dependency if the device also has 'optional' installed
-#
-#   Outstanding (LEFT OFF)
-#	dependency.i32.lib.soft[1.2.3-2.3.1]				package requires within this range of version numbers of this dependency
-#	dependency.i32.lib.soft[>1.2.3] or [1.2.3+]			package requires a version greater than or equal to stated of this dependency
-#	dependency.i32.lib.soft[<1.2.3] or [1.2.3-]			package requires a version less or equal to than stated of this dependency
-#	dependency.i32.lib.soft[=1.2.3] or [1.2.3!]	(implemented)	package requires this exact version of this dependency and will fail if not currently installed; useful for upgrading web.de themes to make sure web.de itself is at a certain version for compatibility
-#	dependency.i64.bin.soft|dependency2.i64.bin.soft|...		package requires any of these dependencies (e.g. thttpd,apache,paged,...)	NOTE: should be in order of preference by OEM; (e.g. TC - size to keep overall size of system down)
-#	dependency.i64.bin.soft{file1,file2,file3,...}			package requires only certain files from the dependency
 
 
 
@@ -172,29 +164,62 @@ exitGracefully() {
 }
 
 
-# Usage syntax: show TYPE MESSAGE NEWLINE TARGET (screen,log,both)
-# Overview:	displays output to the screen in the desired format
+# Usage syntax: showMsg TYPE MESSAGE [TARGET] [SAMELINE] [MULTITAG] [TRIM] [HEADER]
+# Overview:	sends message to the target in the desired format
 # Parameters:
-# TYPE		[string] the type of the message: success, failure
+# TYPE		[string] the type of the message: success, failure, *
+#		[ NOTE ]
+#			 the * represents whatever you pass as the value becomes the XML tag (e.g. 'step' becomes <step>...</step>)
+#			 the * has no effect for plain text
+#			 a blank value is also permitted, which doesn't print any tags with XML, and no prefix for plain text
+#			 a value of 'HEADER' will also print the XML header and not include the message in XML tags
 # MESSAGE	[string] the message to display/store
-# NEWLINE	[boolean][optional] if the prompt needs to go to the next line (default=yes)
 # TARGET	[string] [optional] the target output: both, log, screen (default)
-show() {
+# SAMELINE	[boolean][optional] if the prompt needs to stay on the next line (default=no)	NOTE: a '1' indicates to open an XML tag, whereas a '2' closes it
+# MULTITAG	[boolean][optional] if multi-line (e.g. containing CR's) need to be treated as individual XML tags (default=no)
+#		[ NOTE ] would turn this:	line 1		into this:	<TYPE>line 1</TYPE>
+#						line 2				<TYPE>line 2</TYPE>
+#			 A value of '2' indicates top open a parent XML tag, whereas a '3' closes it
+# TRIM		[boolean][optional] if the output needs to be trimmed (default=no)
+# HEADER	[boolean][optional] if the XML header needs to be shown (default=yes when TYPE={success|failure}, no otherwise)
+showMsg() {
 	local PREFIX=''
 	local SUFFIX=''
 	local TYPE=''
-	[ "$1" = 'failure' ] && TYPE='ERROR: '
+	local MSG="$2"
+	local TARGET='screen'
+	local SAMELINE=''
+	local MULTITAG=0
+	local TRIM=0
+	local HEADER=0
 
+	# DEFINE DEFAULT VALUES
+	[ "$3" ] && TARGET="$3"
+	[ "$4" ] && [ $4 -eq 1 ] && SAMELINE="n"
+	[ "$5" ] && MULTITAG=$5
+	[ "$6" ] && TRIM=$6
+	[ "$7" ] && HEADER=$7
+	[ ! "$7" ] && ( [ "$1" = 'success' ] || [ "$1" = 'failure' ] ) && HEADER=1		# if we were NOT passed a header value, but TYPE={success|failure}, then include it, retain 0 otherwise
+
+	# MAKE VARIABLE CHANGES
+	[ "$1" = 'failure' ] && TYPE='ERROR: '							# this needs to execute regardless of OUTPUT value since this is for the logs
+
+	# OUTPUT TO LOG
+	[ "$TARGET" != 'screen' ] && echo -e${SAMELINE} "${TYPE}${2}" >>"$LOG_ERRS"		# writes to log if value is: both, log		NOTE: we use $2 instead of $MSG to prevent '<br />' contamination
+	( [ "$SILENT" ] || [ "$QUIET" ] ) && return 1						# if we need to be quiet or silent, then no visual, but write to log if desired
+
+	# ADJUST MESSAGE AND OUTPUT TO SCREEN
 	if [ "$OUTPUT" = 'text' ]; then
-#		local SUFFIX=''
-#		case "$1" in
-#			'success') local TYPE='' ;;
-#			'failure') local TYPE='ERROR: ' ;;
-#		esac
+		[ $MULTITAG -eq 4 ] && return 1
+
 		[ "$1" = 'failure' ] && PREFIX='ERROR: '
+		[ "$TARGET" != 'log' ] && echo -e${SAMELINE} "${PREFIX}${MSG}${SUFFIX}"		# writes to screen if value is: both, screen
 	elif [ "$OUTPUT" = 'xml' ]; then
-		echo -e 'Content-Type: text/xml; charset=utf-8'
-		echo -e "<?xml version='1.0' encoding='UTF-8'?>\n\n"
+#		[ "$OUTPUT" != 'success' ] && [ "$OUTPUT" != 'failure' ] && {
+		[ $HEADER -gt 0 ] && {
+			echo -e 'Content-Type: text/xml; charset=utf-8'
+			echo -e "<?xml version='1.0' encoding='UTF-8'?>\n\n"
+		}
 
 		case "$1" in
 			'success')
@@ -205,15 +230,37 @@ show() {
 				PREFIX='<f><msg>'
 				SUFFIX='</msg></f>'
 				;;
+			''|'HEADER')								# if no tags are to be displayed (e.g. the MESSAGE contains them)
+				PREFIX=''
+				SUFFIX=''
+				;;
+			*)	PREFIX="<$1>"
+				SUFFIX="</$1>"
+			
 		esac
 
-		2=$(echo "$2" | sed 's|\\n|<br />|g')		# replace any CR's with <br />'s
-	fi
-	[ "$3" ] && local NEWLINE="$3" || local NEWLINE=''
-	[ "$4" ] && local TARGET="$4" || local TARGET='screen'
+		TEMP=
+		[ $MULTITAG -eq 3 ] && TEMP='\t'
+		if [ $TRIM -eq 0 ]; then							# if we're leaving the output untrimmed, then...
+			[ $MULTITAG -eq 0 ] && MSG="$(echo "$MSG" | sed ':a;N;$!ba;s|\n|<br />|g')"		# replace any CR's with <br />'s		https://stackoverflow.com/questions/1251999/how-can-i-replace-each-newline-n-with-a-space-using-sed
+			[ $MULTITAG -gt 0 ] && MSG="$(echo "$MSG" | sed ":a;N;\$!ba;s|\n|${SUFFIX}\n${TEMP}${PREFIX}|g")"
+		else										# otherwise, apply trimmer efforts
+			[ $MULTITAG -eq 0 ] && MSG="$(echo "$MSG" | sed 's|^\s*||;:a;N;$!ba;s|\n|<br />|g')"
+			[ $MULTITAG -gt 0 ] && MSG="$(echo "$MSG" | sed "s|^\s*||;:a;N;\$!ba;s|\n\s*|${SUFFIX}\n${TEMP}${PREFIX}|g")"
+		fi
 
-	[ "$TARGET" != 'screen' ] && echo -e${NEWLINE} "${TYPE}${2}" >>"$LOG_ERRS"		# writes to log if value is: both, log
-	[ "$TARGET" != 'log' ] && echo -e${NEWLINE} "${PREFIX}${2}${SUFFIX}"			# writes to screen if value is: both, screen
+		# OUTPUT DEPENDING ON SAMELINE VALUE
+		( ( [ ! "$4" ] || [ $4 -eq 0 ] ) && [ $MULTITAG -eq 0 ] ) && echo -e "${PREFIX}${MSG}${SUFFIX}"
+		( ( [ "$4" ] && [ $4 -eq 1 ] ) || [ $MULTITAG -eq 1 ] || [ $MULTITAG -eq 2 ] ) && echo -e${SAMELINE} "${PREFIX}${MSG}"
+		( ( [ "$4" ] && [ $4 -eq 2 ] ) || [ $MULTITAG -eq 1 ] || [ $MULTITAG -eq 3 ] ) && echo -e "${MSG}${SUFFIX}"
+
+#		( ( [ "$4" ] && [ $4 -eq 1 ] ) || [ $MULTITAG -eq 3 ] ) && echo -e${SAMELINE} "${PREFIX}${MSG}"
+	fi
+
+# MOVED 2025/10/27 - this needed to be split and moved above
+#	[ "$TARGET" != 'screen' ] && echo -e${SAMELINE} "${TYPE}${2}" >>"$LOG_ERRS"		# writes to log if value is: both, log		NOTE: we use $2 instead of $MSG to prevent '<br />' contamination
+#	( [ "$SILENT" ] || [ "$QUIET" ] ) && return 1						# if we need to be quiet or silent, then no visual, but write to log if desired
+#	[ "$TARGET" != 'log' ] && echo -e${SAMELINE} "${PREFIX}${MSG}${SUFFIX}"			# writes to screen if value is: both, screen
 }
 
 
@@ -996,7 +1043,10 @@ MODE="$(TEMP="$(getBootcode mode)"; ( [ "$TEMP" = 'conservative' ] || readlink $
 # LOAD VARIABLE PERSONALIZATION
 
 [ -e "${DIR_CONF}/config" ] && . "${DIR_CONF}/config"						# overwrite any of the variables set above by reading in a global config file
-[ -e "${HOME}/.${DIR_CONF:1}/config" ] && . "${HOME}/.${DIR_CONF:1}/config"			# same using a personalized config file - using XSB
+# UPDATED 2025/10/25 - dash as sh threw errors
+#[ -e "${HOME}/.${DIR_CONF:1}/config" ] && . "${HOME}/.${DIR_CONF:1}/config"			# same using a personalized config file - using XSB
+#[ -e "${HOME}/.${DIR_CONF##*/}/config" ] && . "${HOME}/.${DIR_CONF##*/}/config"			# same using a personalized config file - using LSB
+[ -e "${HOME}/.$(echo "${DIR_CONF}" | tail -c +2)/config" ] && . "${HOME}/.$(echo "${DIR_CONF}" | tail -c +2)/config"			# same using a personalized config file - using XSB
 [ -e "${HOME}/.${DIR_CONF##*/}/config" ] && . "${HOME}/.${DIR_CONF##*/}/config"			# same using a personalized config file - using LSB
 
 
@@ -1004,14 +1054,14 @@ MODE="$(TEMP="$(getBootcode mode)"; ( [ "$TEMP" = 'conservative' ] || readlink $
 
 # SCRIPT PARAMETER PROCESSING
 
-if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this module
+if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this script
 	echo
 	echo " This script provides package management for a Linux distro that currently does"
 	echo " not have this functionality, or is interested in switching from its existing"
 	echo " implementation. The packages created and used by this system can be copied out"
 	echo " or mounted and linked-to using the read-only and compact squashfs file system."
 	echo
-	echo "  Usage: ${0##*/} ACTION [OPTIONS] PACKAGE(S) [DIRECTORY]"
+	echo "  Usage: ${0##*/} [OPTIONS] ACTION PACKAGE(S) [DIRECTORY]"
 	echo
 	echo '  ACTIONS:'
 # LEFT OFF - implement the below; so for example say we are using the frame buffer and upgrade to Xorg, the drivers package for the device will have the Xorg driver as an optional dependency that would now be installed with this action
@@ -1075,7 +1125,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-M   defines the package install mode: copy, link (default)'		# old '-R' > new '-M copy'		NOTE: if the OS is run from RAM, then the 'copy' value will copy into RAM, if it is on a disk, then it copies to the disk
 	echo '	-N   do NOT install all files in the package, just those specified'		# allows users to install desired file(s) from a package so all the contents don't get installed (to keep the system as small as possible); keeps attack vector to a minimum
 # LEFT OFF - implement the 'html' and 'xml' values
-	echo '	-O   defines the way output is displayed: none, text (default)'		# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
+	echo '	-O   defines the way output is displayed: none, text (default), xml'		# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
 # UPDATED 2025/10/22 - merged -P with -U
 #	echo '	-P   purges all files of the uninstalled packages including configs'		# data ALWAYS is retained though! (e.g. mysql databases)
 #	echo '	-P   '
@@ -1113,6 +1163,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	The '-I' OPTION value must be comma separated."
 	echo "	The '-L', '-M', and '-V' OPTIONS can only be used with the '-i' ACTION."
 	echo "	The '-N' OPTION takes a comma separated list of filenames."
+	echo "	The '-O' OPTION should always be the first parameter (to catch init errs)"
 	echo "	The '-S' OPTION can take a directory or URL as its value."
 # UPDATED 2025/10/22 - merged -P with -U
 #	echo "	The '-P' and '-U' OPTIONS can only be used with the '-u' ACTION and"
@@ -1151,28 +1202,44 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	     ${0##*/} -u purge nano[.i32.bin.soft]"
 	echo
 	exit 0
-elif [ "$1" = '--version' ]; then
-	head -10 $(which pax) | grep ^'# updated' | sed "s/.*\\t//;s/ .*//;s:/:.:g"
+elif [ "$1" = '--version' ] || [ "$3" = '--version' ]; then			# so a user can do 'pax -O xml --version'
+# UPDATED 2025/10/25
+#	head -10 $(which pax) | grep ^'# updated' | sed "s/.*\\t//;s/ .*//;s:/:.:g"
+	if [ $# -gt 1 ]; then							# if we were passed more than just the '--version' option, it has to be '-O', so...
+		if [ "$2" != 'none' ] && [ "$2" != 'text' ] && [ "$2" != 'xml' ]; then						# validate the passed '-O' value
+			[ "$SILENT" ] || echo "ERROR: you must supply a proper value to the -O option." | tee -a "$LOG_ERRS"	# NOTE: we can't use showMsg() yet because we don't have it's value, so...
+			exit 1
+		fi
+		OUTPUT=$2													# set that value to use from now on
+	fi
+	TEMP=$(head -10 $0 | grep ^'# updated' | sed "s/.*\\t//;s/ .*//;s:/:.:g")
+	showMsg 'success' "$TEMP"
 	exit 0
 else
-	while getopts BcC:dD:eE:f:FiI:JK:lLmM:N:OQr:RS:tT:u:v:VW:X: OPTION; do			# NOTE: the 'V:' indicates that the '-V' parameter requires a value!
+	while getopts BcC:dD:eE:f:FiI:JK:lLmM:N:O:Qr:RS:tT:u:v:VW:X: OPTION; do			# NOTE: the 'V:' indicates that the '-V' parameter requires a value!
 		case ${OPTION} in
 			B) BOOTING=TRUE ;;
 			c) COPY=TRUE ;;
 			C) ( echo ${OPTARG} | grep -q -e ^'i32'$ -e ^'i64'$ -e ^'r32'$ ) || {
-				[ "$SILENT" ] || echo "ERROR: you must supply a CPU architecture to the -C option." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/25
+#				[ "$SILENT" ] || echo "ERROR: you must supply a CPU architecture to the -C option." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a CPU architecture to the -C option." 'both'
 				exit 1
 			   }
 			   CPU="$OPTARG" ;;
 			d) DOWNLOAD=TRUE ;;
 			D) ( echo ${OPTARG} | grep -q ^'/' ) || {
-				[ "$SILENT" ] || echo "ERROR: you must supply an absolute path to the -D option." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/25
+#				[ "$SILENT" ] || echo "ERROR: you must supply an absolute path to the -D option." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide an absolute path to the -D option." 'both'
 				exit 1
 			   }
 			   PREFIX="$OPTARG" ;;
 			e) EXTRACT=TRUE ;;
 			E) if [ "$OPTARG" != 'all' ] && [ "$OPTARG" != 'info' ] && [ "$OPTARG" != 'list' ]; then
-				[ "$SILENT" ] || echo "ERROR: you must supply a valid file to the -E option." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/25
+#				[ "$SILENT" ] || echo "ERROR: you must supply a valid file to the -E option." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a valid file to the -E option." 'both'
 				exit 1
 			   fi
 			   EXTRA="$OPTARG" ;;
@@ -1180,13 +1247,17 @@ else
 			F) FORCE=TRUE ;;
 			i) INSTALL=TRUE ;;
 			I) ( echo ${OPTARG:0:1} | grep -q ^[0-9a-zA-Z] ) || {
-				[ "$SILENT" ] || echo "ERROR: you must supply a comma separated list to the -I option." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: you must supply a comma separated list to the -I option." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a comma separated list to the -I option." 'both'
 				exit 1
 			   }
 			   IGNORE="$OPTARG" ;;
 			J) ONLY=TRUE ;;
 			K) ( echo ${OPTARG:0:1} | grep -q ^[0-9] ) || {
-				[ "$SILENT" ] || echo "ERROR: you must supply a kernel name to the -K option." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: you must supply a kernel name to the -K option." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a kernel name to the -K option." 'both'
 				exit 1
 			   }
 			   KERNEL="$OPTARG" ;;
@@ -1214,8 +1285,12 @@ else
 			   CYAN="\e[1;36m"
 			   WHITE="\e[1;37m"
 
-			   printf "${WHITE}%-30s %-4s %-32s %-11s\n" "Name" "Type" "              Hash" "  Version"
-			   printf "%30s %4s %32s %11s\n" "------------------------------" "----" "--------------------------------" "-----------"
+			   if [ "$OUTPUT" = 'text' ]; then
+				printf "${WHITE}%-30s %-4s %-32s %-11s\n" "Name" "Type" "              Hash" "  Version"
+				printf "%30s %4s %32s %11s\n" "------------------------------" "----" "--------------------------------" "-----------"
+			   elif [ "$OUTPUT" = 'xml' ]; then
+			   	showMsg 'HEADER' "<s>\n   <xml>\n"
+			   fi
 
 # UPDATED 2025/10/22 - no longer using APP* variables
 #			   for FILE in $(ls -1 "$DIR_CLOG" 2>/dev/null | grep 'soft'$); do		# NOTE: using 'grep' prevents directory from being part of FILE
@@ -1231,50 +1306,76 @@ else
 					*-gir*) TYPE='gir' ;;
 					*) TYPE='bin' ;;
 				esac
-				printf "${NORMAL}%-30s %-49s\n" "$FILE" "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} ] && cat ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} | grep ^'Description:' | sed 's/Description:[ \t]*//')"
-				printf "%-30s ${BLUE}%-4s ${DARKGREY}%-32s ${BLUE}%-11s${NORMAL}\n" ' ' "$TYPE" "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_HASH} ] && sed 's/ .*//' ${DIR_CLOG}/${PAK_FILE}.${EXT_HASH})" "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} ] && cat ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} | grep ^'Version:' | sed 's/Version:[ \t]*//')"
+				if [ "$OUTPUT" = 'text' ]; then
+					printf "${NORMAL}%-30s %-49s\n" "$FILE" "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} ] && cat ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} | grep ^'Description:' | sed 's/Description:[ \t]*//')"
+					printf "%-30s ${BLUE}%-4s ${DARKGREY}%-32s ${BLUE}%-11s${NORMAL}\n" ' ' "$TYPE" "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_HASH} ] && sed 's/ .*//' ${DIR_CLOG}/${PAK_FILE}.${EXT_HASH})" "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} ] && cat ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} | grep ^'Version:' | sed 's/Version:[ \t]*//')"
+				elif [ "$OUTPUT" = 'xml' ]; then
+					showMsg '' '	<package>'
+					showMsg 'file' "$FILE"
+					showMsg 'type' "$TYPE"
+					showMsg 'version' "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} ] && cat ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} | grep ^'Version:' | sed 's/Version:[ \t]*//')"
+					showMsg 'hash' "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_HASH} ] && sed 's/ .*//' ${DIR_CLOG}/${PAK_FILE}.${EXT_HASH})"
+					showMsg 'description' "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} ] && cat ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} | grep ^'Description:' | sed 's/Description:[ \t]*//')"
+					showMsg '' '	</package>'
+				fi
 			   done
-			   echo -e "${NORMAL}"
+			   [ "$OUTPUT" = 'text' ] && echo -e "${NORMAL}"
+			   [ "$OUTPUT" = 'xml' ] && showMsg '' "   <xml>\n</s>\n"
 			   exit 0
 			   ;;
 			L) NOLIST=TRUE ;;
 			m) MAKE=TRUE ;;
 			M) if [ "$OPTARG" != 'copy' ] && [ "$OPTARG" != 'link' ]; then
-				[ "$SILENT" ] || echo "ERROR: you must supply a proper mode type to the -M option." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: you must supply a proper mode type to the -M option." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a proper mode type to the -M option." 'both'
 				exit 1
 			   fi
 			   MODE="$OPTARG" ;;
 			N) FILELIST="$OPTARG" ;;
-			O) if [ "$OPTARG" != 'none' ] && [ "$OPTARG" != 'text' ]; then
-				[ "$SILENT" ] || echo "ERROR: you must supply a proper value to the -O option." | tee -a "$LOG_ERRS"
+			O) if [ "$OPTARG" != 'none' ] && [ "$OPTARG" != 'text' ] && [ "$OPTARG" != 'xml' ]; then
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: you must supply a proper value to the -O option." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a proper value to the -O option." 'both'
 				exit 1
 			   fi
-			   [ "$OPTARG" = 'none' ] && SILENT=TRUE ;;
+			   [ "$OPTARG" = 'none' ] && SILENT=TRUE
+			   OUTPUT=$OPTARG ;;
 # MERGED 2025/10/22 - this was merged with -U
 #			P) PURGE=2 ;;
 			Q) QUIET=TRUE ;;
 			r) ( echo ${OPTARG:0:1} | grep -q ^[0-9] ) || {
-				[ "$SILENT" ] || echo "ERROR: you must supply a restore date to the -r action." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: you must supply a restore date to the -r action." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a restore date to the -r action." 'both'
 				exit 1
 			   }
 			   RESTORE="$OPTARG" ;;
 			R) RESTORE=TRUE ;;
 			S) if ( echo $OPTARG | grep -q ^'http' ) || ( echo $OPTARG | grep -q ^'ftp' ) || ( echo $OPTARG | grep -q ^'/' ) || ( echo $OPTARG | grep -q ^'./' ); then
-				[ "$SILENT" ] || echo "ERROR: you must supply a directory or http/ftp URI to the -S option." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: you must supply a directory or http/ftp URI to the -S option." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a directory or http/ftp URI to the -S option." 'both'
 				exit 1
 			   fi
 			   REPO_SOURCE="$OPTARG" ;;
-			t) echo "Dependency trees for package(s)..."
+# UPDATED 2025/10/26
+#			t) echo "Dependency trees for package(s)..."
+			t) showMsg '' "Dependency trees for package(s)..."
 			   TREE=TRUE ;;
 			T) if [ "$OPTARG" != 'bin' ] && [ "$OPTARG" != 'dev' ] && [ "$OPTARG" != 'doc' ] && [ "$OPTARG" != 'drv' ] && [ "$OPTARG" != 'gir' ] && [ "$OPTARG" != 'lib' ] && [ "$OPTARG" != 'loc' ]; then
-				[ "$SILENT" ] || echo "ERROR: the specified value to the -T option is invalid." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: the specified value to the -T option is invalid." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a proper value to the -T option." 'both'
 				exit 1
 			   fi
 			   TYPE="$OPTARG" ;;
 # UPDATED 2025/10/23 - merged with -U
 #			u) UNLOAD=TRUE ;;
 			u) if [ "$OPTARG" != 'unload' ] && [ "$OPTARG" != 'delete' ] && [ "$OPTARG" != 'purge' ]; then
-				[ "$SILENT" ] || echo "ERROR: the specified value to the -u action is invalid." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: the specified value to the -u action is invalid." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a proper value to the -u action." 'both'
 				exit 1
 			   fi
 			   UNLOAD=TRUE
@@ -1288,18 +1389,24 @@ else
 # UPDATED 2025/10/22
 #			   PURGE=1 ;;
 			v) if [ "$OPTARG" != 'data' ] && [ "$OPTARG" != 'deps' ]; then
-				[ "$SILENT" ] || echo "ERROR: you must supply a proper mode type to the -v action." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: you must supply a proper mode type to the -v action." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a proper mode to the -v action." 'both'
 				exit 1
 			   fi
 			   VALIDATE="$OPTARG" ;;
 			V) ( echo ${OPTARG:0:1} | grep -q ^[0-9] ) || {
-				[ "$SILENT" ] || echo "ERROR: you must supply a version number to the -V option." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: you must supply a version number to the -V option." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a version number to the -V option." 'both'
 				exit 1
 			   }
 			   VERSION="$OPTARG" ;;
 			W) ALL=TRUE ;;
 			X) ( echo ${OPTARG} | grep -q ^'/' ) || {
-				[ "$SILENT" ] || echo "ERROR: you must supply a device mount point to the -X option." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#				[ "$SILENT" ] || echo "ERROR: you must supply a device mount point to the -X option." | tee -a "$LOG_ERRS"
+				showMsg 'failure' "You must provide a device mount point to the -X option." 'both'
 				exit 1
 			   }
 			   proxyAction
@@ -1324,7 +1431,9 @@ elif [ ! "$FIND" ]; then									# we're not finding a file (since none of these
 
 	# WARNING: this MUST come before the directory processing!!!
 	if [ "$TEMP" = "$0" ]; then								# if a blank or null value was given for the package name (since the 'shift' command will go back to $0), then...
-		echo "ERROR: you must provide a file or package name before processing can begin." | tee -a "$LOG_ERRS"; 
+# UPDATED 2025/10/26
+#		echo "ERROR: you must provide a file or package name before processing can begin." | tee -a "$LOG_ERRS";
+		showMsg 'failure' "You must provide a file or package name before processing can begin." 'both'
 		exit 1
 	elif [ -f "$1" ] && [ ! "$(echo $1 | grep -e ${EXT_SOFT}$)" ]; then			# check if the PACKAGE(S) value was actually passed as a text file -AND- is NOT a package name (ending with the EXT_SOFT extension)	NOTE: can't check for mime type since busybox doesn't have a 'file' applet
 		[ "$1" = "$TEMP" ] && TEMP=''							#   if the PACKAGE(S) value is the last passed value, then erase the TEMP value to avoid directory processing below
@@ -1335,12 +1444,16 @@ elif [ ! "$FIND" ]; then									# we're not finding a file (since none of these
 	fi
 
 	if [ "$MAKE" ] && ( ( echo "$1" | grep -q ^'/' ) || ( echo "$1" | grep -q ^'./' ) ); then
-		[ "$SILENT" ] || echo "ERROR: you must supply a package name with the -m action." | tee -a "$LOG_ERRS"
+# UPDATED 2025/10/26
+#		[ "$SILENT" ] || echo "ERROR: you must supply a package name with the -m action." | tee -a "$LOG_ERRS"
+		showMsg 'failure' "You must provide a package name with the -m action." 'both'
 		exit 1
 	fi
 
 	if [ ! -d "$TEMP" ] && ( echo $TEMP | grep -q '/' ); then				# if a directory was actually passed (via the presence of '/' characters), but doesn't exist then...
-		[ "$SILENT" ] || echo "ERROR: the passed file or directory does not exist (${TEMP})." | tee -a "$LOG_ERRS"	#   NOTE: this is shown to the screen and logged on purpose!
+# UPDATED 2025/10/26
+#		[ "$SILENT" ] || echo "ERROR: the passed file or directory does not exist (${TEMP})." | tee -a "$LOG_ERRS"	#   NOTE: this is shown to the screen and logged on purpose!
+		showMsg 'failure' "The passed file or directory does not exist (${TEMP})." 'both'
 		exit 1
 	elif [ -d "$TEMP" ] && ( echo $TEMP | grep -q '/' ); then				# otherwise, overwrite the default TCEDIR value (if a directory was passed, indicated via the presense of '/')
 		if [ "$1" = "$TEMP" ]; then							# if the last passed value (the DIRECTORY) is also the PACKAGE(S) value, then a directory needs to be processed as the 'list'...
@@ -1377,50 +1490,82 @@ TEMP=''												# make sure this value is not contaminating anything
 # check the variable values
 # UPDATED 2025/10/22 - the -f action does NOT supply a package name
 #[ ! "$1" ] && { [ "$SILENT" ] || echo "ERROR: you must provide a PACKAGE name." | tee -a "$LOG_ERRS"; exit 1; }
-[ ! "$1" ] && [ ! "$FIND" ] && { [ "$SILENT" ] || echo "ERROR: you must provide a PACKAGE name." | tee -a "$LOG_ERRS"; exit 1; }
-[ ! "$2" ] && [ "$MAKE" ] && { [ "$SILENT" ] || echo "ERROR: you must provide a directory to package." | tee -a "$LOG_ERRS"; exit 1; }
-[ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$EXTRACT" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$MAKE" ] && [ ! "$RESTORE" ] && [ ! "$TREE" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { [ "$SILENT" ] || echo "ERROR: you must provide an ACTION." | tee -a "$LOG_ERRS"; exit 1; }
-[ ! -d "$REPO_PREFIX" ] && [ "$MAKE" ] && { [ "$SILENT" ] || echo "ERROR: the directory storing the package contents does NOT exist." | tee -a "$LOG_ERRS"; exit 1; }
-[ ! -d "$REPO_PREFIX" ] && [ ! "$MAKE" ] && { [ "$SILENT" ] || echo "ERROR: the package storage root directory does NOT exist." | tee -a "$LOG_ERRS"; exit 1; }
-[ ! -d "$REPO_OPTION" ] && [ ! "$MAKE" ] && ( mkdir -p "$REPO_OPTION" || { [ "$SILENT" ] || echo "ERROR: the package storage directory could NOT be created." | tee -a "$LOG_ERRS"; exit 1; } )
-[ "$MAKE" ] && [ "$(echo $REPO_PREFIX | head -c 1)" != '/' ] && { [ "$SILENT" ] || echo "ERROR: you must include the full path (not relative) when creating a package." | tee -a "$LOG_ERRS"; exit 1; }
-[ "$RESTORE" ] && [ ! -e "${REPO_RESTOR}/${RESTORE}" ] && { [ "$SILENT" ] || echo "ERROR: the passed path is not a valid restore point." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/26
+#[ ! "$1" ] && [ ! "$FIND" ] && { [ "$SILENT" ] || echo "ERROR: you must provide a PACKAGE name." | tee -a "$LOG_ERRS"; exit 1; }
+#[ ! "$2" ] && [ "$MAKE" ] && { [ "$SILENT" ] || echo "ERROR: you must provide a directory to package." | tee -a "$LOG_ERRS"; exit 1; }
+#[ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$EXTRACT" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$MAKE" ] && [ ! "$RESTORE" ] && [ ! "$TREE" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { [ "$SILENT" ] || echo "ERROR: you must provide an ACTION." | tee -a "$LOG_ERRS"; exit 1; }
+#[ ! -d "$REPO_PREFIX" ] && [ "$MAKE" ] && { [ "$SILENT" ] || echo "ERROR: the directory storing the package contents does NOT exist." | tee -a "$LOG_ERRS"; exit 1; }
+#[ ! -d "$REPO_PREFIX" ] && [ ! "$MAKE" ] && { [ "$SILENT" ] || echo "ERROR: the package storage root directory does NOT exist." | tee -a "$LOG_ERRS"; exit 1; }
+#[ ! -d "$REPO_OPTION" ] && [ ! "$MAKE" ] && ( mkdir -p "$REPO_OPTION" || { [ "$SILENT" ] || echo "ERROR: the package storage directory could NOT be created." | tee -a "$LOG_ERRS"; exit 1; } )
+#[ "$MAKE" ] && [ "$(echo $REPO_PREFIX | head -c 1)" != '/' ] && { [ "$SILENT" ] || echo "ERROR: you must include the full path (not relative) when creating a package." | tee -a "$LOG_ERRS"; exit 1; }
+#[ "$RESTORE" ] && [ ! -e "${REPO_RESTOR}/${RESTORE}" ] && { [ "$SILENT" ] || echo "ERROR: the passed path is not a valid restore point." | tee -a "$LOG_ERRS"; exit 1; }
+[ ! -d "$REPO_PREFIX" ] && { showMsg 'failure' "The package storage directory does not exist." 'both'; exit 1; }
+[ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$EXTRACT" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$MAKE" ] && [ ! "$RESTORE" ] && [ ! "$TREE" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { showMsg 'failure' "You must provide an ACTION when executing this script." 'both'; exit 1; }
+[ ! "$FIND" ] && [ ! "$1" ] && { showMsg 'failure' "You must provide a package name before processing can begin." 'both'; exit 1; }
+[ ! "$MAKE" ] && [ ! -d "$REPO_OPTION" ] && ( mkdir -p "$REPO_OPTION" || { showMsg 'failure' "The optional package storage directory could not be created." 'both'; exit 1; } )
+[ "$MAKE" ] && [ ! "$2" ] && { showMsg 'failure' "You must provide a directory to package before processing can begin." 'both'; exit 1; }
+[ "$MAKE" ] && [ "$(echo "$REPO_PREFIX" | head -c 1)" != '/' ] && { showMsg 'failure' "The full, not relative, path must be included when creating a package." 'both'; exit 1; }
+[ "$RESTORE" ] && [ ! -e "${REPO_RESTOR}/${RESTORE}" ] && { showMsg 'failure' "The provided path does not contain any valid restore points." 'both'; exit 1; }
 
 # check the directories
 if [ ! -d "${DIR_CLOG}" ]; then
-	mkdir -p "${DIR_CLOG}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The init script directory (DIR_CLOG) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#	mkdir -p "${DIR_CLOG}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The init script directory (DIR_CLOG) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+	mkdir -p "${DIR_CLOG}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The catalog directory (DIR_CLOG) does not exist and could not be created." 'both'; exit 1; }
 fi
-touch "${DIR_CLOG}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The init script directory (DIR_CLOG) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#touch "${DIR_CLOG}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The init script directory (DIR_CLOG) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+touch "${DIR_CLOG}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The catalog directory (DIR_CLOG) is not writable." 'both'; exit 1; }
 rm "${DIR_CLOG}/writable" >>"$LOG_ERRS" 2>&1
 
 if [ ! -d "${DIR_INIT}" ]; then
-	mkdir -p "${DIR_INIT}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The init script directory (DIR_INIT) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#	mkdir -p "${DIR_INIT}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The init script directory (DIR_INIT) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+	mkdir -p "${DIR_INIT}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The init script directory (DIR_INIT) does not exist and could not be created." 'both'; exit 1; }
 fi
-touch "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The init script directory (DIR_INIT) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#touch "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The init script directory (DIR_INIT) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+touch "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The init script directory (DIR_INIT) is not writable." 'both'; exit 1; }
 rm "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1
 
 if [ ! -d "${DIR_INST}" ]; then
-	mkdir -p "${DIR_INST}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The installed cache directory (DIR_INST) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#	mkdir -p "${DIR_INST}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The installed cache directory (DIR_INST) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+	mkdir -p "${DIR_INST}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The installed cache directory (DIR_INST) does not exist and could not be created." 'both'; exit 1; }
 fi
-touch "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The installed cache directory (DIR_INST) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#touch "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The installed cache directory (DIR_INST) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+touch "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The installed cache directory (DIR_INST) is not writable." 'both'; exit 1; }
 rm "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1
 
 if [ ! -d "${DIR_LOGS}" ]; then
-	mkdir -p "${DIR_LOGS}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The logs directory (DIR_LOGS) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#	mkdir -p "${DIR_LOGS}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The logs directory (DIR_LOGS) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+	mkdir -p "${DIR_LOGS}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The logs directory (DIR_LOGS) does not exist and could not be created." 'both'; exit 1; }
 fi
-touch "${DIR_LOGS}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The logs directory (DIR_LOGS) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#touch "${DIR_LOGS}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The logs directory (DIR_LOGS) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+touch "${DIR_LOGS}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The logs directory (DIR_LOGS) is not writable." 'both'; exit 1; }
 rm "${DIR_LOGS}/writable" >>"$LOG_ERRS" 2>&1
 
 if [ ! -d "${DIR_LOOP}" ]; then
-	mkdir -p "${DIR_LOOP}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The mounting directory (DIR_LOOP) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#	mkdir -p "${DIR_LOOP}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The mounting directory (DIR_LOOP) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+	mkdir -p "${DIR_LOOP}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The mounting directory (DIR_LOOP) does not exist and could not be created." 'both'; exit 1; }
 fi
-touch "${DIR_LOOP}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The mounting directory (DIR_LOOP) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#touch "${DIR_LOOP}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The mounting directory (DIR_LOOP) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+touch "${DIR_LOOP}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The mounting directory (DIR_LOOP) is not writable." 'both'; exit 1; }
 rm "${DIR_LOOP}/writable" >>"$LOG_ERRS" 2>&1
 
 if [ ! -d "${DIR_TEMP}" ]; then
-	mkdir -p "${DIR_TEMP}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The temp directory (DIR_TEMP) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#	mkdir -p "${DIR_TEMP}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The temp directory (DIR_TEMP) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+	mkdir -p "${DIR_TEMP}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The temp directory (DIR_TEMP) does not exist and could not be created." 'both'; exit 1; }
 fi
-touch "${DIR_TEMP}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The temp directory (DIR_TEMP) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/10/27
+#touch "${DIR_TEMP}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The temp directory (DIR_TEMP) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+touch "${DIR_TEMP}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The temp directory (DIR_TEMP) is not writable." 'both'; exit 1; }
 rm "${DIR_TEMP}/writable" >>"$LOG_ERRS" 2>&1
 
 
@@ -1449,22 +1594,34 @@ for RAWFILE in $@; do
 #	[ $DEBUG -gt 0 ] && echo -e "body:\n\tAPPFILE :${APPFILE}:\n\tAPPHEAD :${APPHEAD}:\n\tAPPNAME :${APPNAME}:\n\tAPPARCH :${APPARCH}:\n\tAPPTYPE :${APPTYPE}:\n\tAPPEXTN :${APPEXTN}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:" >>"$LOG_DBUG"
 	[ $DEBUG -gt 0 ] && echo -e "body:\n\tPAK_FILE :${PAK_FILE}:\n\tPAK_NAME :${PAK_NAME}:\n\tEXT_SOFT :${EXT_SOFT}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:" >>"$LOG_DBUG"
 
+# showMsg TYPE MESSAGE [TARGET] [SAMELINE] [MULTITAG] [TRIM] [HEADER]
+
 	if [ "$EXTRACT" ]; then									# if we are extracting a packages contents, then...
-		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "Extracting the '${PAK_NAME}' package:"
+# UPDATED 2025/10/27
+#		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "Extracting the '${PAK_NAME}' package:"
+		showMsg 'action' "Extracting the '${PAK_NAME}' package:" 'screen' 1 0 0 1
 		[ ! "$REPO_TARGET" ] && REPO_TARGET='./'					# if no directory was passed, then set the current directory as the target
 		unsquashfs -f -d "$REPO_TARGET" ${PAK_FILE}.${EXT_SOFT} 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 1
-		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo " [done]"
+# UPDATED 2025/10/27
+#		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo " [done]"
+		showMsg 'action' " [done]" 'screen' 2 1
 		continue
 	elif [ "$FIND" ]; then									# if we are finding a file in an installed package, then...
-		cd "${REPO_SYSTEM}" >/dev/null 2>>"$LOG_ERRS"					#   change into the first repo location to check for the files
+		showMsg 'action' "Searching for '${RAWFILE}' in packages..." 'screen' 0 0 0 1
+cd /tmp
+#		cd "${REPO_SYSTEM}" >/dev/null 2>>"$LOG_ERRS"					#   change into the first repo location to check for the files
 		for FILE in $(ls -1 *.${EXT_SOFT}); do
 			[ $(stat -c %s $FILE) -eq 0 ] && continue				#   skip all 0 byte files (since they can just be placeholders); this really shouldn't come into play in this location, but better safe than sorry
 			unsquashfs -ll $FILE | tail -n +5 | grep -v ^d | sed 's:.*/::' | grep -q "$RAWFILE" && {
-				echo $FILE
-				unsquashfs -ll $FILE | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$RAWFILE"
+# UPDATED 2025/10/27
+#				echo $FILE
+#				unsquashfs -ll $FILE | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$RAWFILE"
+				showMsg 'package' "$FILE" 'screen' 0 0
+				showMsg 'matches' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$RAWFILE")" 'screen' 0 1 1
+#				showMsg 'package' "" 'screen' 0 4
 			}
 		done
-
+exit 0
 		if [ "$REPO_OPTION" != "$REPO_SYSTEM" ]; then					#   if there are separate repo's for packages (e.g. XiniX and not TC), then...
 			cd "${REPO_OPTION}" >/dev/null 2>>"$LOG_ERRS"				#	change into the optional repo location to further check for the files
 			for FILE in $(ls -1 *.${EXT_SOFT}); do
@@ -1745,16 +1902,23 @@ exitGracefully 0
 #instituting EXT_* vars, left off @ split name()
 #	use TYPE for APPTYPE (since that's set via switches)
 
+#
+#   Outstanding (LEFT OFF)
+#	dependency.i32.lib.soft[1.2.3-2.3.1]				package requires within this range of version numbers of this dependency
+#	dependency.i32.lib.soft[>1.2.3] or [1.2.3+]			package requires a version greater than or equal to stated of this dependency
+#	dependency.i32.lib.soft[<1.2.3] or [1.2.3-]			package requires a version less or equal to than stated of this dependency
+#	dependency.i32.lib.soft[=1.2.3] or [1.2.3!]	(implemented)	package requires this exact version of this dependency and will fail if not currently installed; useful for upgrading web.de themes to make sure web.de itself is at a certain version for compatibility
+#	dependency.i64.bin.soft|dependency2.i64.bin.soft|...		package requires any of these dependencies (e.g. thttpd,apache,paged,...)	NOTE: should be in order of preference by OEM; (e.g. TC - size to keep overall size of system down)
+#	dependency.i64.bin.soft{file1,file2,file3,...}			package requires only certain files from the dependency
+
+
+
 
 #builer
 #- expand -i to take 'root' (/etc/builder/...) or 'home' (~/.etc/builder/...)
 #- get script to check in XSB and LSB directories
 
 
-
-#fxwm
-#- maybe gedit window is not getting removed from "array" when it gets closed so it stays in listing
-#- see about modifying the index of focused window when a child window is closed
 
 
 # 'sudo pax -v data compiletc' does not work

@@ -36,3 +36,7 @@
 - Replaced '-u remove' with '-u delete'
 - Started to implement the '-O' option
 
+2025/10/27
+- Continued implementing the '-O' option
+- Continued replacing APP* variables with PAK_*
+
