@@ -179,7 +179,7 @@ exitGracefully() {
 # MULTITAG	[boolean][optional] if multi-line (e.g. containing CR's) need to be treated as individual XML tags (default=no)
 #		[ NOTE ] would turn this:	line 1		into this:	<TYPE>line 1</TYPE>
 #						line 2				<TYPE>line 2</TYPE>
-#			 A value of '2' indicates top open a parent XML tag, whereas a '3' closes it
+#			 A value of '2' indicates top open a parent XML tag, whereas a '4' closes it; '3' indicates children
 # TRIM		[boolean][optional] if the output needs to be trimmed (default=no)
 # HEADER	[boolean][optional] if the XML header needs to be shown (default=yes when TYPE={success|failure}, no otherwise)
 showMsg() {
@@ -250,9 +250,18 @@ showMsg() {
 		fi
 
 		# OUTPUT DEPENDING ON SAMELINE VALUE
-		( ( [ ! "$4" ] || [ $4 -eq 0 ] ) && [ $MULTITAG -eq 0 ] ) && echo -e "${PREFIX}${MSG}${SUFFIX}"
-		( ( [ "$4" ] && [ $4 -eq 1 ] ) || [ $MULTITAG -eq 1 ] || [ $MULTITAG -eq 2 ] ) && echo -e${SAMELINE} "${PREFIX}${MSG}"
-		( ( [ "$4" ] && [ $4 -eq 2 ] ) || [ $MULTITAG -eq 1 ] || [ $MULTITAG -eq 3 ] ) && echo -e "${MSG}${SUFFIX}"
+[ $MULTITAG -eq 2 ] && SUFFIX=''
+[ $MULTITAG -eq 3 ] && PREFIX="${TEMP}${PREFIX}"
+[ $MULTITAG -eq 4 ] && PREFIX=''
+		( [ ! "$4" ] || [ $4 -eq 0 ] ) && echo -e "${PREFIX}${MSG}${SUFFIX}"
+		[ "$4" ] && [ $4 -eq 1 ] && echo -e${SAMELINE} "${PREFIX}${MSG}"
+		[ "$4" ] && [ $4 -eq 2 ] && echo -e "${MSG}${SUFFIX}"
+
+
+#		( ( [ ! "$4" ] || [ $4 -eq 0 ] ) && [ $MULTITAG -eq 0 ] ) && echo -e "${PREFIX}${MSG}${SUFFIX}"
+#		( ( [ "$4" ] && [ $4 -eq 1 ] ) || [ $MULTITAG -eq 1 ] || [ $MULTITAG -eq 2 ] ) && echo -e${SAMELINE} "${PREFIX}${MSG}"
+#		( ( [ "$4" ] && [ $4 -eq 2 ] ) || [ $MULTITAG -eq 1 ] || [ $MULTITAG -eq 3 ] ) && echo -e "${MSG}${SUFFIX}"
+# LEFT OFF - i need to pull MULTITAG out of the above 3 statments and figure out a better want to add in the PREFIX and SUFFIX
 
 #		( ( [ "$4" ] && [ $4 -eq 1 ] ) || [ $MULTITAG -eq 3 ] ) && echo -e${SAMELINE} "${PREFIX}${MSG}"
 	fi
@@ -1616,9 +1625,9 @@ cd /tmp
 # UPDATED 2025/10/27
 #				echo $FILE
 #				unsquashfs -ll $FILE | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$RAWFILE"
-				showMsg 'package' "$FILE" 'screen' 0 0
-				showMsg 'matches' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$RAWFILE")" 'screen' 0 1 1
-#				showMsg 'package' "" 'screen' 0 4
+				showMsg 'package' "$FILE" 'screen' 0 2
+				showMsg 'matches' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$RAWFILE")" 'screen' 0 3 1
+				showMsg 'package' "" 'screen' 0 4
 			}
 		done
 exit 0
