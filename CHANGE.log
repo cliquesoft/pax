@@ -40,3 +40,11 @@
 - Continued implementing the '-O' option
 - Continued replacing APP* variables with PAK_*
 
+2025/10/28
+- Removed file logging in initial steps (since it may not be possible yet)
+- Expanded showMsg() to show variations in XML output
+- Updated exitGracefully() to use showMsg()
+- Continued implementing the '-O' option
+- Continued replacing APP* variables with PAK_*
+- Updated config files to use FILE_SCHEMA instead of PAK_FILE
+
