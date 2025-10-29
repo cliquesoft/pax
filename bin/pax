@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/10/28 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/10/29 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -93,8 +93,6 @@ REPO_OPTION="${REPO_PREFIX}/optional"								# WARNING: this needs to reference 
 REPO_SYSTEM="${REPO_PREFIX}/system"								# if any dependency package(s) are not found in the (modified) REPO_OPTION, then check the 'base' location
 REPO_RESTOR="/var/cache/Software/restore"
 REPO_REMOTE='http://repo.cliquesoft.org/vanilla/1.0'						# the source to obtain remote packages from when installing/downloading -AND- the target directory when copying
-REPO_SOURCE=''											# if the user passed a new source via -S
-REPO_TARGET=''											# if the user passed a new target directory as the last passed parameter
 
 # -------------------- DO **NOT** EDIT BELOW THIS LINE --------------------
 
@@ -113,6 +111,7 @@ INDEX=0												# since no arrays can be used in this shell, this keeps track
 TOTAL=0												# keeps track of the $DEP 'array' size
 EXEID="${DIR_TEMP}/$(mktemp -u XXXXXX)"								# stores a temp execution ID (for use with (un)installing)
 OUTPUT='text'											# the output format to display: none, text, xml
+XML=''												# used to store XML until there's a final success/failure
 
 CPU="$(uname -m 2>>"$LOG_ERRS" | sed -r 's/i386|i686/i32/;s/x86_64/i64/;s/armv7l/r32/')"	# this can be used so the .deps files can be universal (like KERNEL below) - bash.CPU.bin.soft
 TYPE='bin'											# the package type: bin dev doc drv gir lib loc	  NOTE: we're specifying the default value here
@@ -120,8 +119,10 @@ TEMP=''												# used to store information temporarily
 KERNEL="$(uname -r 2>>"$LOG_ERRS" | sed 's/-/_/g')"						# store the currently used kernel version (substituting '-' for '_')
 #LATEST=							< LEFT OFF - this can be used so the latest version of a branch can be downloaded (e.g. pax -i apache -V 2.2.LATEST)
 
-PAK_FILE=''											# the full filename of the package (e.g. nano.bin.i32.soft); value set automatically below
-PAK_NAME=''											# the isolated name of the package (e.g. nano.bin.i32.soft > nano); value set automatically below
+PAK_FILE=''			# update to FILENAME						# the full filename of the package (e.g. nano.bin.i32.soft); value set automatically below
+PAK_NAME=''			# update to PACKAGE						# the isolated name of the package (e.g. nano.bin.i32.soft > nano); value set automatically below
+REPO_SOURCE=''			# consolidate to DIRECTORY					# if the user passed a new source via -S
+REPO_TARGET=''			# updated to DIRECTORY						# if the user passed a new target directory as the last passed parameter
 
 DEPENDENCY=''
 LIBRARIES=''
@@ -156,7 +157,10 @@ APPEXTN=''
 # Usage syntax: exitGracefully [EXIT] [TYPE] [TARGET] [SAMELINE] [MULTITAG] [CLOSINGTAG]
 # Overview:	allows the script the terminate gracefully
 # Parameters:
-# EXIT		[number] [optional] the exit status of this script afterwards: 0 (default), 1
+# EXIT		[number] [optional] the exit status of this script afterwards
+#			0 = success (default)
+#			1 = failure with printing ' [failure]'
+#			2 = failure without printing ' [failure]'
 # TYPE		[string] [optional] the TYPE value to send to showMsg
 # TARGET	[string] [optional] the TARGET value to send to showMsg
 # SAMELINE	[string] [optional] the SAMELINE value to send to showMsg
@@ -168,24 +172,26 @@ exitGracefully() {
 	( [ ! "$1" ] || [ $1 -eq 0 ] ) && exit 0
 # UPDATED 2025/10/28
 #	( [ "$SILENT" ] || [ "$QUIET" ] ) || echo " [failure]"
-	showMsg "$2" ' [failure]' "$3" "$4" "$5"
+	[ $1 -eq 1 ] && showMsg "$2" ' [failure]' "$3" "$4" "$5"
 	[ "$6" ] && showMsg "$6" '' "$3" 0 4
-	exit 1
+	exit $1
 }
 
 
-# Usage syntax: showMsg TYPE MESSAGE [TARGET] [SAMELINE] [MULTITAG] [TRIM] [HEADER]
+# Usage syntax: showMsg TAG MESSAGE [TARGET] [SAMELINE] [MULTITAG] [TRIM] [HEADER]
 # Overview:	sends message to the target in the desired format
 # Parameters:
-# TYPE		[string] the type of the message: success, failure, *
+# TAG		[string] the XML tag surrounding the message
 #		[ NOTE ]
-#			 the * represents whatever you pass as the value becomes the XML tag (e.g. 'step' becomes <step>...</step>)
-#			 the * has no effect for plain text
-#			 a blank value is also permitted, which doesn't print any tags with XML, and no prefix for plain text
-#			 a value of 'HEADER' will also print the XML header and not include the message in XML tags
+#			 - this value can be 'success' or 'failure' to a quick '<s><msg>MESSAGE</msg></s>' (or corresponding fail)
+#			 - you can append a '|success' or '|failure' for a final message to denote the overall action status
+#			 - the * represents whatever you pass as the value becomes the XML tag (e.g. 'step' becomes <step>...</step>)
+#			 - the * has no effect for plain text
+#			 - a blank value is also permitted, which doesn't print any tags with XML, and no prefix for plain text
+#			 - a value of 'HEADER' will also print the XML header and not include the message in XML tags
 # MESSAGE	[string] the message to display/store
 # TARGET	[string] [optional] the target output: both, log, screen (default)
-# SAMELINE	[boolean][optional] if the prompt needs to stay on the next line (default=off)
+# SAMELINE	[boolean][optional] if the prompt needs to stay on the same line (default=off)
 #		[ NOTE ]
 #			 0 = off
 #			 1 = on and indicates to leave an XML tag open (e.g. '<TYPE>Example Title:')
@@ -205,44 +211,68 @@ exitGracefully() {
 showMsg() {
 	local PREFIX=''
 	local SUFFIX=''
-	local TYPE=''
+	local TAG="${1%%|*}"
+	local TYPE="${1##*|}"
 	local MSG="$2"
 	local TARGET='screen'
 	local SAMELINE=''
 	local MULTITAG=0
 	local TRIM=0
-	local HEADER=0
+# MOVED 2025/10/29 - this was moved into the parameter processing part since it should only be shown once
+#	local HEADER=0
 
 	# DEFINE DEFAULT VALUES
 	[ "$3" ] && [ "$3" != '' ] && TARGET="$3"						# NOTE: we had to include the "!= ''" condition for exitGracefully (since it can pass a blank value)
 	[ "$4" ] && [ $4 -eq 1 ] && SAMELINE="n"
 	[ "$5" ] && MULTITAG=$5
 	[ "$6" ] && TRIM=$6
-	[ "$7" ] && HEADER=$7
-	[ ! "$7" ] && ( [ "$1" = 'success' ] || [ "$1" = 'failure' ] ) && HEADER=1		# if we were NOT passed a header value, but TYPE={success|failure}, then include it, retain 0 otherwise
+# MOVED 2025/10/29 - this was moved into the parameter processing part since it should only be shown once
+#	[ "$7" ] && HEADER=$7
+##echo "HEADER1 |$HEADER|"
+## UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
+##	[ ! "$7" ] && ( [ "$1" = 'success' ] || [ "$1" = 'failure' ] ) && HEADER=1		# if we were NOT passed a header value, but TYPE={success|failure}, then include it, retain 0 otherwise
+#	[ ! "$7" ] && ( [ "$TAG" = 'success' ] || [ "$TAG" = 'failure' ] ) && HEADER=1		# if we were NOT passed a header value, but TYPE={success|failure}, then include it, retain 0 otherwise
+##echo "HEADER2 |$HEADER|"
 
 	# MAKE VARIABLE CHANGES
-	[ "$1" = 'failure' ] && TYPE='ERROR: '							# this needs to execute regardless of OUTPUT value since this is for the logs
+# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
+#	[ "$1" = 'failure' ] && TYPE='ERROR: '							# this needs to execute regardless of OUTPUT value since this is for the logs
+	[ "$TYPE" = 'failure' ] && TEMP='ERROR: '						# this needs to execute regardless of OUTPUT value since this is for the logs
 
 	# OUTPUT TO LOG
-	[ "$TARGET" != 'screen' ] && echo -e${SAMELINE} "${TYPE}${2}" >>"$LOG_ERRS"		# writes to log if value is: both, log		NOTE: we use $2 instead of $MSG to prevent '<br />' contamination
+	[ "$TARGET" != 'screen' ] && echo -e${SAMELINE} "${TEMP}${2}" >>"$LOG_ERRS"		# writes to log if value is: both, log		NOTE: we use $2 instead of $MSG to prevent '<br />' contamination
 	( [ "$SILENT" ] || [ "$QUIET" ] ) && return 1						# if we need to be quiet or silent, then no visual, but write to log if desired
 	[ "$TARGET" = 'log' ] && return 1							# if we're only logging messages, then we can exit
 
 	# ADJUST MESSAGE AND OUTPUT TO SCREEN
-	if [ "$OUTPUT" = 'text' ]; then
+	if [ "$OUTPUT" = 'fifo' ]; then
 		[ $MULTITAG -eq 4 ] && return 1
 
-		[ "$1" = 'failure' ] && PREFIX='ERROR: '
-		[ "$TARGET" != 'log' ] && echo -e${SAMELINE} "${PREFIX}${MSG}${SUFFIX}"		# writes to screen if value is: both, screen
-	elif [ "$OUTPUT" = 'xml' ]; then
-		# PROCESS THE HEADER
-		[ $HEADER -gt 0 ] && {
-			echo -e 'Content-Type: text/xml; charset=utf-8'
-			echo -e "<?xml version='1.0' encoding='UTF-8'?>\n\n"
-		}
+# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
+#		[ "$1" = 'failure' ] && PREFIX='ERROR: '
+		[ "$TYPE" = 'failure' ] && PREFIX='ERROR: '
+		IFS=$'\n'
+		for LINE in $(echo -e "${PREFIX}${MSG}${SUFFIX}"); do				# convert a multi-line MESSAGE (e.g. 'LINE1\nLINE2') into separate 'echo' calls
+			echo "$LINE" | sed 's/^\s*//;s/\s*$//' >"${DIR_TEMP}/output"		# also strip pre/post spacing (spaces, tabs) since FIFO's can't handle any of this
+		done
+	elif [ "$OUTPUT" = 'text' ]; then
+		[ $MULTITAG -eq 4 ] && return 1
 
-		case "$1" in
+# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
+#		[ "$1" = 'failure' ] && PREFIX='ERROR: '
+		[ "$TYPE" = 'failure' ] && PREFIX='ERROR: '
+		echo -e${SAMELINE} "${PREFIX}${MSG}${SUFFIX}"
+	elif [ "$OUTPUT" = 'xml' ] || [ "$OUTPUT" = 'XML' ]; then
+		# PROCESS THE HEADER
+# MOVED 2025/10/29 - this was moved into the parameter processing part since it should only be shown once
+#		[ $HEADER -gt 0 ] && {
+#			echo -e 'Content-Type: text/xml; charset=utf-8'
+#			echo -e "<?xml version='1.0' encoding='UTF-8'?>\n\n"
+#		}
+
+# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
+#		case "$1" in
+		case "$TAG" in
 			'success')
 				PREFIX='<s><msg>'
 				SUFFIX='</msg></s>'
@@ -251,16 +281,24 @@ showMsg() {
 				PREFIX='<f><msg>'
 				SUFFIX='</msg></f>'
 				;;
-			''|'HEADER')								# if no tags are to be displayed (e.g. the MESSAGE contains them)
+# MOVED 2025/10/29 - this was moved into the parameter processing part since it should only be shown once
+#			''|'HEADER')								# if no tags are to be displayed (e.g. the MESSAGE contains them)
+			'')									# if no tags are to be displayed (e.g. the MESSAGE contains them)
 				PREFIX=''
 				SUFFIX=''
 				;;
 			*)	if [ $MULTITAG -lt 5 ]; then
-					PREFIX="<$1>"
-					SUFFIX="</$1>"
+# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
+#					PREFIX="<$1>"
+#					SUFFIX="</$1>"
+					PREFIX="<${TAG}>"
+					SUFFIX="</${TAG}>"
 				else
-					PREFIX="<$1 id=\"$(echo -e "$2" | sed '/^$/d')\">"
-					SUFFIX="</$1>"
+# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
+#					PREFIX="<$1 id=\"$(echo -e "$2" | sed '/^$/d')\">"
+#					SUFFIX="</$1>"
+					PREFIX="<${TAG} id=\"$(echo -e "$2" | sed '/^$/d')\">"
+					SUFFIX="</${TAG}>"
 					MSG=''							# erase this value since it's already been added to the output
 				fi
 		esac
@@ -290,9 +328,23 @@ showMsg() {
 		[ $MULTITAG -eq 4 ] && PREFIX=''						# if this is ending a parent group, then don't show the PREFIX
 		[ $MULTITAG -eq 5 ] && SUFFIX=''						# if this is starting a parent group (with the MSG as an 'id' attribute), then don't show the SUFFIX
 
-		( [ ! "$4" ] || [ $4 -eq 0 ] ) && echo -e "${PREFIX}${MSG}${SUFFIX}"
-		[ "$4" ] && [ $4 -eq 1 ] && echo -e${SAMELINE} "${PREFIX}${MSG}"
-		[ "$4" ] && [ $4 -eq 2 ] && echo -e "${MSG}${SUFFIX}"
+		if [ "$OUTPUT" = 'xml' ]; then
+			( [ ! "$4" ] || [ $4 -eq 0 ] ) && XML="${XML}${PREFIX}${MSG}${SUFFIX}\n"
+			[ "$4" ] && [ $4 -eq 1 ] && XML="${XML}${PREFIX}${MSG}"
+			[ "$4" ] && [ $4 -eq 2 ] && XML="${XML}${MSG}${SUFFIX}\n"
+
+			if [ "$TAG" != 'success' ] && [ "$TYPE" = 'success' ]; then
+				( echo "$XML" | grep -q '\\n' ) && echo -e "<s>\n   <xml>\n${XML}   </xml>\n</s>\n" || echo -e "<s>${XML}</s>\n"
+			elif [ "$TAG" != 'failure' ] && [ "$TYPE" = 'failure' ]; then
+				( echo "$XML" | grep -q '\\n' ) && echo -e "<f>\n   <xml>\n${XML}   </xml>\n</f>\n" || echo -e "<f>${XML}</f>\n"
+			elif ( [ "$TYPE" = 'success' ] || [ "$TYPE" = 'failure' ] ); then
+				echo -e "${XML}"
+			fi
+		else
+			( [ ! "$4" ] || [ $4 -eq 0 ] ) && echo -e "${PREFIX}${MSG}${SUFFIX}"
+			[ "$4" ] && [ $4 -eq 1 ] && echo -e${SAMELINE} "${PREFIX}${MSG}"
+			[ "$4" ] && [ $4 -eq 2 ] && echo -e "${MSG}${SUFFIX}"
+		fi
 	fi
 }
 
@@ -343,14 +395,25 @@ splitName() {
 		OPTFILE=''
 	fi
 
-	TEMP="${FILE_SCHEMA#*\}}"								# isolate just the package name portion from the PAK_FILE filename 'schema' - everything after the first '}' character
-	eval TEMP="${TEMP}.${EXT_SOFT}"								# combine the 'schema' (less the package name) values and the file extension value (e.g. i32.bin.soft)
+	if ( echo "$RAWFILE" | grep -q "$EXT_SOFT"$ ); then					# if the whole filename was passed, then...
+		TEMP="${FILE_SCHEMA#*\}}"							#   remove just the package name portion from the PAK_FILE filename 'schema' - everything before the first '}' character
+#echo "temp |$TEMP|"
+		TEMP="$(echo "$TEMP" | sed 's/\./\\\\\./g;s/${TYPE}/.../')"			#   escape any periods in the schema and replace TYPE with three dots (to match any TYPE - bin,dev,doc,...)
+		eval TEMP="${TEMP}\\\\.${EXT_SOFT}"						#   eval the variable to get any variable substitution done (except TYPE which was replaced by three dots) and add the extension
+#echo "temp2 |$TEMP|"
+		PAK_NAME="$(echo $RAWFILE | sed "s/${TEMP}$//")"				#   remove the TEMP string that was just created to isolate just the package name
+		PAK_FILE="$(echo $PAK_FILE | sed "s/KERNEL/${KERNEL}/")"			#   perform the KERNEL keyword substitution
+		PAK_FILE="$(echo $RAWFILE | sed "s/.${EXT_SOFT}$//")"				#   
+	else											# otherwise just the package name was, so...
+		TEMP="${FILE_SCHEMA#*\}}"							#   remove just the package name portion from the PAK_FILE filename 'schema' - everything before the first '}' character
+		eval TEMP="${TEMP}.${EXT_SOFT}"							#   combine the 'schema' (less the package name) values and the file extension value (e.g. i32.bin.soft)
 #echo "raw  |$RAWFILE|"
 #echo "temp |$TEMP|"
 #echo $RAWFILE | sed "s/${TEMP}//"
-	PAK_NAME="$(echo $RAWFILE | sed "s/${TEMP}//")"						# remove that combination from the passed package name (in case it was passed like bash.i32.bin.soft) to isolate just the package name (e.g. bash)
-	PAK_FILE="$(echo $PAK_FILE | sed "s/KERNEL/${KERNEL}/")"				# perform the KERNEL keyword substitution
-	eval PAK_FILE=${FILE_SCHEMA}								# store the filename (less the extension) as the defined 'schema' (e.g. bash.i32.bin)
+		PAK_NAME="$(echo $RAWFILE | sed "s/${TEMP}//")"					#   remove that combination from the passed package name (in case it was passed like bash.i32.bin.soft) to isolate just the package name (e.g. bash)
+		PAK_FILE="$(echo $PAK_FILE | sed "s/KERNEL/${KERNEL}/")"			#   perform the KERNEL keyword substitution
+		eval PAK_FILE=${FILE_SCHEMA}							#   store the filename (less the extension) as the defined 'schema' (e.g. bash.i32.bin)
+	fi
 	[ "$VERSION" ] && VERFILE="${VERSION}${TEMP}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
 
 #echo "name |$PAK_NAME|"
@@ -1185,7 +1248,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-M   defines the package install mode: copy, link (default)'		# old '-R' > new '-M copy'		NOTE: if the OS is run from RAM, then the 'copy' value will copy into RAM, if it is on a disk, then it copies to the disk
 	echo '	-N   do NOT install all files in the package, just those specified'		# allows users to install desired file(s) from a package so all the contents don't get installed (to keep the system as small as possible); keeps attack vector to a minimum
 # LEFT OFF - implement the 'html' and 'xml' values
-	echo '	-O   defines the way output is displayed: none, text (default), xml'		# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
+	echo '	-O   how output is displayed: none, fifo, text (default), xml, XML'	# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
 # UPDATED 2025/10/22 - merged -P with -U
 #	echo '	-P   purges all files of the uninstalled packages including configs'		# data ALWAYS is retained though! (e.g. mysql databases)
 #	echo '	-P   '
@@ -1209,7 +1272,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	The '-m' ACTION can be used with pre-compiled software, or if a .make"
 	echo "	     file is present, it will execute it to compile everything."
 	echo "	     NOTES:"
-	echo "	     - place the .make file one directory level down from source code"
+	echo "	     - place the .make file alongside the source code directory"
 # UPDATED 2025/10/23
 #	echo "	     - the source code directory will also be used with packaging, so make"
 #	echo "         sure to swap out its contents for the compiled software"
@@ -1225,11 +1288,18 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	The '-N' OPTION takes a comma separated list of filenames."
 	echo "	The '-O' OPTION must be the first parameter (to catch init errs)."
 	echo "	The '-S' OPTION can take a directory or URL as its value."
+	echo "	The '-T' OPTION can only be used once per call, so all the packages"
+	echo "	     need to be of the same type. Alternatively, you can skip using"
+	echo "	     this option and specify the full name of each package."
 # UPDATED 2025/10/22 - merged -P with -U
 #	echo "	The '-P' and '-U' OPTIONS can only be used with the '-u' ACTION and"
 	echo "	The '-X' OPTION can only be used with the '-c' and '-d' ACTIONS."
+	echo "	The '-O XML' OPTION does NOT encapsulate with <s> or <f> tags."
+	echo "	When using '-O fifo', the fifo must be managed by the calling script"
+	echo "	     or binary, and must use DIR_TEMP/output as its location."
 	echo "	When using the '-V' OPTION, you can only list one package at a time."
-	echo "	     NAME.all.src.make file exists, it will use that to compile."
+# REMOVED 2025/10/29 - this looks like part of an old description
+#	echo "	     NAME.all.src.make file exists, it will use that to compile."
 	echo "	The PACKAGE(S) value can be:"
 	echo "	     - a file containing a list (one package per line)"
 	echo "	     - directory containing the package(s)"
@@ -1397,13 +1467,21 @@ else
 			   fi
 			   MODE="$OPTARG" ;;
 			N) FILELIST="$OPTARG" ;;
-			O) if [ "$OPTARG" != 'none' ] && [ "$OPTARG" != 'text' ] && [ "$OPTARG" != 'xml' ]; then
+			O) if [ "$OPTARG" != 'none' ] && [ "$OPTARG" != 'fifo' ] && [ "$OPTARG" != 'text' ] && [ "$OPTARG" != 'xml' ] && [ "$OPTARG" != 'XML' ]; then
 # UPDATED 2025/10/26
 #				[ "$SILENT" ] || echo "ERROR: you must supply a proper value to the -O option." | tee -a "$LOG_ERRS"
 				showMsg 'failure' "You must provide a proper value to the -O option."
 				exit 1
 			   fi
 			   [ "$OPTARG" = 'none' ] && SILENT=TRUE
+			   [ "$OPTARG" = 'fifo' ] && [ ! -e "${DIR_TEMP}/output" ] && {
+				showMsg 'failure' "The fifo does not exist, aborting execution."
+				exit 1
+			   }
+			   ( [ "$OPTARG" = 'xml' ] || [ "$OPTARG" = 'XML' ] ) && {
+				echo -e 'Content-Type: text/xml; charset=utf-8'
+				echo -e "<?xml version='1.0' encoding='UTF-8'?>\n\n"
+			   }
 			   OUTPUT=$OPTARG ;;
 # MERGED 2025/10/22 - this was merged with -U
 #			P) PURGE=2 ;;
@@ -1658,21 +1736,29 @@ for RAWFILE in $@; do
 #	[ $DEBUG -gt 0 ] && echo -e "body:\n\tAPPFILE :${APPFILE}:\n\tAPPHEAD :${APPHEAD}:\n\tAPPNAME :${APPNAME}:\n\tAPPARCH :${APPARCH}:\n\tAPPTYPE :${APPTYPE}:\n\tAPPEXTN :${APPEXTN}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:" >>"$LOG_DBUG"
 	[ $DEBUG -gt 0 ] && echo -e "body:\n\tPAK_FILE :${PAK_FILE}:\n\tPAK_NAME :${PAK_NAME}:\n\tEXT_SOFT :${EXT_SOFT}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:" >>"$LOG_DBUG"
 
+	if [ ! -e "${REPO_SYSTEM}/${PAK_FILE}.${EXT_SOFT}" ] && [ ! -e "${REPO_OPTION}/${PAK_FILE}.${EXT_SOFT}" ] && [ ! -e "${REPO_SOURCE}/${PAK_FILE}.${EXT_SOFT}" ] && [ ! -e "./${PAK_FILE}.${EXT_SOFT}" ]; then
+		showMsg 'msg|failure' "The '${PAK_FILE}.${EXT_SOFT}' file does not exist."
+		exitGracefully 2
+	fi
+
 # showMsg TYPE MESSAGE [TARGET] [SAMELINE] [MULTITAG] [TRIM] [HEADER]
 
 	if [ "$EXTRACT" ]; then									# if we are extracting a packages contents, then...
 # UPDATED 2025/10/27
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "Extracting the '${PAK_NAME}' package:"
-		showMsg 'action' "Extracting the '${PAK_NAME}' package:" 'screen' 1 0 0 1
+		showMsg 'package' "Extracting the '${PAK_NAME}' package:" 'screen' 1 0 0 1
 		[ ! "$REPO_TARGET" ] && REPO_TARGET='./'					# if no directory was passed, then set the current directory as the target
-		unsquashfs -f -d "$REPO_TARGET" ${PAK_FILE}.${EXT_SOFT} 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'action' 'screen' 2
+		[ $DEBUG -gt 0 ] && echo -e "unsquashfs -f -d \"$REPO_TARGET\" ${PAK_FILE}.${EXT_SOFT}" >>"$LOG_DBUG"
+		unsquashfs -f -d "$REPO_TARGET" ${PAK_FILE}.${EXT_SOFT} 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'package|failure' 'screen' 2
 # UPDATED 2025/10/27
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo " [done]"
-		showMsg 'action' " [done]" 'screen' 2
+		showMsg 'package' " [done]" 'screen' 2
 		continue
 	elif [ "$FIND" ]; then									# if we are finding a file in an installed package, then...
 		showMsg 'action' "Searching for '${PAK_NAME}' in packages..." 'screen' 0 0 0 1
-		cd "${REPO_SYSTEM}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1		#   change into the first repo location to check for the files
+# DBUG
+cd /tmp
+#		cd "${REPO_SYSTEM}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1		#   change into the first repo location to check for the files
 		for FILE in $(ls -1 *.${EXT_SOFT}); do
 			[ $(stat -c %s $FILE) -eq 0 ] && continue				#   skip all 0 byte files (since they can just be placeholders); this really shouldn't come into play in this location, but better safe than sorry
 			unsquashfs -ll $FILE | tail -n +5 | grep -v ^d | sed 's:.*/::' | grep -q "$PAK_NAME" && {
@@ -1681,10 +1767,10 @@ for RAWFILE in $@; do
 #				unsquashfs -ll $FILE | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$PAK_NAME"
 				showMsg 'package' "$FILE" 'screen' 0 5
 				showMsg 'matches' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$PAK_NAME")" 'screen' 0 3 1
-				showMsg 'package' "" 'screen' 0 4
 			}
 		done
-
+# DBUG
+[ 1 -eq 0 ] && {
 		if [ "$REPO_OPTION" != "$REPO_SYSTEM" ]; then					#   if there are separate repo's for packages (e.g. XiniX and not TC), then...
 			cd "${REPO_OPTION}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1	#	change into the optional repo location to further check for the files
 			for FILE in $(ls -1 *.${EXT_SOFT}); do
@@ -1693,12 +1779,16 @@ for RAWFILE in $@; do
 # UPDATED 2025/10/28
 #					echo $FILE
 #					unsquashfs -ll $FILE | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$PAK_NAME"
+					showMsg 'package' "" 'screen' 0 4
 					showMsg 'package' "$FILE" 'screen' 0 5
 					showMsg 'matches' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$PAK_NAME")" 'screen' 0 3 1
-					showMsg 'package' "" 'screen' 0 4
 				}
 			done
 		fi
+# DBUG
+}
+#		showMsg 'package|success' "" 'screen' 0 4
+		showMsg 'package' "" 'screen' 0 4
 		continue
 	elif [ "$MAKE" ]; then									# if we are creating a package for distribution, then...
 		DIRECTORY="$2"
@@ -1778,7 +1868,7 @@ for RAWFILE in $@; do
 ## UPDATED 2025/10/22 - no longer using APP* variables
 ##		echo -e "Don't forget to create/update the .deps and .info files!\n"
 #		echo -e "Don't forget to create/update the .${EXT_HASH} and .${EXT_INFO} files!\n"
-		showMsg 'note' "\nThe package has been created!\nDon't forget to create/update the .${EXT_DEPS} and .${EXT_INFO} files!\n"
+		showMsg 'note|success' "\nThe package has been created!\nDon't forget to create/update the .${EXT_DEPS} and .${EXT_INFO} files!\n"
 		exit 0										# prevent the code below from executing since we're done with this ACTION
 	elif [ "$PROXY" ]; then
 # UPDATED 2025/10/28
@@ -1948,6 +2038,13 @@ done
 
 # EXECUTE FINAL PROCESSING
 
+# finalize any output for '-O xml'
+if [ "$EXTRACT" ] && [ "$OUTPUT" = 'xml' ]; then						# if we are extracting a packages contents, then...
+	showMsg '|success' ""
+elif [ "$FIND" ] && [ "$OUTPUT" = 'xml' ]; then							# if we are finding files in packages, then...
+	showMsg '|success' ""
+fi
+
 # now move the proxy files to the external storage device
 if [ "$PROXY" ]; then
 # UPDATED 2025/10/28
@@ -2051,6 +2148,27 @@ exitGracefully 0
 #	dependency.i32.lib.soft[=1.2.3] or [1.2.3!]	(implemented)	package requires this exact version of this dependency and will fail if not currently installed; useful for upgrading web.de themes to make sure web.de itself is at a certain version for compatibility
 #	dependency.i64.bin.soft|dependency2.i64.bin.soft|...		package requires any of these dependencies (e.g. thttpd,apache,paged,...)	NOTE: should be in order of preference by OEM; (e.g. TC - size to keep overall size of system down)
 #	dependency.i64.bin.soft{file1,file2,file3,...}			package requires only certain files from the dependency
+
+
+# TESTS
+# cd ~/Projects/Scripts/pax
+# sudo su root
+# cp -dpR TESTING/* /tmp
+# exit
+# cd /tmp
+# pax -e zip[.i64.bin.soft] zlib_base[.i64.dev.soft]
+# pax -O fifo -e zip zlib_base
+# pax -O xml -e zip[.i64.bin.soft] zlib_base
+# pax -m ASDF /tmp/zebra2
+# pax -O fifo -m ASDF /tmp/zebra2
+# pax -O xml -m ASDF /tmp/zebra2
+# pax -X /tmp/zebra5/ -d zip
+# pax -O fifo -X /tmp/zebra5/ -d zip
+# pax -O xml -X /tmp/zebra5/ -d zip
+# pax -t libreoffice
+# pax -O fifo -t libreoffice
+# pax -O xml -t libreoffice
+
 
 
 

@@ -48,3 +48,9 @@
 - Continued replacing APP* variables with PAK_*
 - Updated config files to use FILE_SCHEMA instead of PAK_FILE
 
+2025/10/29
+- Added '-O fifo'
+- Moved '-O xml' to '-O XML' without surrounding <s>/<f> tags
+- Added '-O xml' with surrounding <s>/<f> tags
+- Updated the --help output
+- Added detection of invalid filenames when processing multiple
