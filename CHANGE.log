@@ -54,3 +54,9 @@
 - Added '-O xml' with surrounding <s>/<f> tags
 - Updated the --help output
 - Added detection of invalid filenames when processing multiple
+
+2025/10/30
+- Changed '-O XML' to '-O xmLive'
+- Updated the --help output
+- Updated showMsg() to have a simpler operation
+

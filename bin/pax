@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/10/29 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/10/30 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -112,6 +112,7 @@ TOTAL=0												# keeps track of the $DEP 'array' size
 EXEID="${DIR_TEMP}/$(mktemp -u XXXXXX)"								# stores a temp execution ID (for use with (un)installing)
 OUTPUT='text'											# the output format to display: none, text, xml
 XML=''												# used to store XML until there's a final success/failure
+XML_TAGS=''											# stores the tags that are currently opened (e.g. containing children)
 
 CPU="$(uname -m 2>>"$LOG_ERRS" | sed -r 's/i386|i686/i32/;s/x86_64/i64/;s/armv7l/r32/')"	# this can be used so the .deps files can be universal (like KERNEL below) - bash.CPU.bin.soft
 TYPE='bin'											# the package type: bin dev doc drv gir lib loc	  NOTE: we're specifying the default value here
@@ -154,196 +155,213 @@ APPEXTN=''
 
 # DEFINE BUILT-IN FUNCTIONS FOR INTERNAL USE
 
-# Usage syntax: exitGracefully [EXIT] [TYPE] [TARGET] [SAMELINE] [MULTITAG] [CLOSINGTAG]
+# Usage syntax: exitGracefully [EXIT] [TARGET] [TAGS] [TAG]
 # Overview:	allows the script the terminate gracefully
 # Parameters:
 # EXIT		[number] [optional] the exit status of this script afterwards
 #			0 = success (default)
-#			1 = failure with printing ' [failure]'
-#			2 = failure without printing ' [failure]'
-# TYPE		[string] [optional] the TYPE value to send to showMsg
+#	3		1 = failure without printing anything
+#	2		2 = failure printing a generic message
+#	1		3 = failure with printing ' [failure]'
+#			4 = failure printing ' [failure]' and generic message
+#			    NOTES:
+#			    - the TAG should be passed to close XML
+#			    - the TAGS value does not get passed through
 # TARGET	[string] [optional] the TARGET value to send to showMsg
-# SAMELINE	[string] [optional] the SAMELINE value to send to showMsg
-# MULTITAG	[string] [optional] the MULTITAG value to send to showMsg
-# CLOSINGTAB	[string] [optional] the tag name to close if MULTITAG was enabled
+# TAGS		[number] [optional] the TAGS value to send to showMsg
+# TAG		[string] [optional] the TAG value to send to showMsg
 exitGracefully() {
 	find "$DIR_TEMP" -size 0 -print0 | xargs -0 rm 2>/dev/null				# remove any blank cache file	https://stackoverflow.com/questions/3157343/how-to-delete-many-0-byte-files-in-linux
 	rm -f "${DIR_CLOG}/"*.mark 2>/dev/null							# remove any .marker files
 	( [ ! "$1" ] || [ $1 -eq 0 ] ) && exit 0
-# UPDATED 2025/10/28
-#	( [ "$SILENT" ] || [ "$QUIET" ] ) || echo " [failure]"
-	[ $1 -eq 1 ] && showMsg "$2" ' [failure]' "$3" "$4" "$5"
-	[ "$6" ] && showMsg "$6" '' "$3" 0 4
+
+	[ $1 -gt 2 ] && {
+#echo "top |$3|"
+		[ ! "$4" ] && showMsg 'failure' ' [failure]' "$2" 1 "$3"
+		[ "$4" ] && showMsg "$4" ' [failure]' "$2" 1 5
+	}
+	( [ $1 -eq 2 ] || [ $1 -eq 4 ] ) && {
+#echo btm
+		[ ! "$4" ] && showMsg 'failure' 'An error occurred while processing your request.' "$2" 1 "$3"
+		[ "$4" ] && showMsg 'failure' 'An error occurred while processing your request.' "$2" 1 1
+	}
 	exit $1
 }
 
 
-# Usage syntax: showMsg TAG MESSAGE [TARGET] [SAMELINE] [MULTITAG] [TRIM] [HEADER]
+# Usage syntax: showMsg TAG MESSAGE [TARGET] [CR] [TAGS] [TRIM]
 # Overview:	sends message to the target in the desired format
 # Parameters:
 # TAG		[string] the XML tag surrounding the message
 #		[ NOTE ]
 #			 - this value can be 'success' or 'failure' to a quick '<s><msg>MESSAGE</msg></s>' (or corresponding fail)
-#			 - you can append a '|success' or '|failure' for a final message to denote the overall action status
+#			 - you can append a '|success' or '|failure' for a final message to denote the overall action status			< delete
 #			 - the * represents whatever you pass as the value becomes the XML tag (e.g. 'step' becomes <step>...</step>)
 #			 - the * has no effect for plain text
-#			 - a blank value is also permitted, which doesn't print any tags with XML, and no prefix for plain text
-#			 - a value of 'HEADER' will also print the XML header and not include the message in XML tags
+#			 - a blank value is also permitted, which doesn't print any tags with XML, and no prefix for plain text			< delete
+#			 - a value of 'HEADER' will also print the XML header and not include the message in XML tags				< delete
 # MESSAGE	[string] the message to display/store
-# TARGET	[string] [optional] the target output: both, log, screen (default)
-# SAMELINE	[boolean][optional] if the prompt needs to stay on the same line (default=off)
+# TARGET	[string] [optional] the target output: both (default), log, screen
+# CR		[boolean][optional] if the prompt needs to add a character return at the end [0=no, 1=yes (default)]
+# TAGS		[number] [optional] defines XML tag encapsulation (default=1)
 #		[ NOTE ]
-#			 0 = off
-#			 1 = on and indicates to leave an XML tag open (e.g. '<TYPE>Example Title:')
-#			 2 = on and closes it (e.g. ' [done]</TYPE>')
-# MULTITAG	[boolean][optional] if multi-line (e.g. containing CR's) need to be treated as individual XML tags (default=off)
-#		[ NOTE ]
-#			 0 = off
-#			 1 = on				line 1		to	<TYPE>line 1</TYPE>
-#							line 2			<TYPE>line 2</TYPE>
-#			 2 = on (parent open) 		title		to	<TYPE>title
-#			 3 = on (children)		line 1		to		<TYPE>line 1</TYPE>
-#							line 2				<TYPE>line 2</TYPE>
-#			 4 = on (parent close)		title		to	</TYPE>		NOTE: this is ignored when OUTPUT='text'
-#			 5 = on (parent alt open)	title		to	<TYPE id='title'>
+#			 0 = none
+#	1		 1 = on (one set of tags)	line 1		to	<TAG>line 1
+#							line 2			      line 2</TAG>
+#	3		 2 = on (tags for each line)	line 1		to	<TAG>line 1</TAG>
+#							line 2			<TAG>line 2</TAG>
+#	2		 3 = on (parent open) 		title		to	<TAG>title
+#	5		 4 = on (parent alt open)	title		to	<TAG tag='title'>
+#	4		 5 = on (parent close)		title		to	</TAG>		NOTE: this is ignored when OUTPUT='text'
+#			 6 = on (closes all open)
 # TRIM		[boolean][optional] if the output needs to be trimmed of spaces, tabs, newlines at the beginning and end (default=off)
-# HEADER	[boolean][optional] if the XML header needs to be shown (default=yes when TYPE={success|failure}, no otherwise)
 showMsg() {
+	local LINE=''
+	local ITEM=''
 	local PREFIX=''
 	local SUFFIX=''
-	local TAG="${1%%|*}"
-	local TYPE="${1##*|}"
+	local TAG="$1"
 	local MSG="$2"
-	local TARGET='screen'
-	local SAMELINE=''
-	local MULTITAG=0
+	local TARGET='both'
+	local CR=''
+	local TAGS=1
 	local TRIM=0
-# MOVED 2025/10/29 - this was moved into the parameter processing part since it should only be shown once
-#	local HEADER=0
-
+	      TEMP=''
+#echo "TAG  |$TAG|"
 	# DEFINE DEFAULT VALUES
 	[ "$3" ] && [ "$3" != '' ] && TARGET="$3"						# NOTE: we had to include the "!= ''" condition for exitGracefully (since it can pass a blank value)
-	[ "$4" ] && [ $4 -eq 1 ] && SAMELINE="n"
-	[ "$5" ] && MULTITAG=$5
+	[ "$4" ] && [ $4 -eq 0 ] && CR="n"
+	[ "$5" ] && TAGS=$5
 	[ "$6" ] && TRIM=$6
-# MOVED 2025/10/29 - this was moved into the parameter processing part since it should only be shown once
-#	[ "$7" ] && HEADER=$7
-##echo "HEADER1 |$HEADER|"
-## UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
-##	[ ! "$7" ] && ( [ "$1" = 'success' ] || [ "$1" = 'failure' ] ) && HEADER=1		# if we were NOT passed a header value, but TYPE={success|failure}, then include it, retain 0 otherwise
-#	[ ! "$7" ] && ( [ "$TAG" = 'success' ] || [ "$TAG" = 'failure' ] ) && HEADER=1		# if we were NOT passed a header value, but TYPE={success|failure}, then include it, retain 0 otherwise
-##echo "HEADER2 |$HEADER|"
-
+#echo "CR   |$CR|"
+#echo "TAGS |$TAGS|"
 	# MAKE VARIABLE CHANGES
-# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
-#	[ "$1" = 'failure' ] && TYPE='ERROR: '							# this needs to execute regardless of OUTPUT value since this is for the logs
-	[ "$TYPE" = 'failure' ] && TEMP='ERROR: '						# this needs to execute regardless of OUTPUT value since this is for the logs
+	[ "$TAG" = 'failure' ] && TEMP='ERROR: '						# this needs to execute regardless of OUTPUT value since this is for the logs
 
 	# OUTPUT TO LOG
-	[ "$TARGET" != 'screen' ] && echo -e${SAMELINE} "${TEMP}${2}" >>"$LOG_ERRS"		# writes to log if value is: both, log		NOTE: we use $2 instead of $MSG to prevent '<br />' contamination
+	[ "$TARGET" != 'screen' ] && echo -e${CR} "${TEMP}${2}" >>"$LOG_ERRS"			# writes to log if value is: both, log		NOTE: we use $2 instead of $MSG to prevent '<br />' contamination
 	( [ "$SILENT" ] || [ "$QUIET" ] ) && return 1						# if we need to be quiet or silent, then no visual, but write to log if desired
 	[ "$TARGET" = 'log' ] && return 1							# if we're only logging messages, then we can exit
 
 	# ADJUST MESSAGE AND OUTPUT TO SCREEN
 	if [ "$OUTPUT" = 'fifo' ]; then
-		[ $MULTITAG -eq 4 ] && return 1
+# UPDATED 2025/10/30
+#		[ $TAGS -gt 4 ] && return 1
+		[ $TAGS -eq 6 ] && return 1
 
-# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
-#		[ "$1" = 'failure' ] && PREFIX='ERROR: '
-		[ "$TYPE" = 'failure' ] && PREFIX='ERROR: '
+		[ "$TAG" = 'failure' ] && [ "$MSG" != ' [failure]' ] && PREFIX='ERROR: '	# NOTE: the MSG comparison is so that if exitGracefully() was called, then we don't need the prefix
 		IFS=$'\n'
 		for LINE in $(echo -e "${PREFIX}${MSG}${SUFFIX}"); do				# convert a multi-line MESSAGE (e.g. 'LINE1\nLINE2') into separate 'echo' calls
 			echo "$LINE" | sed 's/^\s*//;s/\s*$//' >"${DIR_TEMP}/output"		# also strip pre/post spacing (spaces, tabs) since FIFO's can't handle any of this
 		done
 	elif [ "$OUTPUT" = 'text' ]; then
-		[ $MULTITAG -eq 4 ] && return 1
+# UPDATED 2025/10/30
+#		[ $TAGS -gt 4 ] && return 1
+		[ $TAGS -eq 6 ] && return 1
 
-# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
-#		[ "$1" = 'failure' ] && PREFIX='ERROR: '
-		[ "$TYPE" = 'failure' ] && PREFIX='ERROR: '
-		echo -e${SAMELINE} "${PREFIX}${MSG}${SUFFIX}"
-	elif [ "$OUTPUT" = 'xml' ] || [ "$OUTPUT" = 'XML' ]; then
-		# PROCESS THE HEADER
-# MOVED 2025/10/29 - this was moved into the parameter processing part since it should only be shown once
-#		[ $HEADER -gt 0 ] && {
-#			echo -e 'Content-Type: text/xml; charset=utf-8'
-#			echo -e "<?xml version='1.0' encoding='UTF-8'?>\n\n"
-#		}
-
-# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
-#		case "$1" in
-		case "$TAG" in
-			'success')
-				PREFIX='<s><msg>'
-				SUFFIX='</msg></s>'
-				;;
-			'failure')
-				PREFIX='<f><msg>'
-				SUFFIX='</msg></f>'
-				;;
-# MOVED 2025/10/29 - this was moved into the parameter processing part since it should only be shown once
-#			''|'HEADER')								# if no tags are to be displayed (e.g. the MESSAGE contains them)
-			'')									# if no tags are to be displayed (e.g. the MESSAGE contains them)
-				PREFIX=''
+		[ "$TAG" = 'failure' ] && [ "$MSG" != ' [failure]' ] && PREFIX='ERROR: '	# NOTE: the MSG comparison is so that if exitGracefully() was called, then we don't need the prefix
+		echo -e${CR} "${PREFIX}${MSG}${SUFFIX}"
+	elif [ "$OUTPUT" = 'xml' ] || [ "$OUTPUT" = 'xmLive' ]; then
+		# PROCESS OPENED TAGS
+		# if the tag is present after the first one in the list, then we need to close all the tags before it
+		if ( echo "$XML_TAGS" | grep -qE " $TAG " ); then
+#echo inside
+			for ITEM in $(echo "$XML_TAGS"); do
+				TEMP="$(echo "$XML_TAGS" | sed -E 's/ $//;s/[a-z]+/\\t/g;s/ //g')" # create the proper preceeding tabs
+				XML_TAGS="$(echo "$XML_TAGS" | sed "s/^${ITEM} //")"		# remove the iterated TAG from the list
+				PREFIX="${PREFIX}${TEMP}</${ITEM}>\n"				# update the PREFIX to include each closing TAG
+				[ "$ITEM" = "$TAG" ] && break					# exit the 'for' as soon as we process the matching TAG
+			done
+		fi
+		# WARNING: these are two separate 'if' statements on purpose!
+		# if we're opening a new tag -AND- the tag is NOT already in the opened list, then add it to the beginning of the list
+		if ( [ $TAGS -eq 3 ] || [ $TAGS -eq 4 ] ) && [ "$(echo "$XML_TAGS" | cut -f 1 -d ' ')" != "$TAG" ]; then
+#echo "top |$TAG|"
+			XML_TAGS="$TAG $XML_TAGS"
+		# if we're opening a new tag -AND- the tag IS the first one in the opened list, then close the prior one first
+		elif ( [ $TAGS -eq 3 ] || [ $TAGS -eq 4 ] ) && [ "$(echo "$XML_TAGS" | cut -f 1 -d ' ')" = "$TAG" ]; then
+			TEMP="$(echo "$XML_TAGS" | sed -E 's/ $//;s/[a-z]+/\\t/g;s/ //g')"
+			PREFIX="${PREFIX}${TEMP}</${TAG}>\n"
+		# if we're closing an open tag -AND- the tag IS the first one in the list, then delete it from the list
+		elif [ $TAGS -eq 5 ] && [ "$(echo "$XML_TAGS" | cut -f 1 -d ' ')" = "$TAG" ]; then
+#echo mid
+			XML_TAGS="$(echo "$XML_TAGS" | sed "s/^${TAG} //")"
+		fi
+#echo "prefix |$PREFIX|"
+#echo "XML_TAGS |$XML_TAGS|"
+#echo "TEMP |$TEMP|"
+		# PROCESS TAG AND INDENTATION							  NOTE: this MUST come below the 'PROCESS OPENED TAGS' section
+		TEMP="$(echo "$XML_TAGS" | sed -E 's/ $//;s/[a-z]+/\\t/g;s/ //g')"
+		[ "$XML_TAGS" ] && [ $TAGS -lt 3 ] && TEMP="\t${TEMP}"
+		case "$TAGS" in
+			0)	PREFIX=''							# if no tags are to be displayed (e.g. the MESSAGE contains them)
 				SUFFIX=''
 				;;
-			*)	if [ $MULTITAG -lt 5 ]; then
-# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
-#					PREFIX="<$1>"
-#					SUFFIX="</$1>"
-					PREFIX="<${TAG}>"
-					SUFFIX="</${TAG}>"
-				else
-# UPDATED 2025/10/29 - changed from single-value TYPE to multi-value TAG
-#					PREFIX="<$1 id=\"$(echo -e "$2" | sed '/^$/d')\">"
-#					SUFFIX="</$1>"
-					PREFIX="<${TAG} id=\"$(echo -e "$2" | sed '/^$/d')\">"
-					SUFFIX="</${TAG}>"
-					MSG=''							# erase this value since it's already been added to the output
-				fi
+			1|2)	PREFIX="${PREFIX}${TEMP}<${TAG}>"				# if both opening and closing tags need to be displayed
+				SUFFIX="</${TAG}>"
+				;;
+			3)	[ ! "$CR" ] && PREFIX="${PREFIX}${TEMP}<${TAG}>\n${TEMP}\t"	# if only the opening tag needs to be displayed
+				[ "$CR" ] && PREFIX="${PREFIX}${TEMP}<${TAG}>"			#   WARNING: the CR detection here is backwards since a value of 'n' means NOT to CR!
+				SUFFIX=''
+				;;
+			4)	PREFIX="${PREFIX}${TEMP}<${TAG} tag=\"$(echo -e "$2" | sed 's|^\s*||;s|\s*$||;/^$/d')\">"	# if only the alt opening tag needs to be displayed
+				SUFFIX=''
+				MSG=''								#   erase this value since it's already been added to the output
+				;;
+			5)	PREFIX=''							# if only the closing tag needs to be displayed; this is typically used to close an open tag on the same line (e.g. "<action>Doing some action: [done]</action>")
+				SUFFIX="</${TAG}>"
+				;;
+			6)	PREFIX=''							# if all the closing tags need to be displayed
+				for ITEM in $(echo "$XML_TAGS"); do
+					SUFFIX="${SUFFIX}${TEMP}</${ITEM}>\n"
+					XML_TAGS="$(echo "$XML_TAGS" | sed "s/^${ITEM} //")"
+					TEMP="$(echo "$XML_TAGS" | sed -E 's/ $//;s/[a-z]+/\\t/g;s/ //g')"
+				done
+				[ "$OUTPUT" = 'xml' ] && XML="${XML}${SUFFIX}"
+# MOVED 2025/10/30 - moved below
+#				[ "$OUTPUT" = 'xmLive' ] && SUFFIX="${SUFFIX}</xml>"
+				;;
 		esac
-
-		# PROCESS INDENTATION (for children)
-		TEMP=
-		[ $MULTITAG -eq 3 ] && TEMP='\t'
-
-		# ENCAPSULATE CHILDREN WITH THEIR TAGS
+#echo "P/S |$PREFIX|$SUFFIX|"
+		# APPLY TRIM AND TAG ENCAPSULATE
 		if [ $TRIM -eq 0 ]; then							# if we're leaving the output untrimmed, then...
-			[ $MULTITAG -eq 0 ] && MSG="$(echo "$MSG" | sed ':a;N;$!ba;s|\n|<br />|g')"				# replace any CR's with <br />'s		https://stackoverflow.com/questions/1251999/how-can-i-replace-each-newline-n-with-a-space-using-sed
-			[ $MULTITAG -gt 0 ] && MSG="$(echo "$MSG" | sed ":a;N;\$!ba;s|\n|${SUFFIX}\n${TEMP}${PREFIX}|g")"	# replace any CR's with XML tags (plus indentation)
+#echo not-trimming
+			[ $TAGS -lt 2 ] && MSG="$(echo "$MSG" | sed ':a;N;$!ba;s|\n|<br />|g')"	# replace any CR's with <br />'s		https://stackoverflow.com/questions/1251999/how-can-i-replace-each-newline-n-with-a-space-using-sed
+			[ $TAGS -eq 2 ] && MSG="$(echo "$MSG" | sed ":a;N;\$!ba;s|\n|${SUFFIX}\n${PREFIX}|g")"	# replace any CR's with XML tags (plus indentation)
 		else										# otherwise, do the same as above, but apply trimming
-			[ $MULTITAG -eq 0 ] && {
-				MSG="$(echo "$MSG" | sed 's|^\s*||;s|\s*$||;:a;N;$!ba;s|\n\s*|<br />|g')"
-				MSG="$(echo -e "$MSG" | sed '/^$/d')"				# removes any remaining newlines
+#echo trimming
+			[ $TAGS -lt 2 ] && {
+				MSG="$(echo "$MSG" | sed 's|^\s*||;s|\s*$||')"			# trim pre/post spacing
+				MSG="$(echo -e "$MSG" | sed '/^$/d')"				# removes any blank lines
+				MSG="$(echo -e "$MSG" | sed ':a;N;$!ba;s|\n\s*|<br />|g')"	# convert CR's to <br />'s
 			}
-			[ $MULTITAG -gt 0 ] && {
-				MSG="$(echo "$MSG" | sed "s|^\s*||;s|\s*$||;:a;N;\$!ba;s|\n\s*|${SUFFIX}\n${TEMP}${PREFIX}|g")"
-				MSG="$(echo -e "$MSG" | sed '/^$/d')"				# removes any remaining newlines
+			[ $TAGS -eq 2 ] && {
+				MSG="$(echo "$MSG" | sed "s|^\s*||;s|\s*$||")"
+				MSG="$(echo -e "$MSG" | sed '/^$/d')"
+				MSG="$(echo -e "$MSG" | sed ":a;N;\$!ba;s|\n\s*|${SUFFIX}\n${PREFIX}|g")"
 			}
+			[ $TAGS -gt 2 ] && MSG="$(echo "$MSG" | sed 's|^\s*||;s|\s*$||')"
 		fi
 
-		# OUTPUT DEPENDING ON SAMELINE VALUE
-		[ $MULTITAG -eq 2 ] && SUFFIX=''						# if this is starting a parent group, then don't show the SUFFIX
-		[ $MULTITAG -eq 3 ] && PREFIX="${TEMP}${PREFIX}"				# if this is dealing with child within the group, then add indentation and their first tag
-		[ $MULTITAG -eq 4 ] && PREFIX=''						# if this is ending a parent group, then don't show the PREFIX
-		[ $MULTITAG -eq 5 ] && SUFFIX=''						# if this is starting a parent group (with the MSG as an 'id' attribute), then don't show the SUFFIX
-
+		# PROCESS XML
+		[ "$OUTPUT" = 'xmLive' ] && {
+			[ "$TAG" = 'failure' ] && [ $TAGS -eq 6 ] && PREFIX='<failure>' && SUFFIX="</failure>\n${SUFFIX}"	# for exitGracefully calls that need to close open tags while still showing <failure>
+			[ "$TAG" = 'failure' ] && [ "$XML_TAGS" = '' ] && PREFIX="\t${PREFIX}"	# for inline failure calls
+			[ "$TAG" = 'success' ] && [ "$XML_TAGS" = '' ] && PREFIX="${PREFIX}"	# for inline failure calls
+			echo -e${CR} "${PREFIX}${MSG}${SUFFIX}"
+			( [ "$TAG" = 'success' ] || [ "$TAG" = 'failure' ] || [ $TAGS -eq 6 ] ) && echo '</xml>'
+		}
 		if [ "$OUTPUT" = 'xml' ]; then
-			( [ ! "$4" ] || [ $4 -eq 0 ] ) && XML="${XML}${PREFIX}${MSG}${SUFFIX}\n"
-			[ "$4" ] && [ $4 -eq 1 ] && XML="${XML}${PREFIX}${MSG}"
-			[ "$4" ] && [ $4 -eq 2 ] && XML="${XML}${MSG}${SUFFIX}\n"
+			if [ "$TAG" = 'success' ]; then
+				( echo "$XML" | grep -q '\\n' ) && echo -e "<s>\n    <xml>\n${XML}    </xml>\n</s>" || echo -e "<s>${XML}</s>"
+			elif [ "$TAG" = 'failure' ]; then
+				echo -e "<f><msg>${MSG}</msg></f>"
+			else
+				( [ $TAGS -eq 3 ] && [ "$CR" ] ) && CR='' || CR='\n'
+				XML="${XML}${PREFIX}${MSG}${SUFFIX}${CR}"
 
-			if [ "$TAG" != 'success' ] && [ "$TYPE" = 'success' ]; then
-				( echo "$XML" | grep -q '\\n' ) && echo -e "<s>\n   <xml>\n${XML}   </xml>\n</s>\n" || echo -e "<s>${XML}</s>\n"
-			elif [ "$TAG" != 'failure' ] && [ "$TYPE" = 'failure' ]; then
-				( echo "$XML" | grep -q '\\n' ) && echo -e "<f>\n   <xml>\n${XML}   </xml>\n</f>\n" || echo -e "<f>${XML}</f>\n"
-			elif ( [ "$TYPE" = 'success' ] || [ "$TYPE" = 'failure' ] ); then
-				echo -e "${XML}"
+#echo -e "XML:\n$XML"
 			fi
-		else
-			( [ ! "$4" ] || [ $4 -eq 0 ] ) && echo -e "${PREFIX}${MSG}${SUFFIX}"
-			[ "$4" ] && [ $4 -eq 1 ] && echo -e${SAMELINE} "${PREFIX}${MSG}"
-			[ "$4" ] && [ $4 -eq 2 ] && echo -e "${MSG}${SUFFIX}"
 		fi
 	fi
 }
@@ -1248,7 +1266,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-M   defines the package install mode: copy, link (default)'		# old '-R' > new '-M copy'		NOTE: if the OS is run from RAM, then the 'copy' value will copy into RAM, if it is on a disk, then it copies to the disk
 	echo '	-N   do NOT install all files in the package, just those specified'		# allows users to install desired file(s) from a package so all the contents don't get installed (to keep the system as small as possible); keeps attack vector to a minimum
 # LEFT OFF - implement the 'html' and 'xml' values
-	echo '	-O   how output is displayed: none, fifo, text (default), xml, XML'	# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
+	echo '	-O   how output is displayed: none, fifo, text, xml, xmLive'		# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
 # UPDATED 2025/10/22 - merged -P with -U
 #	echo '	-P   purges all files of the uninstalled packages including configs'		# data ALWAYS is retained though! (e.g. mysql databases)
 #	echo '	-P   '
@@ -1294,7 +1312,8 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 # UPDATED 2025/10/22 - merged -P with -U
 #	echo "	The '-P' and '-U' OPTIONS can only be used with the '-u' ACTION and"
 	echo "	The '-X' OPTION can only be used with the '-c' and '-d' ACTIONS."
-	echo "	The '-O XML' OPTION does NOT encapsulate with <s> or <f> tags."
+	echo "	The '-O xmLive' OPTION does NOT encapsulate with <s> tags, so assume"
+	echo "	     success unless an <f> tag is relayed."
 	echo "	When using '-O fifo', the fifo must be managed by the calling script"
 	echo "	     or binary, and must use DIR_TEMP/output as its location."
 	echo "	When using the '-V' OPTION, you can only list one package at a time."
@@ -1443,18 +1462,23 @@ else
 # UPDATED 2025/10/28
 #					showMsg '' '	<package>'
 #					showMsg 'file' "$FILE"
-					showMsg 'package' "$FILE" 'screen' 0 5
+# UPDATED 2025/10/30
+#					showMsg 'package' "$FILE" 'screen' 0 5
+					showMsg 'package' "$FILE" 'screen' 1 4
 					showMsg 'type' "$TYPE"
 					showMsg 'version' "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} ] && cat ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} | grep ^'Version:' | sed 's/Version:[ \t]*//')"
 					showMsg 'hash' "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_HASH} ] && sed 's/ .*//' ${DIR_CLOG}/${PAK_FILE}.${EXT_HASH})"
 					showMsg 'description' "$([ -e ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} ] && cat ${DIR_CLOG}/${PAK_FILE}.${EXT_INFO} | grep ^'Description:' | sed 's/Description:[ \t]*//')"
 # UPDATED 2025/10/28
 #					showMsg '' '	</package>'
-					showMsg 'package' "" 'screen' 0 4
+# REMOVED 2025/10/30
+#					showMsg 'package' "" 'screen' 0 4
 				fi
 			   done
 			   [ "$OUTPUT" = 'text' ] && echo -e "${NORMAL}"
-			   [ "$OUTPUT" = 'xml' ] && showMsg '' "   <xml>\n</s>\n"
+# UPDATED 2025/10/30
+#			   [ "$OUTPUT" = 'xml' ] && showMsg '' "   <xml>\n</s>\n"
+			   [ "$OUTPUT" = 'xml' ] && showMsg 'package' "   <xml>\n</s>" 1 6
 			   exit 0
 			   ;;
 			L) NOLIST=TRUE ;;
@@ -1467,7 +1491,7 @@ else
 			   fi
 			   MODE="$OPTARG" ;;
 			N) FILELIST="$OPTARG" ;;
-			O) if [ "$OPTARG" != 'none' ] && [ "$OPTARG" != 'fifo' ] && [ "$OPTARG" != 'text' ] && [ "$OPTARG" != 'xml' ] && [ "$OPTARG" != 'XML' ]; then
+			O) if [ "$OPTARG" != 'none' ] && [ "$OPTARG" != 'fifo' ] && [ "$OPTARG" != 'text' ] && [ "$OPTARG" != 'xml' ] && [ "$OPTARG" != 'xmLive' ]; then
 # UPDATED 2025/10/26
 #				[ "$SILENT" ] || echo "ERROR: you must supply a proper value to the -O option." | tee -a "$LOG_ERRS"
 				showMsg 'failure' "You must provide a proper value to the -O option."
@@ -1478,10 +1502,11 @@ else
 				showMsg 'failure' "The fifo does not exist, aborting execution."
 				exit 1
 			   }
-			   ( [ "$OPTARG" = 'xml' ] || [ "$OPTARG" = 'XML' ] ) && {
+			   ( [ "$OPTARG" = 'xml' ] || [ "$OPTARG" = 'xmLive' ] ) && {
 				echo -e 'Content-Type: text/xml; charset=utf-8'
 				echo -e "<?xml version='1.0' encoding='UTF-8'?>\n\n"
 			   }
+			   [ "$OPTARG" = 'xmLive' ] && echo '<xml>'
 			   OUTPUT=$OPTARG ;;
 # MERGED 2025/10/22 - this was merged with -U
 #			P) PURGE=2 ;;
@@ -1503,7 +1528,9 @@ else
 			   REPO_SOURCE="$OPTARG" ;;
 # UPDATED 2025/10/26
 #			t) echo "Dependency trees for package(s)..."
-			t) showMsg 'action' "Dependency trees for package(s)..." 'screen' 0 0 0 1
+# UPDATED 2025/10/30
+#			t) showMsg 'action' "Dependency trees for package(s)..." 'screen' 0 0 0 1
+			t) showMsg 'action' "Dependency trees for package(s)..." 'screen'
 			   TREE=TRUE ;;
 			T) if [ "$OPTARG" != 'bin' ] && [ "$OPTARG" != 'dev' ] && [ "$OPTARG" != 'doc' ] && [ "$OPTARG" != 'drv' ] && [ "$OPTARG" != 'gir' ] && [ "$OPTARG" != 'lib' ] && [ "$OPTARG" != 'loc' ]; then
 # UPDATED 2025/10/26
@@ -1726,7 +1753,7 @@ for RAWFILE in $@; do
 
 	INDEX=0											# reset these values each iteration
 	TOTAL=0
-
+#echo 01
 	splitName "$RAWFILE"									# NOTE: the RAWFILE value will be overwritten by the splitName() call
 #	PAK_NAME=$RAWFILE
 #	eval PAK_FILE=${PAK_FILE}
@@ -1735,27 +1762,38 @@ for RAWFILE in $@; do
 # UPDATED 2025/10/22 - no longer using APP* variables
 #	[ $DEBUG -gt 0 ] && echo -e "body:\n\tAPPFILE :${APPFILE}:\n\tAPPHEAD :${APPHEAD}:\n\tAPPNAME :${APPNAME}:\n\tAPPARCH :${APPARCH}:\n\tAPPTYPE :${APPTYPE}:\n\tAPPEXTN :${APPEXTN}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:" >>"$LOG_DBUG"
 	[ $DEBUG -gt 0 ] && echo -e "body:\n\tPAK_FILE :${PAK_FILE}:\n\tPAK_NAME :${PAK_NAME}:\n\tEXT_SOFT :${EXT_SOFT}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:" >>"$LOG_DBUG"
-
-	if [ ! -e "${REPO_SYSTEM}/${PAK_FILE}.${EXT_SOFT}" ] && [ ! -e "${REPO_OPTION}/${PAK_FILE}.${EXT_SOFT}" ] && [ ! -e "${REPO_SOURCE}/${PAK_FILE}.${EXT_SOFT}" ] && [ ! -e "./${PAK_FILE}.${EXT_SOFT}" ]; then
-		showMsg 'msg|failure' "The '${PAK_FILE}.${EXT_SOFT}' file does not exist."
-		exitGracefully 2
+#echo 02
+	if [ ! "$FIND" ] && [ ! "$MAKE" ] && [ ! -e "${REPO_SYSTEM}/${PAK_FILE}.${EXT_SOFT}" ] && [ ! -e "${REPO_OPTION}/${PAK_FILE}.${EXT_SOFT}" ] && [ ! -e "${REPO_SOURCE}/${PAK_FILE}.${EXT_SOFT}" ] && [ ! -e "./${PAK_FILE}.${EXT_SOFT}" ]; then
+# UPDATED 2025/10/30
+#		showMsg 'msg|failure' "The '${PAK_FILE}.${EXT_SOFT}' file does not exist."
+		showMsg 'failure' "The '${PAK_FILE}.${EXT_SOFT}' file does not exist."
+#echo 02b
+		exitGracefully 1
 	fi
-
-# showMsg TYPE MESSAGE [TARGET] [SAMELINE] [MULTITAG] [TRIM] [HEADER]
+#echo 03
+# showMsg TAG MESSAGE [TARGET] [CR] [TAGS] [TRIM]
 
 	if [ "$EXTRACT" ]; then									# if we are extracting a packages contents, then...
 # UPDATED 2025/10/27
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "Extracting the '${PAK_NAME}' package:"
-		showMsg 'package' "Extracting the '${PAK_NAME}' package:" 'screen' 1 0 0 1
+# UPDATED 2025/10/30
+#		showMsg 'package' "Extracting the '${PAK_NAME}' package:" 'screen' 1 0 0 1
+		showMsg 'package' "Extracting the '${PAK_NAME}' package:" 'both' 0 3
 		[ ! "$REPO_TARGET" ] && REPO_TARGET='./'					# if no directory was passed, then set the current directory as the target
 		[ $DEBUG -gt 0 ] && echo -e "unsquashfs -f -d \"$REPO_TARGET\" ${PAK_FILE}.${EXT_SOFT}" >>"$LOG_DBUG"
-		unsquashfs -f -d "$REPO_TARGET" ${PAK_FILE}.${EXT_SOFT} 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'package|failure' 'screen' 2
+		unsquashfs -f -d "$REPO_TARGET" ${PAK_FILE}.${EXT_SOFT} 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 2
 # UPDATED 2025/10/27
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo " [done]"
-		showMsg 'package' " [done]" 'screen' 2
+# UPDATED 2025/10/30
+#		showMsg 'package' " [done]" 'screen' 2
+		showMsg 'package' " [done]" 'both' 1 5 
 		continue
 	elif [ "$FIND" ]; then									# if we are finding a file in an installed package, then...
-		showMsg 'action' "Searching for '${PAK_NAME}' in packages..." 'screen' 0 0 0 1
+# UPDATED 2025/10/29
+#		showMsg 'action' "Searching for '${PAK_NAME}' in packages..." 'screen' 0 0 0 1
+# UPDATED 2025/10/30
+#		showMsg 'action' "Searching for '${PAK_NAME}' in packages..." 'screen' 0 5
+		showMsg 'action' "Searching for '${PAK_NAME}' in packages..." 'both' 1 4	# NOTE: we store to the log so if any error occurs, we know what it relates to (the rest of this section can just show to the screen)
 # DBUG
 cd /tmp
 #		cd "${REPO_SYSTEM}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1		#   change into the first repo location to check for the files
@@ -1765,8 +1803,13 @@ cd /tmp
 # UPDATED 2025/10/27
 #				echo $FILE
 #				unsquashfs -ll $FILE | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$PAK_NAME"
-				showMsg 'package' "$FILE" 'screen' 0 5
-				showMsg 'matches' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$PAK_NAME")" 'screen' 0 3 1
+# UPDATED 2025/10/30
+#				showMsg 'package' "$FILE" 'screen' 0 5
+#				showMsg 'matches' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$PAK_NAME")" 'screen' 0 3 1
+				showMsg 'package' "   $FILE" 'screen' 1 4 1
+				showMsg 'matches' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/      /' | grep "$PAK_NAME")" 'screen' 1 2 1
+# REMOVED 2025/10/30
+#				showMsg 'package' "" 'screen' 0 4
 			}
 		done
 # DBUG
@@ -1788,7 +1831,8 @@ cd /tmp
 # DBUG
 }
 #		showMsg 'package|success' "" 'screen' 0 4
-		showMsg 'package' "" 'screen' 0 4
+# REMOVED 2025/10/30
+#		showMsg 'action' "" 'screen' 0 4
 		continue
 	elif [ "$MAKE" ]; then									# if we are creating a package for distribution, then...
 		DIRECTORY="$2"
@@ -1800,75 +1844,108 @@ cd /tmp
 		if [ -e "${DIRECTORY}/${PAK_FILE}.${EXT_MAKE}" ] && [ -x "${DIRECTORY}/${PAK_FILE}.${EXT_MAKE}" ]; then		# if a compile script exists (and is executable), then lets run that first!
 # UPDATED 2025/10/28
 #			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "Making the '${PAK_NAME}' package..."
-			showMsg 'action' "Compiling the '${PAK_NAME}' package:" 'screen' 1 0 0 1
-			cd "${DIRECTORY}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'action' 'screen' 2			# change into the passed directory (e.g. /tmp/staging[/PACKAGE.make|src/] > /tmp) so the generated files get placed correctly
+# UPDATED 2025/10/30
+#			showMsg 'action' "Compiling the '${PAK_NAME}' package:" 'screen' 1 0 0 1
+#			cd "${DIRECTORY}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'action' 'screen' 2			# change into the passed directory (e.g. /tmp/staging[/PACKAGE.make|src/] > /tmp) so the generated files get placed correctly
+			showMsg 'action' "Compiling the '${PAK_NAME}' package:" 'both' 0 3
+			cd "${DIRECTORY}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'action'			# change into the passed directory (e.g. /tmp/staging[/PACKAGE.make|src/] > /tmp) so the generated files get placed correctly
 			./${PAK_FILE}.${EXT_MAKE} >${PAK_FILE}.${EXT_MAKE}.log 2>&1 || {
 # UPDATED 2025/10/28
 #				[ "$SILENT" ] || echo "ERROR: a compile error occurred - see the log for details."
 #				showMsg 'failure' "An error occurred while compiling."
-				exitGracefully 1 'action' 'screen' 2
+# UPDATED 2025/10/30
+#				exitGracefully 1 'action' 'screen' 2
+				exitGracefully 4 'both' 5 'action'
 			}
-			showMsg 'action' " [done]" 'screen' 2
-			TEMP=0									# indicate we do NOT need to show the XML header again
+			showMsg 'action' " [done]" 'both' 1 5
+# REMOVED 2025/10/30 - this is handled elsewhere now
+#			TEMP=0									# indicate we do NOT need to show the XML header again
 		fi
 
 # UPDATED 2025/10/22 - no longer using APP* variables
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "Creating the '${APPNAME}' package..."
 # UPDATED 2025/10/28
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "Creating the '${PAK_NAME}' package..."
-		showMsg 'action' "Creating the '${PAK_NAME}' package..." 'screen' 0 5 0 $TEMP
-# UPDATED 2025/10/23 - corrected the location to be the passed directory, and moved it to the top of this block
-#		cd "${REPO_PREFIX}" >/dev/null 2>>"$LOG_ERRS"					# change into the previous directory (REPO_PREFIX) so the generated files get placed correctly (e.g. /tmp/staging > /tmp)
-		cd "${DIRECTORY}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'action' 'screen' 2				# change into the passed directory (e.g. /tmp/staging[/package][/bin,/etc,/usr,...] > /tmp) so the generated files get placed correctly
+# UPDATED 2025/10/30
+#		showMsg 'action' "Creating the '${PAK_NAME}' package..." 'screen' 0 5 0 $TEMP
+## UPDATED 2025/10/23 - corrected the location to be the passed directory, and moved it to the top of this block
+##		cd "${REPO_PREFIX}" >/dev/null 2>>"$LOG_ERRS"					# change into the previous directory (REPO_PREFIX) so the generated files get placed correctly (e.g. /tmp/staging > /tmp)
+#		cd "${DIRECTORY}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'action' 'screen' 2				# change into the passed directory (e.g. /tmp/staging[/package][/bin,/etc,/usr,...] > /tmp) so the generated files get placed correctly
+		showMsg 'action' "Creating the '${PAK_NAME}' package..." 'both' 1 4
+		cd "${DIRECTORY}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 2 'both' 6					# change into the passed directory (e.g. /tmp/staging[/package][/bin,/etc,/usr,...] > /tmp) so the generated files get placed correctly
 # UPDATED 2025/10/28
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[1/4] Erasing any prior files"
-		showMsg 'step' "   [1/4] Erasing any prior files:" 'screen' 1 3 1		# NOTE: we can't do an "rm -f PAK_FILE.* since it would erase the .make file too
-# UPDATED 2025/10/22 - no longer using APP* variables
-#		rm -f ${APPHEAD}.* >/dev/null 2>>"$LOG_ERRS"
-		[ -e "${PAK_FILE}.${EXT_SOFT}" ] && { rm -f "${PAK_FILE}.${EXT_SOFT}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'; }
-		[ -e "${PAK_FILE}.${EXT_HASH}" ] && { rm -f "${PAK_FILE}.${EXT_HASH}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'; }
-		[ -e "${PAK_FILE}.${EXT_LIST}" ] && { rm -f "${PAK_FILE}.${EXT_LIST}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'; }
-		[ -e "${PAK_FILE}.${EXT_INFO}" ] && { rm -f "${PAK_FILE}.${EXT_INFO}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'; }
-		[ -e "${PAK_FILE}.${EXT_DEPS}" ] && { rm -f "${PAK_FILE}.${EXT_DEPS}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'; }
-		showMsg 'step' " [done]" 'screen' 2 3
+# UPDATED 2025/10/30
+#		showMsg 'step' "   [1/4] Erasing any prior files:" 'screen' 1 3 1		# NOTE: we can't do an "rm -f PAK_FILE.* since it would erase the .make file too
+# #UPDATED 2025/10/22 - no longer using APP* variables
+##		rm -f ${APPHEAD}.* >/dev/null 2>>"$LOG_ERRS"
+#		[ -e "${PAK_FILE}.${EXT_SOFT}" ] && { rm -f "${PAK_FILE}.${EXT_SOFT}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'; }
+#		[ -e "${PAK_FILE}.${EXT_HASH}" ] && { rm -f "${PAK_FILE}.${EXT_HASH}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'; }
+#		[ -e "${PAK_FILE}.${EXT_LIST}" ] && { rm -f "${PAK_FILE}.${EXT_LIST}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'; }
+#		[ -e "${PAK_FILE}.${EXT_INFO}" ] && { rm -f "${PAK_FILE}.${EXT_INFO}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'; }
+#		[ -e "${PAK_FILE}.${EXT_DEPS}" ] && { rm -f "${PAK_FILE}.${EXT_DEPS}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'; }
+#		showMsg 'step' " [done]" 'screen' 2 3
+		showMsg 'step' "   [1/4] Erasing any prior files:" 'both' 0 3			# NOTE: we can't do an "rm -f PAK_FILE.* since it would erase the .make file too
+		[ -e "${PAK_FILE}.${EXT_SOFT}" ] && { rm -f "${PAK_FILE}.${EXT_SOFT}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'step'; }
+		[ -e "${PAK_FILE}.${EXT_HASH}" ] && { rm -f "${PAK_FILE}.${EXT_HASH}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'step'; }
+		[ -e "${PAK_FILE}.${EXT_LIST}" ] && { rm -f "${PAK_FILE}.${EXT_LIST}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'step'; }
+		[ -e "${PAK_FILE}.${EXT_INFO}" ] && { rm -f "${PAK_FILE}.${EXT_INFO}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'step'; }
+		[ -e "${PAK_FILE}.${EXT_DEPS}" ] && { rm -f "${PAK_FILE}.${EXT_DEPS}" >/dev/null 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'step'; }
+		showMsg 'step' " [done]" 'both' 1 5
 # UPDATED 2025/10/22 - no longer using APP* variables
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[2/4] Creating the .soft file"
 #		mksquashfs "${REPO_OPTION##*/}" "$APPFILE" >>"$LOG_ERRS" 2>&1
 # UPDATED 2025/10/28
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[2/4] Creating the .${EXT_SOFT} file"
-		showMsg 'step' "   [2/4] Creating the .${EXT_SOFT} file:" 'screen' 1 3 1
-# UPDATED 2025/10/28
-#		[ -d "${DIRECTORY}/package" ] && TEMP='package' || TEMP="${2##*/}"		# if the compiled software call above created a 'package' directory then use it to create the packages below, otherwise use the directory that was passed
+# UPDATED 2025/10/30
+#		showMsg 'step' "   [2/4] Creating the .${EXT_SOFT} file:" 'screen' 1 3 1
+## UPDATED 2025/10/28
+##		[ -d "${DIRECTORY}/package" ] && TEMP='package' || TEMP="${2##*/}"		# if the compiled software call above created a 'package' directory then use it to create the packages below, otherwise use the directory that was passed
+#		[ -d "${DIRECTORY}/package" ] && TEMP='package' || TEMP=''			# if the compiled software call above created a 'package' directory then use it to create the packages below, otherwise use the directory that was passed
+## UPDATED 2025/10/23 - corrected the location to be the passed directory
+##		mksquashfs "${REPO_OPTION##*/}" "${PAK_FILE}.${EXT_SOFT}" >>"$LOG_ERRS" 2>&1
+#		mksquashfs "${TEMP}" "${PAK_FILE}.${EXT_SOFT}" >>"$LOG_ERRS" 2>&1 || exitGracefully 1 'step' 'screen' 2 3 'action'
+#		showMsg 'step' " [done]" 'screen' 2 3
+		showMsg 'step' "   [2/4] Creating the .${EXT_SOFT} file:" 'both' 0 3
 		[ -d "${DIRECTORY}/package" ] && TEMP='package' || TEMP=''			# if the compiled software call above created a 'package' directory then use it to create the packages below, otherwise use the directory that was passed
-# UPDATED 2025/10/23 - corrected the location to be the passed directory
-#		mksquashfs "${REPO_OPTION##*/}" "${PAK_FILE}.${EXT_SOFT}" >>"$LOG_ERRS" 2>&1
-		mksquashfs "${TEMP}" "${PAK_FILE}.${EXT_SOFT}" >>"$LOG_ERRS" 2>&1 || exitGracefully 1 'step' 'screen' 2 3 'action'
-		showMsg 'step' " [done]" 'screen' 2 3
+		mksquashfs "${TEMP}" "${PAK_FILE}.${EXT_SOFT}" >>"$LOG_ERRS" 2>&1 || exitGracefully 4 'both' 5 'step'
+		showMsg 'step' " [done]" 'both' 1 5
 # UPDATED 2025/10/22 - no longer using APP* variables
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[3/4] Creating the .hash file"
 #		md5sum "$APPFILE" > "${APPHEAD}.hash" 2>>"$LOG_ERRS"
 # UPDATED 2025/10/28
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[3/4] Creating the .${EXT_HASH} file"
-		showMsg 'step' "   [3/4] Creating the .${EXT_HASH} file:" 'screen' 1 3 1
-		md5sum "${PAK_FILE}.${EXT_SOFT}" >"${PAK_FILE}.${EXT_HASH}" 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'
-		showMsg 'step' " [done]" 'screen' 2 3
+# UPDATED 2025/10/30
+#		showMsg 'step' "   [3/4] Creating the .${EXT_HASH} file:" 'screen' 1 3 1
+#		md5sum "${PAK_FILE}.${EXT_SOFT}" >"${PAK_FILE}.${EXT_HASH}" 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'
+#		showMsg 'step' " [done]" 'screen' 2 3
+		showMsg 'step' "   [3/4] Creating the .${EXT_HASH} file:" 'both' 0 3
+		md5sum "${PAK_FILE}.${EXT_SOFT}" >"${PAK_FILE}.${EXT_HASH}" 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'step'
+		showMsg 'step' " [done]" 'both' 1 5
 # UPDATED 2025/10/22 - no longer using APP* variables
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[4/4] Creating the .list file"
 #		find "${REPO_OPTION##*/}" -not -type d 2>>"$LOG_ERRS" | sed "s/${REPO_OPTION##*/}//" > "${APPHEAD}.list" 2>>"$LOG_ERRS"
 # UPDATED 2025/10/28
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[4/4] Creating the .${EXT_LIST} file"
-		showMsg 'step' "   [4/4] Creating the .${EXT_LIST} file:" 'screen' 1 3 1
-# UPDATED 2025/10/23 - corrected the location to be the passed directory
-#		find "${REPO_OPTION##*/}" -not -type d 2>>"$LOG_ERRS" | sed "s/${REPO_OPTION##*/}//" > "${PAK_FILE}.${EXT_LIST}" 2>>"$LOG_ERRS"
-		find "${TEMP}" -not -type d 2>>"$LOG_ERRS" | sed "s|${TEMP}||" >"${PAK_FILE}.${EXT_LIST}" 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'
-		showMsg 'step' " [done]" 'screen' 2 3
-		showMsg 'action' "" 'screen' 0 4
+# UPDATED 2025/10/30
+#		showMsg 'step' "   [4/4] Creating the .${EXT_LIST} file:" 'screen' 1 3 1
+## UPDATED 2025/10/23 - corrected the location to be the passed directory
+##		find "${REPO_OPTION##*/}" -not -type d 2>>"$LOG_ERRS" | sed "s/${REPO_OPTION##*/}//" > "${PAK_FILE}.${EXT_LIST}" 2>>"$LOG_ERRS"
+#		find "${TEMP}" -not -type d 2>>"$LOG_ERRS" | sed "s|${TEMP}||" >"${PAK_FILE}.${EXT_LIST}" 2>>"$LOG_ERRS" || exitGracefully 1 'step' 'screen' 2 3 'action'
+#		showMsg 'step' " [done]" 'screen' 2 3
+#		showMsg 'action' "" 'screen' 0 4
+		showMsg 'step' "   [4/4] Creating the .${EXT_LIST} file:" 'both' 0 3
+		find "${TEMP}" -not -type d 2>>"$LOG_ERRS" | sed "s|${TEMP}||" >"${PAK_FILE}.${EXT_LIST}" 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'step'
+		showMsg 'step' " [done]" 'both' 1 5
+	#	showMsg 'action' "" 'screen' 0 4
 # UPDATED 2025/10/28
 #		echo -e "\nThe package has been created!"
 ## UPDATED 2025/10/22 - no longer using APP* variables
 ##		echo -e "Don't forget to create/update the .deps and .info files!\n"
 #		echo -e "Don't forget to create/update the .${EXT_HASH} and .${EXT_INFO} files!\n"
-		showMsg 'note|success' "\nThe package has been created!\nDon't forget to create/update the .${EXT_DEPS} and .${EXT_INFO} files!\n"
+	#	showMsg 'note|success' "\nThe package has been created!\nDon't forget to create/update the .${EXT_DEPS} and .${EXT_INFO} files!\n"
+		showMsg 'note' "\nThe package has been created!\nDon't forget to create/update the .${EXT_DEPS} and .${EXT_INFO} files!\n" 'both' 1 2 1
+		showMsg 'success' "" 'both' 1 6
 		exit 0										# prevent the code below from executing since we're done with this ACTION
 	elif [ "$PROXY" ]; then
 # UPDATED 2025/10/28
@@ -2039,10 +2116,10 @@ done
 # EXECUTE FINAL PROCESSING
 
 # finalize any output for '-O xml'
-if [ "$EXTRACT" ] && [ "$OUTPUT" = 'xml' ]; then						# if we are extracting a packages contents, then...
-	showMsg '|success' ""
-elif [ "$FIND" ] && [ "$OUTPUT" = 'xml' ]; then							# if we are finding files in packages, then...
-	showMsg '|success' ""
+if [ "$EXTRACT" ] && ( [ "$OUTPUT" = 'xml' ] || [ "$OUTPUT" = 'xmLive' ] ); then		# if we are extracting a packages contents, then...
+	showMsg 'success' "" 'both' 1 6
+elif [ "$FIND" ] && ( [ "$OUTPUT" = 'xml' ] || [ "$OUTPUT" = 'xmLive' ] ); then			# if we are finding files in packages, then...
+	showMsg 'success' "" 'screen' 1 6
 fi
 
 # now move the proxy files to the external storage device
