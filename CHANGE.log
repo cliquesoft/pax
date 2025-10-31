@@ -59,4 +59,11 @@
 - Changed '-O XML' to '-O xmLive'
 - Updated the --help output
 - Updated showMsg() to have a simpler operation
+- Updated showMsg() calls up to the proxy code
+
+2025/10/31
+- Updated showMsg() to remove blank lines for xmLive output
+- Continued implementing the '-O' option
+- Updated the --help output
+- Updated splitName() to output correct values when a version is passed
 
