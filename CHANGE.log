@@ -67,3 +67,9 @@
 - Updated the --help output
 - Updated splitName() to output correct values when a version is passed
 
+2025/11/03
+- Implemented DIRECTORY instead of the various REPO_* variables
+- Updated -e to use -S and DIRECTORY values
+- Updated -f to use -S and DIRECTORY values
+- Updated -X to error when using DIRECTORY
+
