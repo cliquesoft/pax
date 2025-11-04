@@ -72,4 +72,11 @@
 - Updated -e to use -S and DIRECTORY values
 - Updated -f to use -S and DIRECTORY values
 - Updated -X to error when using DIRECTORY
+- Updated the --help output
+
+2025/11/04
+- Renamed PAK_NAME to PACKAGE
+- Renamed PAK_FILE to FILENAME
+- Renamed DIR_CLOG to DIR_LIST
+- Added BASENAME
 
