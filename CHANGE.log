@@ -79,4 +79,19 @@
 - Renamed PAK_FILE to FILENAME
 - Renamed DIR_CLOG to DIR_LIST
 - Added BASENAME
+- Simplified processDependency()
+- Continued implementing the '-O' option in processDependencies() and
+  copyPackage()
+- Continued replacing APP* variables in processDependencies() and
+  copyPackage()
+- Updated the --help output
+
+2025/11/05
+- Updated -c to use -S and DIRECTORY values
+- Patched -e to use -S and DIRECTORY values
+- Updated -m to use -S and DIRECTORY values
+- Added FILETYPE for use with processDependencies()
+- Expanded -l to check for specific packages
+- Updated the --help output
+
 
