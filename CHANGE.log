@@ -92,6 +92,27 @@
 - Updated -m to use -S and DIRECTORY values
 - Added FILETYPE for use with processDependencies()
 - Expanded -l to check for specific packages
+- Continued replacing APP* variables
 - Updated the --help output
 
+2025/11/06
+- Continued replacing APP* variables
+- Added LOOP_SCHEMA to define mount point naming convention
+- Added REPO_SCHEMA to define package repo naming convention
+- Expanded -E to include code, cpio, and make files
+- Updated -c to include new -E files
+- Updated -t
+- Rearranged several blocks of code for better flow
+- Updated the --help output
+
+2025/11/07
+- Adjusted showMsg() to also output to debug log
+- Adjusted some code to output to the log correctly
+- Updated some of the debug logging to also go into the error log
+- Continued replacing APP* variables
+- Updated -d to include new -E files
+- Updated -d to use -S and DIRECTORY
+- Updated -i to use -S and DIRECTORY
+- Updated the install code to be more efficient
+- Updated the --help output
 
