@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/11/07 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/11/10 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -102,7 +102,9 @@ REPO_RESTOR="/var/cache/Software/restore"
 
 INDEX=0												# since no arrays can be used in this shell, this keeps track of the index within the dependency stack	NOTE: 0=no deps
 TOTAL=0												# keeps track of the $DEP 'array' size
-EXEID="${DIR_TEMP}/$(mktemp -u XXXXXX)"								# stores a temp execution ID (for use with (un)installing)
+# UPDATED 2025/11/10
+#EXEID="${DIR_TEMP}/$(mktemp -u XXXXXX)"								# stores a temp execution ID (for use with (un)installing)
+EXEID="$(mktemp -u XXXXXX)"									# stores a temp execution ID (for use with (un)installing)
 TEMP=''												# used to store information temporarily
 
 LIBRARIES=''											# boolean indicating libraries are contained in the package and need to be loaded after installation
@@ -130,6 +132,7 @@ XML_TAGS=''											# stores the tags that are currently opened (e.g. containi
 #PURGE=0											# indicate no purging is happening by default
 PURGE=''											# indicate no purging is happening by default	NOTE: keep this blank as default (indicated we are just unloading and not uninstalling)
 
+PREFIX=''											# where the software should be installed: root=/ (firmware), everyone=/Users/Public, user-specific=$HOME, custom=specified
 DEPENDENCY=''											# the current iterated dependency to work with
 PACKAGE=''											# the isolated name of the package (e.g. nano.bin.i32.soft > nano); value set automatically below
 BASENAME=''											# the filename without the extension (e.g. nano.bin.i32); value set automatically below
@@ -186,6 +189,9 @@ APPEXTN=''
 exitGracefully() {
 	find "$DIR_TEMP" -size 0 -print0 | xargs -0 rm 2>/dev/null				# remove any blank cache file	https://stackoverflow.com/questions/3157343/how-to-delete-many-0-byte-files-in-linux
 	rm -f "${DIR_LIST}/"*.${EXT_MARK} 2>/dev/null						# remove any .marker files
+	rm -f "${DIR_TEMP}/installs.${EXEID}" 2>/dev/null					# remove any installation temp files
+	rm -f "${DIR_TEMP}/services.${EXEID}" 2>/dev/null
+	rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>/dev/null
 	( [ ! "$1" ] || [ $1 -eq 0 ] ) && exit 0
 
 	[ $1 -gt 2 ] && {
@@ -939,7 +945,9 @@ processDependencies() {
 			# if there is an EXEID -AND- the requested package is a dependency for the iterated installed software -AND- that iterated installed software is not in the EXEID file that can be uninstalled, then..
 # UPDATED 2025/11/04 - we are now using DIRECTORY
 #			[ "$EXEID" ] && ( grep -q ^"$RAWFILE" "${REPO_OPTION}/${DEPBASE}.${EXT_DEPS}" ) && ( ! grep -q ^"${DEPFILE}" "$EXEID" >/dev/null 2>&1 ) && {
-			[ "$EXEID" ] && ( grep -q ^"$RAWFILE" "${DIRECTORY}/${DEPBASE}.${EXT_DEPS}" ) && ( ! grep -q ^"${DEPFILE}" "$EXEID" >/dev/null 2>&1 ) && {
+# UPDATED 2025/11/10
+#			[ "$EXEID" ] && ( grep -q ^"$RAWFILE" "${DIRECTORY}/${DEPBASE}.${EXT_DEPS}" ) && ( ! grep -q ^"${DEPFILE}" "$EXEID" >/dev/null 2>&1 ) && {
+			[ "$EXEID" ] && ( grep -q ^"$RAWFILE" "${DIRECTORY}/${DEPBASE}.${EXT_DEPS}" ) && ( ! grep -q ^"${DEPFILE}" "${DIR_TEMP}/${EXEID}" >/dev/null 2>&1 ) && {
 				[ $DEBUG -gt 0 ] && echo -e "\tOther software depends on this dependency..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
 				showMsg 'step' "[depend] [(${DEPTYPE}) ${DEPNAME}] (${FILETYPE})${INDENT} ${PACKAGE}" 'both' 1 1
 # REMOVED 2025/11/07
@@ -1063,12 +1071,16 @@ copyPackage() {
 	}
 
 	[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${REPO_SOURCE}/${BASENAME}.${EXT_SOFT}\" './'" >>"$LOG_DBUG"
-	cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_SOFT}" './' >>"$LOG_ERRS" 2>&1 || {		# copy the .soft file from the source directory
+# UPDATED 2025/11/10
+#	cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_SOFT}" './' >>"$LOG_ERRS" 2>&1 || {		# copy the .soft file from the source directory
+	( cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_SOFT}" './' 2>&1 | sed 's/^c/ \[failure\]\nc/' | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# copy the .soft file from the source directory
 		showMsg 'failure' "The package copy failed (${BASENAME}.${EXT_SOFT})." 'log'
 		return 1
 	}
 	[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${REPO_SOURCE}/${BASENAME}.${EXT_HASH}\" './'" >>"$LOG_DBUG"
-	cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_HASH}" './' >>"$LOG_ERRS" 2>&1 || {		# copy the corresponding hash file
+# UPDATED 2025/11/10
+#	cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_HASH}" './' >>"$LOG_ERRS" 2>&1 || {		# copy the corresponding hash file
+	( cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_HASH}" './' 2>&1 | sed 's/^c/ \[failure\]\nc/' | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# copy the corresponding hash file
 		showMsg 'failure' "The package hash file copy failed (${BASENAME}.${EXT_HASH})." 'log'
 		return 1
 	}
@@ -1077,7 +1089,9 @@ copyPackage() {
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'code' ]; then
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"./${BASENAME}.${EXT_CODE}\" './'" >>"$LOG_DBUG"
 			if [ -e "${REPO_SOURCE}/${BASENAME}.${EXT_CODE}" ]; then
-				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_CODE}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding code file
+# UPDATED 2025/11/10
+#				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_CODE}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding code file
+				( cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_CODE}" './' 2>&1 | sed 's/^c/ \[failure\]\nc/' | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# copy the corresponding code file
 					showMsg 'failure' "The package source code file copy failed (${BASENAME}.${EXT_CODE})." 'log'
 					return 1
 				}
@@ -1086,7 +1100,9 @@ copyPackage() {
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'cpio' ]; then
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"./${BASENAME}.cpio\" './'" >>"$LOG_DBUG"
 			if [ -e "${REPO_SOURCE}/${BASENAME}.cpio" ]; then
-				cp -f "${REPO_SOURCE}/${BASENAME}.cpio" './' >>"$LOG_ERRS" 2>&1 || {		# copy the corresponding cpio file
+# UPDATED 2025/11/10
+#				cp -f "${REPO_SOURCE}/${BASENAME}.cpio" './' >>"$LOG_ERRS" 2>&1 || {		# copy the corresponding cpio file
+				( cp -f "${REPO_SOURCE}/${BASENAME}.cpio" './' 2>&1 | sed 's/^c/ \[failure\]\nc/' | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the corresponding cpio file
 					showMsg 'failure' "The package cpio file copy failed (${BASENAME}.cpio)." 'log'
 					return 1
 				}
@@ -1095,7 +1111,9 @@ copyPackage() {
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'info' ]; then
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"./${BASENAME}.${EXT_INFO}\" './'" >>"$LOG_DBUG"
 			if [ -e "${REPO_SOURCE}/${BASENAME}.${EXT_INFO}" ]; then
-				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_INFO}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding info file
+# UPDATED 2025/11/10
+#				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_INFO}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding info file
+				( cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_INFO}" './' 2>&1 | sed 's/^c/ \[failure\]\nc/' | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# copy the corresponding info file
 					showMsg 'failure' "The package info file copy failed (${BASENAME}.${EXT_INFO})." 'log'
 					return 1
 				}
@@ -1104,7 +1122,9 @@ copyPackage() {
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'list' ]; then
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"./${BASENAME}.${EXT_LIST}\" './'" >>"$LOG_DBUG"
 			if [ -e "${REPO_SOURCE}/${BASENAME}.${EXT_LIST}" ]; then
-				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_LIST}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding list file
+# UPDATED 2025/11/10
+#				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_LIST}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding list file
+				( cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_LIST}" './' 2>&1 | sed 's/^c/ \[failure\]\nc/' | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# copy the corresponding list file
 					showMsg 'failure' "The package manifest file copy failed (${BASENAME}.${EXT_LIST})." 'log'
 					return 1
 				}
@@ -1113,7 +1133,9 @@ copyPackage() {
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'make' ]; then
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"./${BASENAME}.${EXT_MAKE}\" './'" >>"$LOG_DBUG"
 			if [ -e "${REPO_SOURCE}/${BASENAME}.${EXT_MAKE}" ]; then
-				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_MAKE}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding make file
+# UPDATED 2025/11/10
+#				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_MAKE}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding make file
+				( cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_MAKE}" './' 2>&1 | sed 's/^c/ \[failure\]\nc/' | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# copy the corresponding make file
 					showMsg 'failure' "The package make file copy failed (${BASENAME}.${EXT_MAKE})." 'log'
 					return 1
 				}
@@ -1291,16 +1313,18 @@ return 0
 # Usage syntax: installPackage
 # Overview:	performs the actual work of installing the contents of the package to the system via copy or symlink
 # Notes:	pwd is irrelevent to this function										< UPDATED - this is no longer true as of 2018/11/27
-#		this can also perform one of the tasks of the package validation
+# 		the directory containing the package(s) should already be entered BEFORE calling this function!
+#		this can also performs package validation
 #		all the necessary packages should already be obtained and in REPO_SOURCE (via COPY or DOWNLOAD)
 installPackage() {
-	local SUCCESS=0										# indicates if the copy-to-RAM was successful (if that is desired)
+#	local SUCCESS=0										# indicates if the copy-to-RAM was successful (if that is desired)
 	local MARKER=''										# used to convert the install marker (/usr/local/tce.installed) to the XiniX naming convention
 	local SCRIPT=''										# used to convert the service script (/usr/local/etc/init.d) to the XiniX naming convention
 	local SOURCE=''
 	local TARGET=''
-	local OUTPUT=0
+#	local OUTPUT=0
 	local PERM=0
+	local MODE=''
 
 # UPDATED 2025/11/06 - replace APP* variables
 #	[ $DEBUG -gt 0 ] && { echo -en "installPackage:\n\tRAWFILE :${RAWFILE}:\n\tAPPFILE :${APPFILE}:\n\tAPPHEAD :${APPHEAD}:\n\tAPPNAME :${APPNAME}:\n\tAPPARCH :${APPARCH}:\n\tAPPTYPE :${APPTYPE}:\n\tAPPEXTN :${APPEXTN}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:\n\tpwd     " >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
@@ -1363,17 +1387,117 @@ installPackage() {
 # UPDATED 2025/11/07
 #	MARKER="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}${DIR_INST}" 2>/dev/null)"						# NOTE: since XiniX uses different package names than TC, this renames the 'installed marker' to be appropriate; this can be removed once we start adjusting the contents of each package
 #	SCRIPT="$(ls -1 "${DIR_LOOP}/${APPNAME}.${APPTYPE}${DIR_INIT}" 2>/dev/null)"						# same, but with the service script
-	MARKER="$(ls -1 "${DIR_LOOP}/${BASENAME}${DIR_INST}" 2>/dev/null)"							# check for installation scripts
-	SCRIPT="$(ls -1 "${DIR_LOOP}/${BASENAME}${DIR_INIT}" 2>/dev/null)"							# same, but with the service script
+# MOVED 2025/11/10 - below
+#	MARKER="$(ls -1 "${DIR_LOOP}/${BASENAME}${DIR_INST}" 2>/dev/null)"							# check for installation scripts
+#	SCRIPT="$(ls -1 "${DIR_LOOP}/${BASENAME}${DIR_INIT}" 2>/dev/null)"							# same, but with the service script
 
-# LEFT OFF - can we simplify the below process (no matter copying or symlinking or using FILELIST) and process one file at a time
+	# if '-M copy' was passed to this script -OR- the copy-everything-to-RAM file exists -OR- { the copy the system directory (REPO_SYSTEM) contents to RAM file exists -and- we're using that directory (e.g. booting) -and- REPO_SYSTEM and REPO_OPTION are NOT the same (to prevent TC from erroneously loading everything to RAM since those two would be the same) }, then...
+	if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/copy_all.flag" ] || ( [ -e "${REPO_PREFIX}/copy_sys.flag" ] && [ "$REPO_SOURCE" = "$REPO_SYSTEM" ] && [ "$REPO_SYSTEM" != "$REPO_OPTION" ] ); then
+		[ $DEBUG -gt 0 ] && echo -e "\tInstall by copying..." >>"$LOG_DBUG"
+		showMsg 'step' " [copy]" 'both' 0 0
+		MODE='copy'
+	else
+		[ $DEBUG -gt 0 ] && echo -e '\tInstall using symlinks...' >>"$LOG_DBUG"
+		showMsg 'step' " [link]" 'both' 0 0
+		MODE='link'
+	fi
+
+	TEMP=''											# set a default value
+	( [ "$FORCE" ] || [ "$VALIDATE" ] ) && {						# if we've been instructed to force (overwrite) -OR- are validating (which always overwrites), then...
+		showMsg 'step' " [overwrite]" 'both' 0 0					#   indicate this to the user
+		TEMP='f'									#   store the force flag for usage below
+		unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
+		unalias ln >/dev/null 2>&1
+	}
 
 	# if we only need to copy specified files out of the package, then lets obtain that list
-	if [ "$FILELIST" ]; then
+	# NOTES:
+	#	- if the passed file does NOT exist, it will NOT be in the filelist.txt
+	#	- the final sed adds the directory to the listing so the 'for' loop below works correctly
+	#	  EXPLAINED: holds the entire line in the hold buffer; removes the filename from the line; prints the line; prints the hold buffer
+	#	  SEE: https://stackoverflow.com/questions/12833714/the-concept-of-hold-space-and-pattern-space-in-sed
 # UPDATED 2025/11/07
+#	if [ "$FILELIST" ]; then
 #		find "${DIR_LOOP}/${APPNAME}.${APPTYPE}" ! -type d -name $(echo "$FILELIST" | sed 's/,/ -o -name /g') >"${DIR_TEMP}/filelist.txt" 2>>"$LOG_ERRS"
-		find "${DIR_LOOP}/${BASENAME}" ! -type d -name $(echo "$FILELIST" | sed 's/,/ -o -name /g') >"${DIR_TEMP}/filelist.txt" 2>>"$LOG_ERRS"
-	fi
+#	fi
+	[ "$FILELIST" ] && find "${DIR_LOOP}/${BASENAME}" ! -type d -name $(echo "$FILELIST" | sed 's/,/ -o -name /g') | sed 'h;s|[^/]*$||;p;x' >"${DIR_TEMP}/filelist.${EXEID}" 2>>"$LOG_ERRS"
+
+	# if a filelist.EXEID file does NOT exist, then we need to process all files in the package, otherwise -N was passed so only certain ones need to be
+	# NOTES:
+	#	- the sub-shell was constructed using to different conditions so the failure of a prior execution did not erroneously trigger an '||' execution
+	#	- the '| tail -n +2' skips the first line of output, which is the current directory and should NOT be processed
+	#	- we use EXEID here so simultaneous pax executions can operate without issues
+	# WARNING: multiple problems occurred trying to use 'cp' (with these params: -aisL, -LRis, -HRis) but the task failed for one reason or another; the below was used instead
+	for SOURCE in $([ ! -e "${DIR_TEMP}/filelist.${EXEID}" ] && find "${DIR_LOOP}/${BASENAME}" | tail -n +2; [ -e "${DIR_TEMP}/filelist.${EXEID}" ] && cat "${DIR_TEMP}/filelist.${EXEID}"); do
+		TARGET="$(echo "$SOURCE" | sed "s:^${DIR_LOOP}/${BASENAME}::")"			# (re)set the value; remove the loopback mount point prefix to store only the target directory/file path
+
+		if [ ! -d "$SOURCE" ]; then							# for each file...
+			( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "$SOURCE" ] && continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the file does exist then go to the next file
+
+			if [ "$MODE" = 'copy' ]; then
+				# NOTE: if the package installation is done with root, the USER:GROUP ownership is preserved (e.g. when installing to /), otherwise it will default to the user and their default group (e.g. when installing to /Users/Public or $HOME)
+				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -dp${TEMP} \"${DIR_LOOP}/${BASENAME}/${SOURCE}\" \"${PREFIX}/\"" >>"$LOG_DBUG"
+				( cp -dp${TEMP} "${DIR_LOOP}/${BASENAME}/${SOURCE}" "${PREFIX}/" 2>&1 | sed 's/^c/ \[failure\]\nc/' | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
+					showMsg 'failure' "The package file copy failed (${SOURCE})." 'log'
+					return 1
+				}
+			else
+				# NOTE: if the package installation is done with root, the USER:GROUP ownership is preserved (e.g. when installing to /), otherwise it will default to the user and their default group (e.g. when installing to /Users/Public or $HOME)
+				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    ln -s${TEMP} \"${DIR_LOOP}/${BASENAME}/${SOURCE}\" \"${PREFIX}${SOURCE%/*}\"" >>"$LOG_DBUG"
+				( ln -s${TEMP} "${DIR_LOOP}/${BASENAME}/${SOURCE}" "${PREFIX}${SOURCE%/*}" 2>&1 | sed 's/^c/ \[failure\]\nc/' | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# symlink the file from the source directory
+					showMsg 'failure' "The package file symlink failed (${SOURCE})." 'log'
+					return 1
+				}
+			fi
+			continue
+		fi
+
+		# if we've made it here, then we're dealing with a directory, so...
+		( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "$TARGET" ] && continue		#   if we're NOT forcing -AND- we're NOT validating -AND- the directory does exist then cycle the 'for' loop
+
+		if [ ! -e "${PREFIX}${TARGET}" ]; then						# create the directory
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    mkdir -p \"${PREFIX}${TARGET}\"" >>"$LOG_DBUG"
+			( mkdir -p "${PREFIX}${TARGET}" 2>&1 | sed 's/^m/ \[failure\]\nm/' | tee -a "$LOG_ERRS" | grep -q ^'mkdir: ' ) && {
+				showMsg 'failure' "The package directory creation failed (${PREFIX}${TARGET})." 'log'
+				 return 1;
+			}
+		fi
+	done
+
+
+# REMOVED 2025/11/10 - this doesn't look like it's necessary, but left until confirmed
+#	MARKER="$(ls -1 "${DIR_LOOP}/${BASENAME}${DIR_INST}" 2>/dev/null)"							# check for installation scripts
+#	[ "$MARKER" ] && {											# if a marker is included in the package, then...
+#		rm "${DIR_INST}/${MARKER}" >>"$LOG_ERRS" 2>&1								#   remove the symlink created above
+#		ln -s$TEMP "${DIR_LOOP}/${APPNAME}.${APPTYPE}/${DIR_INST}/${MARKER}" "${DIR_INST}/${APPNAME}.${APPTYPE}" >>"$LOG_ERRS" 2>&1	#   re-symlink using the XiniX naming convention
+#	}
+#
+#	SCRIPT="$(ls -1 "${DIR_LOOP}/${BASENAME}${DIR_INIT}" 2>/dev/null)"							# same, but with the service script
+#	[ "$SCRIPT" ] && {											# same with the service script
+#		rm "${DIR_INIT}/${SCRIPT}" >>"$LOG_ERRS" 2>&1
+#		ln -s$TEMP "${DIR_LOOP}/${APPNAME}.${APPTYPE}${DIR_INIT}/${SCRIPT}" "${DIR_INIT}/${APPNAME}" >>"$LOG_ERRS" 2>&1
+#	}
+
+	# update the "associated with this package" list contents
+	echo "$FILENAME" >>"${DIR_TEMP}/installed.${EXEID}"						# add the package to the cache file for future unloading/uninstalling information
+
+	# update the "install" list
+	# if we are NOT validating -AND- installing a requested package [INDEX==1] (not a dependency for it [INDEX>1]) -AND- it needs to be added to the optional.list -AND- the package isn't already in the LIST, then add the package to the LIST file
+	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ ! "$NOLIST" ] && ( ! grep -q $RAWFILE "${REPO_PREFIX}/$LIST" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST}" 2>>"$LOG_ERRS"
+
+	# defer the execution of any related marker/service scripts from the package(s) until everything is installed - if we are not validating package data!
+	[ ! "$VALIDATE" ] && [ -x "${DIR_INST}/${BASENAME}" ] && ( ! grep -q "${DIR_INST}/${BASENAME}" ${DIR_TEMP}/installs.${EXEID} 2>/dev/null ) && echo "${BASENAME}" >>${DIR_TEMP}/installs.${EXEID} 2>>"$LOG_ERRS"
+	[ ! "$VALIDATE" ] && [ -e "${DIR_INIT}/${BASENAME}" ] && ( ! grep -q "${DIR_INIT}/${BASENAME}" ${DIR_TEMP}/services.${EXEID} 2>/dev/null ) && echo "${BASENAME}" >>${DIR_TEMP}/services.${EXEID} 2>>"$LOG_ERRS"
+
+	# remove any -N filelist files
+	[ -e "${DIR_TEMP}/filelist.${EXEID}" ] && rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>>"$LOG_ERRS"
+
+	# now add to the 'catalog' of installed packages	
+	ln -sf "$(pwd)/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
+	ln -sf "$(pwd)/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
+	ln -sf "$(pwd)/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
+
+return 0
 
 	# if '-M copy' was passed to this script -OR- the copy-everything-to-RAM file exists -OR- the copy all system directories (REPO_OPTION and REPO_SYSTEM) contents to RAM file exists -and- we're using one of those directories, then...
 	if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/copy_all.flag" ] || ( [ -e "${REPO_PREFIX}/copy_sys.flag" ] && [ ! "$REPO_TARGET" ] ); then
@@ -1494,7 +1618,10 @@ installPackage() {
 	ln -sf "$(pwd)/${APPHEAD}.deps" "${DIR_LIST}/${APPHEAD}.deps" 2>>"$LOG_ERRS"
 
 	# update the appropriate list contents
-	( ! grep -q "$APPFILE" "${DIR_TEMP}/"* 2>>"$LOG_ERRS" ) && echo "$APPFILE" >> "$EXEID"		# if the package isn't already part of an existing list, then add the package to the cache file for future uninstalling information
+# UPDATED 2025/11/10
+#	( ! grep -q "$APPFILE" "${DIR_TEMP}/"* 2>>"$LOG_ERRS" ) && echo "$APPFILE" >> "$EXEID"		# if the package isn't already part of an existing list, then add the package to the cache file for future uninstalling information
+	( ! grep -q "$APPFILE" "${DIR_TEMP}/"* 2>>"$LOG_ERRS" ) && echo "$APPFILE" >> "${DIR_TEMP}/${EXEID}"		# if the package isn't already part of an existing list, then add the package to the cache file for future uninstalling information
+
 # UPDATED 2025/10/23 - the -L option is now a negation
 #	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ "$NOLIST" ] && ( ! grep -q $RAWFILE "${REPO_PREFIX}/$LIST" 2>>"$LOG_ERRS" ) && echo "$RAWFILE" >> "${REPO_PREFIX}/$LIST" 2>>"$LOG_ERRS"	# if we are updating the system from (one of the) requested packages and not one of its dependencies (via INDEX==1) -AND- we're installing -AND- we're not only loading (no adjustment to LIST) -AND- the package isn't already in the LIST, then add the package to the LIST file
 	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ ! "$NOLIST" ] && ( ! grep -q $RAWFILE "${REPO_PREFIX}/$LIST" 2>>"$LOG_ERRS" ) && echo "$RAWFILE" >> "${REPO_PREFIX}/$LIST" 2>>"$LOG_ERRS"	# if we are updating the system from (one of the) requested packages and not one of its dependencies (via INDEX==1) -AND- we're installing -AND- we're not only loading (no adjustment to LIST) -AND- the package isn't already in the LIST, then add the package to the LIST file
@@ -1514,6 +1641,8 @@ installPackage() {
 unloadPackage() {
 	local PARAMS=''
 	local FILE=''
+
+# LEFT OFF 2025/11/10 - there appear to be no checks if the package is depended on by other software before unloading occurs!!!!
 
 	[ $DEBUG -gt 0 ] && echo -e "unloadPackage:\n\tRAWFILE :${RAWFILE}:\n\tAPPFILE :${APPFILE}:\n\tAPPHEAD :${APPHEAD}:\n\tAPPNAME :${APPNAME}:\n\tAPPARCH :${APPARCH}:\n\tAPPTYPE :${APPTYPE}:\n\tAPPEXTN :${APPEXTN}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:" >>"$LOG_DBUG"
 
@@ -1578,7 +1707,10 @@ unloadPackage() {
 #		is this necessary if we are creating restore points?
 
 	[ -e "${DIR_LIST}/${APPFILE}" ] && rm -f "${DIR_LIST}/${APPHEAD}."* >>"$LOG_ERRS" 2>&1					# delete the 'catalog' item
-	[ "$EXEID" ] && sed -i "/${RAWFILE}/d" "${EXEID%/*}/"*									# remove the package from all the cache files (since it was just unloaded!)	  NOTE: this was if a dep is in another list, but it doesn't have any deps and can be unloaded too
+# UPDATED 2025/11/10
+#	[ "$EXEID" ] && sed -i "/${RAWFILE}/d" "${EXEID%/*}/"*									# remove the package from all the cache files (since it was just unloaded!)	  NOTE: this was if a dep is in another list, but it doesn't have any deps and can be unloaded too
+	[ "$EXEID" ] && sed -i "/${RAWFILE}/d" "${DIR_TEMP}/"*									# remove the package from all the cache files (since it was just unloaded!)	  NOTE: this was if a dep is in another list, but it doesn't have any deps and can be unloaded too
+
 # UPDATED 2025/10/22 - merged -P with -U
 #	[ "$INDEX" -eq 1 ] && [ "$PURGE" -gt '0' ] && sed -i "/${RAWFILE}/d" "${REPO_PREFIX}/$LIST" 2>>"$LOG_ERRS"		# if we are updating the system from (one of the) requested packages and not one of its dependencies (via INDEX==1) -AND- we're unloading -AND- we're are actually purging (uninstalling), then remove the package from the onboot.lst file
 	[ "$INDEX" -eq 1 ] && [ "$PURGE" != '' ] && sed -i "/${RAWFILE}/d" "${REPO_PREFIX}/$LIST" 2>>"$LOG_ERRS"		# if we are updating the system from (one of the) requested packages and not one of its dependencies (via INDEX==1) -AND- we're unloading -AND- we're are actually purging (uninstalling), then remove the package from the onboot.lst file
@@ -1698,7 +1830,8 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-l   list all currently installed packages'
 	echo '	-m   make a new package (requires DIRECTORY)'					# this makes a new .soft package tarball based on the passed directory; 	NOTE: you can just have the .make file call builder to do all the heavy lifting
 #	echo '	-n   '
-#	echo '	-o   '
+# LEFT OFF -
+#	echo '	-o   open a fifo for (client) communication'		# this will allow remote administration; uses DIR_TEMP/input
 # LEFT OFF - check for updates to installed packages (compare the version numbers in the local .list files vs ones dl'ed from repo server); use cron to do this regularly
 #	echo '	-p   process updates for installed packages'
 #			check		simply checks for updates and notifies
@@ -1725,7 +1858,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '  OPTIONS:'
 # LEFT OFF - implement
 #	echo '	-A   approval code/key from the server when making purchases'			# so after the software is purchased, the code/key can be passed as authentication to download the software package(s)
-	echo '	-B   indicates we are currently booting the system'			# NOTE: this currently does nothing!!!		NOTE 2025/10/06 - use this to indicate everything gets installed to root, not /Users/Public or a home directory
+	echo '	-B   indicates we are currently booting the system'				# use this to indicate everything gets installed to root (PREFIX=/) and obtain files from REPO_SYSTEM
 	echo '	-C   specifies an alternative CPU architecture: i32, i64, r32, r64'		# this allows for alternative CPU software downloads		r01 (raspi 0 and 1), r23 (raspi 2 and 3)
 # UPDATED 2025/10/22
 #	echo '	-D   sets the directory prefix when installing/unloading packages'		# this can be used to install to / (OS - admin permissions), /Users/.Public (everyone), $HOME (personal) while retaining the bin, sbin, lib, etc structure
@@ -1757,7 +1890,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #	echo '	-U   uninstalls specified package files: all, app (leaves configs)'	# old '-p' > new '-U'		# data ALWAYS is retained though! (e.g. mysql databases)
 #	echo '	-U   '
 	echo '	-V   the specific version of a package to install'
-	echo '	-W   installs the whole .deps list of software, including optional'	# old '-A' > new '-W'			this is so that if a user is installing a drivers set, any optional software is also installed (e.g. [xf86_video_intel|xorg])
+	echo '	-W   installs all packages in .deps file, including optional'		# old '-A' > new '-W'			this is so that if a user is installing a drivers set, any optional software is also installed (e.g. [xf86_video_intel|xorg])
 # VER2 - proxy other actions via ssh so that administrators can push software to clients, or reinstall/delete software that's currently installed
 	echo '	-X   obtain packages via proxy using another device'				# Can be used when one location has little or no Internet access. For example, @home has bad internet connection, but work is good, can dl @work for @home.
 #	echo '	-Y   '
@@ -1817,6 +1950,11 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	     - a full path: /tmp/pax/"
 	echo "	     - or a relative path: ./pax"
 	echo "	     - or have a trailing slash: pax/"
+	echo "	The presence of a REPO_PREFIX/copy_all.flag file will indicate that"
+	echo "	     all packages will be loaded into RAM."
+	echo "	The presence of a REPO_PREFIX/copy_sys.flag file will indicate that"
+	echo "	     all the packages in REPO_SYSTEM will be loaded into RAM.  This"
+	echo "	     only takes place if REPO_SYSTEM and REPO_OPTION are different."
 	echo
 	echo '  EXAMPLES:'
 	echo '	Copy packages from optional to specified directory:'
@@ -2417,6 +2555,7 @@ elif [ "$INSTALL" ]; then									# if we are installing package(s), then...
 		DIRECTORY='/'									#     set DIRECTORY to the filesystem root
 		REPO_SOURCE="$REPO_SYSTEM"							#     set REPO_SOURCE to the 'FIRMWARE' packages location
 	}
+	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
 #elif [ "$LIST" ]; then										# if we are listing installed packages, then...
 	# this is handled in the script parameter processing section
 elif [ "$MAKE" ]; then										# if we are creating a package for distribution, then...

@@ -116,3 +116,9 @@
 - Updated the install code to be more efficient
 - Updated the --help output
 
+2025/11/10
+- Continued replacing APP* variables
+- Consolidated code in installPackage()
+- Updated the EXEID value used through to remove the directory
+- Updated the --help output
+
