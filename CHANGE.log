@@ -112,7 +112,7 @@
 - Continued replacing APP* variables
 - Updated -d to include new -E files
 - Updated -d to use -S and DIRECTORY
-- Updated -i to use -S and DIRECTORY
+- Started to implement -i to use -S and DIRECTORY
 - Updated the install code to be more efficient
 - Updated the --help output
 
@@ -121,4 +121,12 @@
 - Consolidated code in installPackage()
 - Updated the EXEID value used through to remove the directory
 - Updated the --help output
+
+2025/11/12
+- Moved some initial checks after directory values are set
+- Added DIR_LIVE
+- Corrected an XML tag bug with exitGracefully()
+- Completed implementation of -i to use -S and DIRECTORY
+- Started to implement -u to use -S and DIRECTORY
+
 
