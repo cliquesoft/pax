@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/11/12 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/11/13 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -88,6 +88,9 @@ EXT_SOFT='soft'											# [mksquashfs file] packaged compiled software
 LOG_DBUG="${DIR_LOGS}/pax.debug"								# the log file for debug output
 LOG_ERRS="${DIR_LOGS}/pax.log"									# the log file for error output
 
+						# LEFT OFF - document the below as being able to connect to a "pax server" for remote administration (e.g. FIFO_SERVER='/sshfs/directory/device_nic_mac')
+FIFO_SERVER="${DIR_TEMP}/input"									# defines the location that the -o action should attach for (remote) commands
+
 FILE_SCHEMA='${PACKAGE}.${TYPE}.${CPU}'								# the format for the package filenames		NOTE: encase in single quotes so variables are NOT expanded yet
 LOOP_SCHEMA='${PACKAGE}.${TYPE}'								# the format for the package mount point	NOTE: same as above
 REPO_SCHEMA='http://repo.cliquesoft.org/vanilla/1.0/${PACKAGE/_${KERNEL}}'			# the format for remote packages		NOTE: save as above
@@ -131,7 +134,8 @@ XML_TAGS=''											# stores the tags that are currently opened (e.g. containi
 
 # UPDATED 2025/10/22 - merged -P with -U
 #PURGE=0											# indicate no purging is happening by default
-PURGE=''											# indicate no purging is happening by default	NOTE: keep this blank as default (indicated we are just unloading and not uninstalling)
+# REMOVED 2025/11/13 - this was merged with UNLOAD
+#PURGE=''											# indicate no purging is happening by default	NOTE: keep this blank as default (indicated we are just unloading and not uninstalling)
 
 PREFIX=''											# where the software should be installed: root=/ (firmware), everyone=/Users/Public, user-specific=$HOME, custom=specified
 DEPENDENCY=''											# the current iterated dependency to work with
@@ -188,12 +192,14 @@ APPEXTN=''
 # TAGS		[number] [optional] the TAGS value to send to showMsg
 # TAG		[string] [optional] the TAG value to send to showMsg
 exitGracefully() {
-	find "$DIR_TEMP" -size 0 -print0 | xargs -0 rm 2>/dev/null				# remove any blank cache file	https://stackoverflow.com/questions/3157343/how-to-delete-many-0-byte-files-in-linux
+# UPDATED 2025/11/13 - prevents deleted named pipes/fifo's
+#	find "$DIR_TEMP" -size 0 -print0 | xargs -0 rm 2>/dev/null				# remove any blank cache file	https://stackoverflow.com/questions/3157343/how-to-delete-many-0-byte-files-in-linux
+	find "$DIR_TEMP" ! -type p -size 0 -print0 | xargs -0 rm 2>/dev/null				# remove any blank cache file	https://stackoverflow.com/questions/3157343/how-to-delete-many-0-byte-files-in-linux
 	rm -f "${DIR_LIST}/"*.${EXT_MARK} 2>/dev/null						# remove any .marker files
 	[ $DEBUG -eq 0 ] && rm -f "${DIR_TEMP}/installs.${EXEID}" 2>/dev/null					# remove any installation temp files
 	[ $DEBUG -eq 0 ] && rm -f "${DIR_TEMP}/services.${EXEID}" 2>/dev/null
 	[ $DEBUG -eq 0 ] && rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>/dev/null
-	[ "$MODE" = 'copy' ] && [ $1 -gt 0 ] && sudo /bin/umount "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1	# if we're copying and an error was encountered, then umount the package
+	[ "$MODE" = 'copy' ] && [ $1 -gt 0 ] && ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && sudo /bin/umount "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1	# if we're copying and an error was encountered, then umount the package
 
 	( [ ! "$1" ] || [ $1 -eq 0 ] ) && exit 0
 
@@ -433,7 +439,9 @@ getBootcode() {
 # NAME		[string] the name of the package to parse (e.g. bash.i64.dev.soft)
 # EXTENSION	[string] [optional] the file extension to process (EXT_SOFT is default)
 splitName() {
-	local PARAMETER="${1##*/}"								# remove any directory structure and store the raw parameter value
+# UPDATED 2025/11/13 - this is so -o could work (i
+#	local PARAMETER="${1##*/}"								# remove any directory structure and store the raw parameter value
+	local PARAMETER="$(echo "$1" | sed 's|.*/||;s|^\s*||')"					# remove any directory structure and store the raw parameter value	NOTE: we also remove any preceeding spacing that gets injected when using -o for some reason
 	local EXT="${EXT_SOFT}"
 	local TEMP=''
 
@@ -834,7 +842,9 @@ processDependencies() {
 #	[ "$UNLOAD" ] && [ ! -e "${DIR_LIST}/${APPFILE}" ] && [ "$PURGE" = '' ] && {					# if the iterated dependency is already unloaded -AND- we aren't uninstalling it, then go to the next one!
 #		[ $DEBUG -gt 0 ] && echo -e "\tPackage already unloaded..." >>"$LOG_DBUG"
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[absent] ${APPNAME}.${APPTYPE}"
-	[ "$UNLOAD" ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && [ "$PURGE" = '' ] && {					# if the iterated dependency is already unloaded -AND- we aren't uninstalling it, then go to the next one!
+# UPDATED 2025/11/3
+#	[ "$UNLOAD" ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && [ "$PURGE" = '' ] && {					# if the iterated dependency is already unloaded -AND- we aren't uninstalling it, then go to the next one!
+	[ "$UNLOAD" = 'unload' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {					# if the iterated dependency is already unloaded -AND- we are just unloading (not uninstalling it: delete or purge), then go to the next one!
 		[ $DEBUG -gt 0 ] && echo -e "\tThe package is already unloaded." >>"$LOG_DBUG"				# NOTE: we left this line like this since this is not a failure, but just a package to skip
 		showMsg 'step' "[absent] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0
@@ -989,6 +999,8 @@ processDependencies() {
 	# add the passed dependency to the stack
 	addDependency "${FILENAME}"								# add the passed package to the stack to be processed outside of this function
 	[ $DEBUG -gt 0 ] && echo "processDependencies (returned):" >>"$LOG_DBUG"
+
+	[ "$INSTALL" ] && echo "$FILENAME" >>"${DIR_TEMP}/installed.${EXEID}"			# add the dependency to the 
 
 	[ "$ONLY" ] && {									# if we are only affecting the package itself and not any dependencies, then...
 		[ $DEBUG -gt 0 ] && echo -e "\tJust downloading the package, not any dependencies..." >>"$LOG_DBUG"
@@ -1371,7 +1383,8 @@ installPackage() {
 		showMsg 'step' " [unloading]" 'both' 0 0
 		unloadPackage || return 1							#   unload the package first no matter what
 		[ "$RESTORE" ] && {								#   if we're creating a restore point, then...
-			showMsg 'step' " [archiving]" 'both' 0 0
+# MOVED 2025/11/13 - moved this into uninstallPackage
+#			showMsg 'step' " [archiving]" 'both' 0 0
 			uninstallPackage || return 1						#      we need to uninstall of the package too
 		}
 	fi
@@ -1454,7 +1467,7 @@ installPackage() {
 #echo before
 	for SOURCE in $([ ! -e "${DIR_TEMP}/filelist.${EXEID}" ] && find "${DIR_LOOP}/${BASENAME}" | tail -n +2; [ -e "${DIR_TEMP}/filelist.${EXEID}" ] && cat "${DIR_TEMP}/filelist.${EXEID}"); do
 #echo "iterating |$SOURCE|"
-		TARGET="$(echo "$SOURCE" | sed "s:^${DIR_LOOP}/${BASENAME}::")"			# (re)set the value; remove the loopback mount point prefix to store only the target '/directory/filename' string
+		TARGET="$(echo "$SOURCE" | sed "s|^${DIR_LOOP}/${BASENAME}||")"			# (re)set the value; remove the loopback mount point prefix to store only the target '/directory/filename' string
 #echo "target |$TARGET|"
 		if [ ! -d "$SOURCE" ]; then							# for each file...
 #echo "[F] |$SOURCE|"
@@ -1526,8 +1539,8 @@ installPackage() {
 
 	# now add to the 'catalog' of installed packages	
 	ln -sf "$(pwd)/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
-	ln -sf "$(pwd)/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
-	ln -sf "$(pwd)/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
+	[ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "$(pwd)/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
+	[ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "$(pwd)/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
 
 return 0
 
@@ -1679,6 +1692,75 @@ unloadPackage() {
 
 	[ $DEBUG -gt 0 ] && { echo -en "unloadPackage:\n\tRAWFILE     |${RAWFILE}|\n\tFILENAME    |${FILENAME}|\n\tBASENAME    |${BASENAME}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${CPU}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tVERBASE     |${VERBASE}|\n\tOPTFILE     |${OPTFILE}|\n\tREPO_SOURCE |${REPO_SOURCE}|\n\tDIRECTORY   |${DIRECTORY}|\n\tpwd         " >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
 
+	[ "$UNLOAD" != 'unload' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {				# if the package has been marked for uninstallation (delete or purge) -AND- it currently is NOT installed, then...
+		uninstallPackage || return 1							#   uninstall the package files
+		return 0									#   no need to process anything further!
+	}
+
+	# if the package has a service start/stop script, then stop the service before continuing
+	if [ -e "${DIR_INIT}/${PACKAGE}" ]; then
+		[ $DEBUG -gt 0 ] && echo -e "\tPackage has service script...\n\tCalling: \"${DIR_INIT}/${PACKAGE}\" stop" >>"$LOG_DBUG"
+		"${DIR_INIT}/${PACKAGE}" stop >>"$LOG_ERRS" 2>&1 || return 1
+	fi
+
+	# determine how the package was installed (copied or symlinked) -AND- make sure it's not in use by something else
+	if ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ); then	# if the package has been mounted and symlinked, then...
+		[ $DEBUG -gt 0 ] && echo -e "\tPackage is symlinked...\n\tCalling: sudo /bin/umount \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
+		sudo /bin/umount "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
+
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling: sudo /bin/mount \"./${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\" -t squashfs -o loop,ro,bs=4096" >>"$LOG_DBUG"
+		sudo /bin/mount "./${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro,bs=4096 >>"$LOG_ERRS" 2>&1 || return 1			# remount it again for further processing
+	else											# otherwise it was a copy-to-RAM, so...
+		[ ! -e "${DIR_LOOP}/${APPNAME}.${APPTYPE}" ] && { mkdir -p "${DIR_LOOP}/${APPNAME}.${APPTYPE}" >>"$LOG_ERRS" 2>&1 || return 1; }			# if the mount point doesn't exist, then create it!
+
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling: sudo /bin/mount \"./${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\" -t squashfs -o loop,ro,bs=4096" >>"$LOG_DBUG"
+		sudo /bin/mount "./${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro,bs=4096 >>"$LOG_ERRS" 2>&1 || return 1			# now mount it for processing
+
+		for FILE in $(find "${DIR_LOOP}/${BASENAME}" ! -type d 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||"); do		# scan to make sure that no software in the package is being used
+			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && return 1				#   if one of the files in the package is currently in use, then exit this function	https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
+		done
+	fi
+
+	# check if the package has any libs we need to unload later						  NOTE: we check this way because simply checking for the directory can produce false positives
+	[ $DEBUG -gt 0 ] && echo -e "\tChecking for modules..." >>"$LOG_DBUG"
+	( ls -1p "${DIR_LOOP}/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE				# NOTE: the "grep -qv '/'$" removes directories from the listing so only files remain (otherwise /lib/modules/ would provide a false positive)
+	( ls -1p "${DIR_LOOP}/lib64" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
+	( ls -1p "${DIR_LOOP}/usr/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
+	( ls -1p "${DIR_LOOP}/usr/local/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
+	# check if the package has a [/usr[/local]]'/lib/modules' directory to indicate we need to load modules later
+	[ -d "${DIR_LOOP}/lib/modules" ] || [ -d "${DIR_LOOP}/usr/lib/modules" ] || [ -d "${DIR_LOOP}/usr/local/lib/modules" ] && MODULES=TRUE	# NOTE: we CAN simply check for directories here since files would be packaged under them
+
+	# if we've made it here, delete all the files/dirs contained in the package from the OS
+	[ "$UNLOAD" != 'purge' ] && PARAMS='! -path "*/etc/*"'					# if we have been instructed to NOT purge any 'etc' files, then add these parameters to the 'find' calls below   http://www.cyberciti.biz/faq/find-command-exclude-ignore-files/
+
+	[ $DEBUG -gt 0 ] && echo -e "\tRemoving package contents from filesystem..." >>"$LOG_DBUG"
+	for FILE in $(eval find "${DIR_LOOP}/${BASENAME}" $PARAMS 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||" | sort -r); do		# NOTE: we 'sort -r' to place the file above the directories since they have to be removed first!
+		if [ ! -d "$FILE" ]; then						#   if the iterated FILE is anything but a directory (e.g. device file, symlink, text file, ...), then delete it!
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIRECTORY}${FILE}\"" >>"$LOG_DBUG"
+			rm -f "${DIRECTORY}/${FILE}" >>"$LOG_ERRS" 2>&1 || return 1
+		elif [ -d "$FILE" ] && [ ! "$(ls -A "$FILE" 2>/dev/null)" ]; then				#   otherwise it is a directory, so check if it's empty and delete it if so! NOTE: we do NOT error out here if we can't delete it!
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rmdir \"${DIRECTORY}${FILE}\"" >>"$LOG_DBUG"
+			rmdir "${DIRECTORY}${FILE}" >>"$LOG_ERRS" 2>&1
+		fi
+	done
+
+	[ -e "${DIR_LIST}/${FILENAME}" ] && rm -f "${DIR_LIST}/${FILENAME}" >>"$LOG_ERRS" 2>&1		# delete the installed marker
+	[ -e "${DIR_LIST}/${BASENAME}.${EXT_HASH}" ] && rm -f "${DIR_LIST}/${BASENAME}.${EXT_HASH}" >>"$LOG_ERRS" 2>&1
+	[ -e "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" ] && rm -f "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" >>"$LOG_ERRS" 2>&1
+	sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1					# finally umount the package
+	rmdir "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1								# delete the packages mount point
+
+	# if we also need to uninstall (delete or purge), then...
+	[ "$UNLOAD" != 'unload' ] && {
+		showMsg 'step' " [uninstall]" 'both' 0 0
+		uninstallPackage || return 1											# if the package has been marked for uninstallation, then...
+	}
+# LEFT OFF - when installing, and a file exists (e.g. grep symlink to busybox), then rename to FILE.-PACK.TYPE (or 'SYS' if not part of package); when the PACK.TYPE is uninstalled and one of those files exists, restore it
+#		is this necessary if we are creating restore points?
+
+	[ "$INDEX" -eq 1 ] && [ "$UNLOAD" != 'unload' ] && sed -i "/${FILENAME}/d" "${REPO_PREFIX}/$LIST" 2>>"$LOG_ERRS"		# if this is a requested package and not one of its dependencies (via INDEX==1) -AND- we're are actually uninstalling (deleting or purging), then remove the package from the LIST file
+
+
 return 0
 
 	[ $DEBUG -gt 0 ] && echo -e "unloadPackage:\n\tRAWFILE :${RAWFILE}:\n\tAPPFILE :${APPFILE}:\n\tAPPHEAD :${APPHEAD}:\n\tAPPNAME :${APPNAME}:\n\tAPPARCH :${APPARCH}:\n\tAPPTYPE :${APPTYPE}:\n\tAPPEXTN :${APPEXTN}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:" >>"$LOG_DBUG"
@@ -1762,13 +1844,19 @@ return 0
 uninstallPackage() {
 	[ $DEBUG -gt 0 ] && echo -e "uninstallPackage:" >>"$LOG_DBUG"
 	if [ ! "$RESTORE" ]; then								# if we do NOT need a restore point, then...
-		[ $DEBUG -gt 0 ] && echo -e "\tSkip creating a restore point...\n\trm -f ${APPHEAD}.*" >>$LOG_DBUG
-		rm -f "${APPHEAD}".* >>"$LOG_ERRS" 2>&1 || return 1				# just delete the packages' files (e.g. .deps, .hash, .soft, ...) and exit
+# UPDATED 2025/11/13
+#		[ $DEBUG -gt 0 ] && echo -e "\tSkip creating a restore point...\n\trm -f ${APPHEAD}.*" >>$LOG_DBUG
+#		rm -f "${APPHEAD}".* >>"$LOG_ERRS" 2>&1 || return 1				# just delete the packages' files (e.g. .deps, .hash, .soft, ...) and exit
+		[ $DEBUG -gt 0 ] && echo -e "\tSkip creating a restore point...\n\trm -f ${BASENAME}.*" >>$LOG_DBUG
+		rm -f "${BASENAME}".* >>"$LOG_ERRS" 2>&1 || return 1				# just delete the packages' files (e.g. .deps, .hash, .soft, ...) and exit
 		return 0
 	fi
 
 	# if we've made it here then we need to create a restore point
 	[ $DEBUG -gt 0 ] && echo -e "\tCreating a restore point..." >>$LOG_DBUG
+	showMsg 'step' " [archiving]" 'both' 0 0
+
+	# For XiniX only so the archives have permanence
 	if [ ! -e "${REPO_RESTOR}" ] && [ -e "${DIR_MOUNT}/DATA/Links" ]; then			# if the root-level restore directory doesn't exist (e.g. /var/restore/2017-01-01 > /var/restore) -AND- there's a DATA, then...
 		if [ ! -e "${DIR_MOUNT}/DATA/Links${REPO_RESTOR}" ]; then
 			mkdir -p "${DIR_MOUNT}/DATA/Links${REPO_RESTOR}" >>"$LOG_ERRS" 2>&1 || {					#   create the restore directory on the DATA partition so that it actually gets preserved between reboots of the device
@@ -1784,20 +1872,31 @@ uninstallPackage() {
 
 	# now create a unique name for the restore point: ACTION PACKAGE_NAMES/DIR_NAME (e.g. Updating sdl)
 	TEMP="$(date +%F)/"
-	[ "$INSTALL" ] && ( [ "$FORCE" ] || [ "$RESTORE" ] ) && TEMP="${TEMP}Updating ${APPNAME}.${APPTYPE}"			# add a description of this process to the restore point
+# UPDATED 2025/11/13
+#	[ "$INSTALL" ] && ( [ "$FORCE" ] || [ "$RESTORE" ] ) && TEMP="${TEMP}Updating ${APPNAME}.${APPTYPE}"			# add a description of this process to the restore point
+	[ "$INSTALL" ] && ( [ "$FORCE" ] || [ "$RESTORE" ] ) && TEMP="${TEMP}Updating ${BASENAME}"			# add a description of this process to the restore point
 # UPDATED 2025/10/22 - merged -P with -U
 #	[ "$UNLOAD" ] && [ "$PURGE" -gt '0' ] && TEMP="${TEMP}Uninstalling ${APPNAME}.${APPTYPE}"
-	[ "$UNLOAD" ] && [ "$PURGE" != '' ] && TEMP="${TEMP}Uninstalling ${APPNAME}.${APPTYPE}"
+# UPDATED 2025/11/13
+#	[ "$UNLOAD" ] && [ "$PURGE" != '' ] && TEMP="${TEMP}Uninstalling ${APPNAME}.${APPTYPE}"
+	[ "$UNLOAD" != 'unload' ] && TEMP="${TEMP}Uninstalling ${BASENAME}"
 
 	# NOTE: the below line will create the entire REPO_RESTOR directory structure if there is no DATA, or just the date directory in the event there is one
 	[ ! -e "${REPO_RESTOR}/${TEMP}" ] && { mkdir -p "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1; }		# if the restore point directory doesn't exist, then create it!
 
-	readlink "$APPFILE" >/dev/null 2>&1 && {												# if a particular prior version of the package that was installed (designated via a symlink), then...
-		[ $DEBUG -gt 0 ] && echo -e "\tPrior version...\n\tmv -f \"$(readlink ${APPFILE} | head -c -6)\".* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
-		mv -f "$(readlink "${APPFILE}" 2>>"$LOG_ERRS" | head -c -6)".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# move the actual files referenced by the symlinks to the restore point (which would be the numerical named files)
+# UPDATED 2025/11/13
+#	readlink "$APPFILE" >/dev/null 2>&1 && {												# if a particular prior version of the package that was installed (designated via a symlink), then...
+#		[ $DEBUG -gt 0 ] && echo -e "\tPrior version...\n\tmv -f \"$(readlink ${APPFILE} | head -c -6)\".* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
+#		mv -f "$(readlink "${APPFILE}" 2>>"$LOG_ERRS" | head -c -6)".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# move the actual files referenced by the symlinks to the restore point (which would be the numerical named files)
+#	}
+#	[ $DEBUG -gt 0 ] && echo -e "\tmv -f ${APPHEAD}.* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
+#	mv -f "${APPHEAD}".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# now move the iterated dependency into the restore point	NOTE: it will be symlinks if VERSION has a value
+	readlink "$FILENAME" >/dev/null 2>&1 && {												# if a particular prior version of the package that was installed (designated via a symlink), then...
+		[ $DEBUG -gt 0 ] && echo -e "\tPrior version...\n\tmv -f \"$(readlink ${FILENAME} | sed "s|\.${EXT_SOFT}||")\".* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
+		mv -f "$(readlink "${FILENAME}" 2>>"$LOG_ERRS" | sed "s|\.${EXT_SOFT}||")".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# move the actual files referenced by the symlinks to the restore point (which would be the numerical named files)
 	}
-	[ $DEBUG -gt 0 ] && echo -e "\tmv -f ${APPHEAD}.* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
-	mv -f "${APPHEAD}".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# now move the iterated dependency into the restore point	NOTE: it will be symlinks if VERSION has a value
+	[ $DEBUG -gt 0 ] && echo -e "\tmv -f ${BASENAME}.* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
+	mv -f "${BASENAME}".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# now move the iterated dependency into the restore point	NOTE: it will be symlinks if VERSION has a value
 	return 0
 }
 
@@ -1867,8 +1966,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-l   list all currently installed packages'
 	echo '	-m   make a new package (requires DIRECTORY)'					# this makes a new .soft package tarball based on the passed directory; 	NOTE: you can just have the .make file call builder to do all the heavy lifting
 #	echo '	-n   '
-# LEFT OFF -
-#	echo '	-o   open a fifo for (client) communication'		# this will allow remote administration; uses DIR_TEMP/input
+	echo '	-o   open a fifo for (remote) communication'		# this will allow remote administration; uses DIR_TEMP/input
 # LEFT OFF - check for updates to installed packages (compare the version numbers in the local .list files vs ones dl'ed from repo server); use cron to do this regularly
 #	echo '	-p   process updates for installed packages'
 #			check		simply checks for updates and notifies
@@ -2033,6 +2131,14 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 # REMOVED 2025/11/04 - this is duplicated above
 #	echo '	Extract package contents:'
 #	echo "	     ${0##*/} -e package[.i32.bin.soft] [/path/to/extract]"
+	echo '	Open a fifo to operate pax:'
+	echo "	     ${0##*/} -o"
+	echo '	Open a fifo to operate pax using a specific fifo:'
+	echo "	     ${0##*/} -o name"
+	echo '	Open a fifo to operate pax, clearing a prior failure:'
+	echo "	     ${0##*/} -o clear"
+	echo '	Open a fifo to operate pax, clearing and using specific fifo:'
+	echo "	     ${0##*/} -o clear name"
 	echo '	Proxy a download:'
 	echo "	     ${0##*/} -X /mnt/sdb1 -d package"
 	echo '	Show dependency tree for package(s):'
@@ -2065,7 +2171,7 @@ elif [ "$1" = '--version' ] || [ "$3" = '--version' ]; then			# so a user can do
 else
 	# PROCESS PASSED PARAMETERS
 
-	while getopts BcC:dD:eE:fFiI:JK:lLmM:N:O:Qr:RS:tT:u:v:VW:X: OPTION; do			# NOTE: the 'V:' indicates that the '-V' parameter requires a value!
+	while getopts BcC:dD:eE:fFiI:JK:lLmM:N:oO:Qr:RS:tT:u:v:VW:X: OPTION; do			# NOTE: the 'V:' indicates that the '-V' parameter requires a value!
 		case ${OPTION} in
 			B) BOOTING=TRUE ;;
 			c) COPY=TRUE ;;
@@ -2231,6 +2337,42 @@ else
 			   fi
 			   MODE="$OPTARG" ;;
 			N) FILELIST="$OPTARG" ;;
+			o) [ "$2" ] && [ "$2" != 'clear' ] && FIFO_SERVER="$2"				# NOTE: the second parameter MUST be 'clear', even when using a custom input fifo
+			   [ "$3" ] && FIFO_SERVER="$3"
+			   if [ "$2" ] && [ "$2" = 'clear' ]; then
+				rm -f "${FIFO_SERVER}" || {
+					showMsg 'failure' "The input FIFO could not be cleared." 'screen'
+					exit 1
+				}
+			   fi
+
+			   if [ -e "${FIFO_SERVER}" ]; then
+				showMsg 'failure' "Pax is already running in this mode." 'screen'
+				exit 1
+			   fi
+
+			   mknod -m 700 "${FIFO_SERVER}" p || {
+				showMsg 'failure' "The FIFO could not be created." 'screen'
+				exit 1
+			   }
+
+			   while true; do
+				if read LINE <"${FIFO_SERVER}" 2>>"$LOG_ERRS"; then
+					[ "$LINE" == 'quit' ] && break
+					( echo "$LINE" | grep -q ^'pax ' ) || {
+						echo "ERROR: An invalid command was attempted."
+						continue
+					}
+					showMsg 'start' "\n\n------- [ FIFO: Script Execution ] -------" 'log'
+					showMsg 'start' "           $(date +'%Y-%m-%d  %H:%M:%S')\n" 'log'
+					showMsg 'action' "EXECUTE: $LINE" 'both'
+					$LINE
+				fi
+			   done
+
+			   echo "QUIT"
+			   rm -f "${FIFO_SERVER}"
+			   exit 0 ;;
 # UPDATED 2025/11/03
 #			O) if [ "$OPTARG" != 'none' ] && [ "$OPTARG" != 'fifo' ] && [ "$OPTARG" != 'text' ] && [ "$OPTARG" != 'xml' ] && [ "$OPTARG" != 'xmLive' ]; then
 			O) ( echo ${OPTARG} | grep -qE ^'(none|fifo|text|xml|xmLive)'$ ) || {
@@ -2333,8 +2475,10 @@ else
 				exit 1
 #			   fi
 			   }
-			   UNLOAD=TRUE
-			   [ "$OPTARG" != 'unload' ] && PURGE="$OPTARG" ;;		# specify the purge type if we're not just unloading the software
+# REMOVED 2025/11/13 - this was merged with UNLOAD
+#			   UNLOAD=TRUE
+#			   [ "$OPTARG" != 'unload' ] && PURGE="$OPTARG" ;;		# specify the purge type if we're not just unloading the software
+			   UNLOAD="$OPTARG" ;;
 # UPDATED 2025/10/23 - merged with -u
 #			U) if [ "$OPTARG" != 'app' ] && [ "$OPTARG" != 'all' ]; then
 #				[ "$SILENT" ] || echo "ERROR: the specified value to the -U switch is invalid." | tee -a "$LOG_ERRS"
@@ -2625,8 +2769,12 @@ elif [ "$PROXY" ]; then										# if we are proxying an action, then...
 #	adjust the below once the directory values get set
 #	[ ! -e "${REPO_RESTOR}/${RESTORE}" ] && { showMsg 'failure' "The provided path does not contain any valid restore points." 'screen'; exit 1; }
 #		[ "$RESTORE" ] && cd "${REPO_RESTOR}/${RESTORE}"				# change into the restore points directory to get all the requested software and any of its dependencies
+#elif [ "$TREE" ]; then										# if we are showing the dependency tree, then...
+	# this is handled in the script parameter processing section above
 elif [ "$UNLOAD" ]; then									# if we are unloading/uninstalling package(s), then...
-	echo 'fill me out'
+	[ "$PREFIX" ] && DIRECTORY="${PREFIX}"							#   if the -D option was passed, add it to the directory structure
+	[ ! "$PREFIX" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && DIRECTORY="$DIR_LIVE"		#   if the -D option was NOT passed, and the DIRECTORY was NOT passed, then set to the default installation location
+	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
 elif [ "$VALIDATE" ]; then									# if we are validating package(s) information, then...
 	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only validate local packages
 	eval REPO_SOURCE="${REPO_SOURCE}"							#   eval REPO_SOURCE incase it has any variables in it
@@ -2654,15 +2802,18 @@ fi
 #[ "$LIST" ]
 #[ "$MAKE" ]
 [ "$PROXY" ] && showMsg 'action' "Generating package list..." 'both' 1 4
-if [ "$UNLOAD" ]; then										# if we are unloading/uninstalling package(s), then...
-# REMOVED 2025/11/04 - this serves no functional purpose
-#	TEMP=$OPTIND										#   store the current OPTIND value to restore it in just a second
-# UPDATED 2025/11/04 - replaced APP*
-#	for APPFILE in $@; do touch ${DIR_LIST}/${APPFILE}.mark; done				#   mark all the files we want to unload
-# LEFT OFF - move this into the 'for' loop below and touch each file as it gets iterated to; there's no reason to place it here
-	for FILE in $@; do touch ${DIR_LIST}/${FILE%.*}.${EXT_MARK}; done			#   mark all the files we want to unload
-# REMOVED 2025/11/04 - this serves no functional purpose
-#	OPTIND=$TEMP										#   restore the original value of OPTIND
+#[ "$TREE" ]
+[ "$INSTALL" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
+# MOVED 2025/11/13 - moved below in the passed packages section
+#if [ "$UNLOAD" ]; then										# if we are unloading/uninstalling package(s), then...
+## REMOVED 2025/11/04 - this serves no functional purpose
+##	TEMP=$OPTIND										#   store the current OPTIND value to restore it in just a second
+## UPDATED 2025/11/04 - replaced APP*
+##	for APPFILE in $@; do touch ${DIR_LIST}/${APPFILE}.mark; done				#   mark all the files we want to unload
+#	for FILE in $@; do touch ${DIR_LIST}/${FILE%.*}.${EXT_MARK}; done			#   mark all the files we want to unload
+## REMOVED 2025/11/04 - this serves no functional purpose
+##	OPTIND=$TEMP										#   restore the original value of OPTIND
+[ "$UNLOAD" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
 fi
 [ "$VALIDATE" = 'deps' ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
 
@@ -2694,7 +2845,9 @@ for RAWFILE in $@; do
 #		showMsg 'msg|failure' "The '${FILENAME}' file does not exist."
 		showMsg 'failure' "The '${FILENAME}' package does not exist."
 #echo 02b
-		exitGracefully 1
+# UPDATED 2025/11/13
+#		exitGracefully 1
+		exitGracefully 4 'both' 5 'action'
 	fi
 #echo 03
 # showMsg TAG MESSAGE [TARGET] [CR] [TAGS] [TRIM]
@@ -2774,9 +2927,10 @@ for RAWFILE in $@; do
 # REMOVED 2025/10/30
 #		showMsg 'action' "" 'screen' 0 4
 		continue
-	elif [ "$INSTALL" ]; then									# if we are installing package(s), then...
-		# add the package to the list of dependencies						  NOTE: this lists EVERY dependency for every dependency in one list; not just the dependencies for the requested package!
-		echo "$FILENAME" >>"${DIR_TEMP}/installed.${EXEID}"					# add the package to the cache file for future unloading/uninstalling information
+# MOVED 2025/11/13 - moved into processDependencies() so that ALL the dependencies are added to the list
+#	#elif [ "$INSTALL" ]; then									# if we are installing package(s), then...
+#		# add the package to the list of dependencies						  NOTE: this lists EVERY dependency for every dependency in one list; not just the dependencies for the requested package!
+#		echo "$FILENAME" >>"${DIR_TEMP}/installed.${EXEID}"					# add the package to the cache file for future unloading/uninstalling information
 	#elif [ "$LIST" ]; then										# if we are listing installed packages, then...
 			# this is handled in the script parameter processing section
 	elif [ "$MAKE" ]; then									# if we are creating a package for distribution, then...
@@ -2905,6 +3059,8 @@ for RAWFILE in $@; do
 		echo "$PACKAGE" >> "${DIR_TEMP}/proxy.list"					# create the proxy package list
 		continue
 	elif [ "$UNLOAD" ]; then									# if we are unloading/uninstalling package(s), then...
+# LEFT OFF - figure out the marking and installed.MKTEMP files
+		touch ${DIR_LIST}/${FILE%.*}.${EXT_MARK}
 		EXEID="$(grep -lH "$PACKAGE" "${DIR_TEMP}/installed."*)"			# store the cache file containing the software to be uninstalled
 	fi
 
@@ -2963,6 +3119,9 @@ for RAWFILE in $@; do
 # UPDATED 2025/10/22 - using PACKAGE
 #		processDependencies "${RAWFILE}"
 		processDependencies "${PACKAGE}" || exitGracefully 2 'screen' 5 'step'
+echo '----'
+ls -1 /tmp/pax >/tmp/debug.txt
+echo '----'
 		[ ! "$DEPENDENCY" ] && continue							# if the iterated package has already been installed (via a prior package), then no need to waste resources below...
 # UPDATED 2025/10/31
 #		[ "$TREE" ] && { showMsg 'dependencies' '' 'screen' 0 4; continue; }		# if we are simply displaying a dependency tree, then go to the next package in the list

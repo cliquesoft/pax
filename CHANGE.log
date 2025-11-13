@@ -129,4 +129,14 @@
 - Completed implementation of -i to use -S and DIRECTORY
 - Started to implement -u to use -S and DIRECTORY
 
+2025/11/13
+- Implemented the -o action
+- Updated splitName to work with -o
+- Patched exitGracefully to not delete fifo's
+- Added FIFO_SERVER
+- Merged PURGE into UNLOAD
+- Continued replacing APP* variables
+- Completed implementation of -u to use -S and DIRECTORY
+- Updated the --help output
+
 
