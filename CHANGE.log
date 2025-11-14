@@ -131,12 +131,17 @@
 
 2025/11/13
 - Implemented the -o action
-- Updated splitName to work with -o
+- Updated splitName to work with -o by removing preceeding spaces
 - Patched exitGracefully to not delete fifo's
 - Added FIFO_SERVER
 - Merged PURGE into UNLOAD
-- Continued replacing APP* variables
+- Completed replacing APP* variables
 - Completed implementation of -u to use -S and DIRECTORY
 - Updated the --help output
 
+2025/11/14
+- Added the -Y option
+- Adjusted output for -c
+- Adjusted output for -d
+- Continued updating of -u
 
