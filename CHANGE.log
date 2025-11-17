@@ -145,3 +145,7 @@
 - Adjusted output for -d
 - Continued updating of -u
 
+2025/11/17
+- Continued updating of -u
+- Implemented -Y with '-u unload'
+

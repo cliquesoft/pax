@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/11/14 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/11/17 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -552,83 +552,6 @@ return 0
 }
 
 
-# Usage syntax: proxyAction
-# Overview:	proxy's the action by creating a temporary shell script to execute on another device
-# Notes:	https://unix.stackexchange.com/questions/22623/extract-middle-section-of-lines-of-a-text-file
-#		https://unix.stackexchange.com/questions/2072/whats-the-best-way-to-take-a-segment-out-of-a-text-file
-proxyAction() {
-	( [ -e "${DIR_TEMP}/proxy.sh" ] || [ -e "${PROXY}/proxy.sh" ] ) && return 0		# if the script is already generated, we can skip re-creating it again
-
-	echo '#!/bin/sh' > "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	echo '# Variable Declarations' >> "${DIR_TEMP}/proxy.sh"
-	echo -e "COPY=${COPY}\nDOWNLOAD=${DOWNLOAD}${INSTALL}\nDEBUG=0\nEXTRA=${EXTRA}\nINDEX=0\nTOTAL=0\n" >> "${DIR_TEMP}/proxy.sh"
-	echo -e "LOG_ERRS=\"\$(pwd)/proxy.log\"\nFLAG='proxy.flag'\nTEMP=''\n" >> "${DIR_TEMP}/proxy.sh"
-	echo -e "REPO_PREFIX=\"\$(pwd)\"\nREPO_OPTION=\"\${REPO_PREFIX}/Software\"\nREPO_SYSTEM=\"\${REPO_PREFIX}/Software\"\nREPO_REMOTE='${REPO_REMOTE}'\nREPO_SOURCE='${REPO_SOURCE}'\nREPO_TARGET='${REPO_TARGET}'\n" >> "${DIR_TEMP}/proxy.sh"
-	echo -e "CPU='${CPU}'\nKERNEL='${KERNEL}'\n" >> "${DIR_TEMP}/proxy.sh"
-	echo -e "DEPENDENCY=''\nVERSION=''\nVERFILE=''\nRAWFILE=''\nOPTFILE=''\nDEPFILE=''\nAPPFILE=''\nAPPHEAD=''\nAPPNAME=''\nAPPARCH=''\nAPPTYPE=''\nAPPEXTN=''" >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	echo '# Function Declarations' >> "${DIR_TEMP}/proxy.sh"
-	sed -n '/^exitGracefully()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"				# https://stackoverflow.com/questions/6916856/can-bash-show-a-functions-definition
-	echo >> "${DIR_TEMP}/proxy.sh"
-	sed -n '/^splitName()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	sed -n '/^addDependency()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	sed -n '/^deleteDependency()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	sed -n '/^processDependencies()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	sed -n '/^copyPackage()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	sed -n '/^downloadPackage()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	echo '# Directory Checks' >> "${DIR_TEMP}/proxy.sh"
-	echo "if [ ! -d \"\$REPO_OPTION\" ]; then" >> "${DIR_TEMP}/proxy.sh"
-	echo "	mkdir -p \"\$REPO_OPTION\" >>\"\$LOG_ERRS\" 2>&1 || { echo \"ERROR: The storage directory (REPO_OPTION) does not exist and could not be created.\" | tee -a \$LOG_ERRS; exit 1; }" >> "${DIR_TEMP}/proxy.sh"
-	echo "fi" >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	echo '# Start Execution' >> "${DIR_TEMP}/proxy.sh"
-	echo "for RAWFILE in \$(cat proxy.list); do" >> "${DIR_TEMP}/proxy.sh"
-	echo "	processDependencies \"\${RAWFILE}\"" >> "${DIR_TEMP}/proxy.sh"
-	echo "	[ ! \"\$DEPENDENCY\" ] && continue" >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	echo "	while [ \"\$DEPENDENCY\" ] && [ \$INDEX -gt 0 ]; do" >> "${DIR_TEMP}/proxy.sh"
-	echo "		splitName \"\$DEPENDENCY\"" >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	echo "		if [ ! \"\$REPO_SOURCE\" ] && [ -e \"./\${APPFILE}\" ]; then" >> "${DIR_TEMP}/proxy.sh"
-	echo "			SOURCE='local'" >> "${DIR_TEMP}/proxy.sh"
-	echo "		elif [ \"\$REPO_SOURCE\" ] && ( echo \"\$REPO_SOURCE\"|grep -q ^'http' || echo \"\$REPO_SOURCE\"|grep -q ^'ftp' ); then" >> "${DIR_TEMP}/proxy.sh"
-	echo "			cd \"\$REPO_OPTION\" >>\$LOG_ERRS 2>&1" >> "${DIR_TEMP}/proxy.sh"
-	echo "			DOWNLOAD=TRUE" >> "${DIR_TEMP}/proxy.sh"
-	echo "		elif [ \"\$REPO_SOURCE\" ] && ( echo \"\$REPO_SOURCE\"|grep -q ^'/' || echo \"\$REPO_SOURCE\"|grep -q ^'./' ) && ( [ -e \"\${REPO_SOURCE}/\${APPFILE}\" ] || [ -f \"\${REPO_SOURCE}/\${VERFILE}\" ] ); then" >> "${DIR_TEMP}/proxy.sh"
-	echo "			cd \"\$REPO_SOURCE\" >>\$LOG_ERRS 2>&1" >> "${DIR_TEMP}/proxy.sh"
-	echo "			unset DOWNLOAD" >> "${DIR_TEMP}/proxy.sh"
-	echo "		elif [ -e \"\${REPO_SYSTEM}/\${APPFILE}\" ] || [ -f \"\${REPO_SYSTEM}/\${VERFILE}\" ]; then" >> "${DIR_TEMP}/proxy.sh"
-	echo "			cd \"\$REPO_SYSTEM\" >>\$LOG_ERRS 2>&1" >> "${DIR_TEMP}/proxy.sh"
-	echo "			unset DOWNLOAD" >> "${DIR_TEMP}/proxy.sh"
-	echo "		else" >> "${DIR_TEMP}/proxy.sh"
-	echo "			cd \"\$REPO_OPTION\" >>\$LOG_ERRS 2>&1" >> "${DIR_TEMP}/proxy.sh"
-	echo "			( [ -e \"\${REPO_OPTION}/\${APPFILE}\" ] || [ -f \"\${REPO_OPTION}/\${VERFILE}\" ] ) && unset DOWNLOAD || DOWNLOAD=TRUE" >> "${DIR_TEMP}/proxy.sh"
-	echo "		fi" >> "${DIR_TEMP}/proxy.sh"
-	echo >> "${DIR_TEMP}/proxy.sh"
-	echo "		if [ \"\$DOWNLOAD\" ]; then" >> "${DIR_TEMP}/proxy.sh"
-	echo "			( [ \"\$SILENT\" ] || [ \"\$QUIET\" ] ) || echo -n \"\${APPFILE}: [remote] [download]\"" >> "${DIR_TEMP}/proxy.sh"
-	echo "			[ \"\$REPO_TARGET\" ] && cd \"\$REPO_TARGET\" >>\$LOG_ERRS 2>&1 || cd \"\$REPO_OPTION\" >>\$LOG_ERRS 2>&1" >> "${DIR_TEMP}/proxy.sh"
-	echo "			downloadPackage || exitGracefully 1" >> "${DIR_TEMP}/proxy.sh"
-	echo "		elif [ \"\$COPY\" ]; then" >> "${DIR_TEMP}/proxy.sh"
-	echo "			( [ \"\$SILENT\" ] || [ \"\$QUIET\" ] ) || echo -n \"\${APPFILE}: [local] [copy]\"" >> "${DIR_TEMP}/proxy.sh"
-	echo "			copyPackage || exitGracefully 1" >> "${DIR_TEMP}/proxy.sh"
-	echo "		fi" >> "${DIR_TEMP}/proxy.sh"
-	echo "		( [ \"\$SILENT\" ] || [ \"\$QUIET\" ] ) || echo \" [done]\"" >> "${DIR_TEMP}/proxy.sh"
-	echo "		deleteDependency TRUE" >> "${DIR_TEMP}/proxy.sh"
-	echo "	done">> "${DIR_TEMP}/proxy.sh"
-	echo "done">> "${DIR_TEMP}/proxy.sh"
-
-	chmod 755 "${DIR_TEMP}/proxy.sh"
-}
-
-
 # Usage syntax: addDependency FILENAME
 # Overview:	adds the passed package name onto the top of the stack of dependencies
 # Parameters:
@@ -656,7 +579,11 @@ deleteDependency() {
 
 	eval "unset DEP${INDEX}"
 	[ "$1" ] && INDEX=$(( INDEX - 1 ))							# if we need to decrease the INDEX value, then do so!
-	[ "$INDEX" -eq 0 ] && { unset DEPENDENCY; return 0; }					# if there isn't anything in the stack, delete the variable and exit
+	[ "$INDEX" -eq 0 ] && {									# if there isn't anything in the stack, delete the variable and exit
+		unset DEPENDENCY
+		[ $DEBUG -gt 0 ] && echo -e "deleteDependency (new):\n\tINDEX       |${INDEX}|\n\tDEPENDENCY  ||" >>"$LOG_DBUG"
+		return 0
+	}
 	[ "$1" ] && eval "DEPENDENCY=\$DEP${INDEX}"
 
 	[ $DEBUG -gt 0 ] && echo -e "deleteDependency (new):\n\tINDEX       |${INDEX}|\n\tDEPENDENCY  |${DEPENDENCY}|" >>"$LOG_DBUG"
@@ -865,7 +792,9 @@ processDependencies() {
 #	[ "$UNLOAD" ] && ( [ -L "${DIR_LIST}/${APPHEAD}.soft" ] || [ ! -s "${DIR_LIST}/${APPHEAD}.soft" ] ) && {	# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then go to the next one!
 #		[ $DEBUG -gt 0 ] && echo -e "\tPackage is being ignored (BOOT)..." >>"$LOG_DBUG"
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[ BOOT ] ${APPNAME}.${APPTYPE}"
-	[ "$UNLOAD" ] && ( [ -L "${DIR_LIST}/${FILENAME}" ] || [ ! -s "${DIR_LIST}/${FILENAME}" ] ) && {	# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then go to the next one!
+# UPDATED 2025/11/17 - had to remove the symlink check since this is the new way of
+#	[ "$UNLOAD" ] && ( [ -L "${DIR_LIST}/${FILENAME}" ] || [ ! -s "${DIR_LIST}/${FILENAME}" ] ) && {	# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then go to the next one!
+	[ "$UNLOAD" ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && {	# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then go to the next one!
 # UPDATED 2025/11/07
 #		[ $DEBUG -gt 0 ] && echo -e "\tPackage is being ignored (FIRMWARE package)..." >>"$LOG_DBUG"
 		showMsg 'step' "[SYSTEM] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -874,7 +803,7 @@ processDependencies() {
 	}
 # UPDATED 2025/11/07 - removed COPY since it would already error out with the other check above; also we simply need to check if it's local or not
 #	( [ "$COPY" ] || [ "$UNLOAD" ] || [ "$VALIDATE" ] ) && [ "$SOURCE" = 'remote' ] && {				# if we are copying, unloading/uninstalling, or validating -AND- the iterated dependency is considered 'remote' (can't be found due to needing a proper -S value) then, go to the next one!
-	( [ "$UNLOAD" ] || [ "$VALIDATE" ] ) && ! -e "${REPO_SOURCE}/${FILENAME}" ] && {				# if we are copying, unloading/uninstalling, or validating -AND- the iterated dependency is not present, then go to the next one!
+	( [ "$UNLOAD" ] || [ "$VALIDATE" ] ) && [ ! -e "${REPO_SOURCE}/${FILENAME}" ] && {				# if we are copying, unloading/uninstalling, or validating -AND- the iterated dependency is not present, then go to the next one!
 # UPDATED 2025/11/07
 #		[ $DEBUG -gt 0 ] && echo -e "\tPackage is missing..." >>"$LOG_DBUG"
 # UPDATED 2025/10/31 - replace APP* variables and using showMsg()
@@ -884,22 +813,11 @@ processDependencies() {
 		return 1
 	}
 
-	# determine if the SOURCE is remote or local, then...					# NOTE: for any actions that must perform locally, an error would have already been issued above
-	[ -e "${REPO_SOURCE}/${FILENAME}" ] && SOURCE=' local'
-	[ ! -e "${REPO_SOURCE}/${FILENAME}" ] && {
-		( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) || {
-			showMsg 'step' "[!REPO!] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-			showMsg 'failure' "The package needs to be downloaded, but the REPO_SOURCE is local." 'log'
-			return 1
-		}
-		SOURCE='remote'
-	}
-
 	# check that the dependency is not already in the list to be processed
 # UPDATED 2025/11/05 - to reduce duplicates once they've been proceeded
 #	if [ ! "$TREE" ] && [ ! "$VALIDATE" ]; then						# if we're not displaying a dependency tree -OR- validating packages, then...
 	if [ ! "$TREE" ]; then									# if we're not displaying a dependency tree, then...
-		[ $DEBUG -gt 0 ] && echo -e "\tChecking if dependency is already marked for processing..." >>"$LOG_DBUG"
+		[ $DEBUG -gt 0 ] && echo -en "\tChecking if dependency is already marked for processing:" >>"$LOG_DBUG"
 #echo 'checking deps listing'
 		for DEPFILE in $(seq 1 $INDEX); do						# check if the dependencies has already been added to the list to be processed, so...
 			eval TEMP="\$DEP$DEPFILE"						#   since busybox 'sh' does not support arrays, we have to use this method to check each stored dependency
@@ -907,19 +825,17 @@ processDependencies() {
 # UPDATED 2025/11/05 - updated to be the full filename to prevent any issues with different TYPEs
 #			if [ "$TEMP" = "$RAWFILE" ]; then					#   if the iterated dependency is already in the list (including any specific version number), then...
 			if [ "$TEMP" = "$FILENAME" ]; then					#   if the iterated dependency is already in the list (including any specific version number), then...
-				[ "$VALIDATE" ] && {
-					showMsg 'step' "[duplicate] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1	# other possible values: processed
-					return 0
-				}
+				[ $DEBUG -gt 0 ] && echo " [yes]" >>"$LOG_DBUG"
 
-				[ $DEBUG -gt 0 ] && echo -e "\tPackage already marked for processing..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
+				[ "$VALIDATE" ] && showMsg 'step' "[duplicate] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1	# other possible values: processed
 # UPDATED 2025/10/31 - replace APP* variables and using showMsg()
 #				( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[marked] ${APPNAME}.${APPTYPE}"
 	#			showMsg 'step' "[marked] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-				showMsg 'step' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
+				[ ! "$VALIDATE" ] && showMsg 'step' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
 				return 0
 			fi
 		done
+		[ $DEBUG -gt 0 ] && echo " [no]" >>"$LOG_DBUG"
 	fi
 
 	# --- IF WE HAVE MADE IT HERE, THEN DO SOME WORK ---
@@ -983,6 +899,18 @@ if [ 1 -eq 0 ]; then
 	fi
 fi
 
+	# determine if the SOURCE is remote or local, then...					# NOTE: for any actions that must perform locally, an error would have already been issued above
+	[ -e "${REPO_SOURCE}/${FILENAME}" ] && SOURCE=' local'
+	[ ! -e "${REPO_SOURCE}/${FILENAME}" ] && {
+		( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) || {
+			showMsg 'step' "[!REPO!] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+			showMsg 'failure' "The package needs to be downloaded, but the REPO_SOURCE is local." 'log'
+			return 1
+		}
+		SOURCE='remote'
+	}
+
+	# display the package name to the output targets
 	if [ "$TREE" ]; then
 # UPDATED 2025/11/05 - replaced the APP* variables
 #		echo "${INDENT}${APPNAME}.${APPTYPE}"
@@ -1001,15 +929,20 @@ fi
 	fi
 
 	# add the passed dependency to the stack
-	[ ! "$UNLOAD" ] && addDependency "${FILENAME}"								# add the passed package to the stack to be processed outside of this function
-	[ $DEBUG -gt 0 ] && echo "processDependencies (returned):" >>"$LOG_DBUG"
+# UPDATED 2025/11/17
+#	[ ! "$UNLOAD" ] && addDependency "${FILENAME}"								# add the passed package to the stack to be processed outside of this function
+	( [ ! "$UNLOAD" ] || ( echo "${UNLOAD}" | grep -q 2 ) ) && addDependency "${FILENAME}"								# if we're NOT unloading -OR- we're on the 2nd stage of unloading, then add the passed package to the stack to be processed outside of this function
+	( [ ! "$UNLOAD" ] || ( echo "${UNLOAD}" | grep -q 2 ) ) && [ $DEBUG -gt 0 ] && echo "processDependencies (returned):" >>"$LOG_DBUG"
 
 # REMOVED 2025/11/14 - we're changing how this works
 #	[ "$INSTALL" ] && echo "$FILENAME" >>"${DIR_TEMP}/installed.${EXEID}"			# add the dependency to the listing for the package
-	[ "$UNLOAD" ] && echo "$FILENAME" >>"${DIR_TEMP}/unload.${EXEID}"			# add the dependency to the listing for all packages to unload
+# UPDATED 2025/11/17
+#	[ "$UNLOAD" ] && echo "$FILENAME" >>"${DIR_TEMP}/unload.${EXEID}"			# add the dependency to the listing for all packages to unload
+	[ "$UNLOAD" ] && ( ! echo "${UNLOAD}" | grep -q 2 ) && echo "$FILENAME" >>"${DIR_TEMP}/unload.${EXEID}"			# if we ARE unloading -AND- it's the first stage, then add the dependency to the listing for all packages to unload
+	[ "$UNLOAD" ] && ( ! echo "${UNLOAD}" | grep -q 2 ) && [ $DEBUG -gt 0 ] && echo -e "\tAdding dependency to the unload list: [done]" >>"$LOG_DBUG"
 
 	[ "$ONLY" ] && {									# if we are only affecting the package itself and not any dependencies, then...
-		[ $DEBUG -gt 0 ] && echo -e "\tJust downloading the package, not any dependencies..." >>"$LOG_DBUG"
+		[ $DEBUG -gt 0 ] && echo -e "\tDownloading only the package, not any dependencies..." >>"$LOG_DBUG"
 # UPDATED 2025/11/05 - updated to be the full filename to prevent any issues with different TYPEs
 #		addDependency "${RAWFILE}"							#   add the passed package to the stack to be processed outside of this function
 # REMOVED 2025/11/07 - re-arranged the code so that this step is already taken above
@@ -1033,7 +966,7 @@ fi
 # UPDATED 2025/11/14
 #	if ( [ "$COPY" ] || [ "$DOWNLOAD" ] || [ "$INSTALL" ] ); then 				# if copying, downloading, or installing from an external source, then...	NOTE: we are already in the target storage directory
 	if ( [ "$COPY" ] || [ "$DOWNLOAD" ] || [ "$INSTALL" ] || [ "$UNLOAD" ] ); then 				# if we're copying, downloading, installing, or unloading, then...	NOTE: we are already in the target storage directory
-		[ $DEBUG -gt 0 ] && echo -e "\tChecking for package dependency file..." >>"$LOG_DBUG"
+		[ $DEBUG -gt 0 ] && echo -en "\tChecking for package dependency file:" >>"$LOG_DBUG"
 		if [ ! "$COPY" ] && [ "$SOURCE" = 'remote' ]; then
 			eval SOURCE="${REPO_SOURCE}/${BASENAME}.${EXT_DEPS}"				#   re-purpose SOURCE (since we're done using it for its original intention) incase REPO_SOURCE has any variables in it
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    wget -cq \"${SOURCE}\"" >>"$LOG_DBUG"
@@ -1047,8 +980,9 @@ fi
 		fi
 
 		# process all the dependencies of the passed software
+		[ ! -e "${BASENAME}.${EXT_DEPS}" ] && [ $DEBUG -gt 0 ] && echo -e " [absent] [done]" >>"$LOG_DBUG"
 		if [ -e "${BASENAME}.${EXT_DEPS}" ]; then
-			[ $DEBUG -gt 0 ] && echo -e "\tA package dependency file exists, processing..." >>"$LOG_DBUG"
+			[ $DEBUG -gt 0 ] && echo -e " [exists] [processing]" >>"$LOG_DBUG"
 #echo "BASENAME |$BASENAME|" >>$LOG_DBUG
 # UPDATED 2025/11/14 - so that DRYRUN would work correctly
 #			for DEPFILE in $(cat "./${BASENAME}.${EXT_DEPS}" 2>/dev/null); do			# if the passed dependency also has dependencies, then...
@@ -1724,6 +1658,83 @@ installPackage() {
 }
 
 
+# Usage syntax: proxyAction
+# Overview:	proxy's the action by creating a temporary shell script to execute on another device
+# Notes:	https://unix.stackexchange.com/questions/22623/extract-middle-section-of-lines-of-a-text-file
+#		https://unix.stackexchange.com/questions/2072/whats-the-best-way-to-take-a-segment-out-of-a-text-file
+proxyAction() {
+	( [ -e "${DIR_TEMP}/proxy.sh" ] || [ -e "${PROXY}/proxy.sh" ] ) && return 0		# if the script is already generated, we can skip re-creating it again
+
+	echo '#!/bin/sh' > "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	echo '# Variable Declarations' >> "${DIR_TEMP}/proxy.sh"
+	echo -e "COPY=${COPY}\nDOWNLOAD=${DOWNLOAD}${INSTALL}\nDEBUG=0\nEXTRA=${EXTRA}\nINDEX=0\nTOTAL=0\n" >> "${DIR_TEMP}/proxy.sh"
+	echo -e "LOG_ERRS=\"\$(pwd)/proxy.log\"\nFLAG='proxy.flag'\nTEMP=''\n" >> "${DIR_TEMP}/proxy.sh"
+	echo -e "REPO_PREFIX=\"\$(pwd)\"\nREPO_OPTION=\"\${REPO_PREFIX}/Software\"\nREPO_SYSTEM=\"\${REPO_PREFIX}/Software\"\nREPO_REMOTE='${REPO_REMOTE}'\nREPO_SOURCE='${REPO_SOURCE}'\nREPO_TARGET='${REPO_TARGET}'\n" >> "${DIR_TEMP}/proxy.sh"
+	echo -e "CPU='${CPU}'\nKERNEL='${KERNEL}'\n" >> "${DIR_TEMP}/proxy.sh"
+	echo -e "DEPENDENCY=''\nVERSION=''\nVERFILE=''\nRAWFILE=''\nOPTFILE=''\nDEPFILE=''\nAPPFILE=''\nAPPHEAD=''\nAPPNAME=''\nAPPARCH=''\nAPPTYPE=''\nAPPEXTN=''" >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	echo '# Function Declarations' >> "${DIR_TEMP}/proxy.sh"
+	sed -n '/^exitGracefully()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"				# https://stackoverflow.com/questions/6916856/can-bash-show-a-functions-definition
+	echo >> "${DIR_TEMP}/proxy.sh"
+	sed -n '/^splitName()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	sed -n '/^addDependency()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	sed -n '/^deleteDependency()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	sed -n '/^processDependencies()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	sed -n '/^copyPackage()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	sed -n '/^downloadPackage()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	echo '# Directory Checks' >> "${DIR_TEMP}/proxy.sh"
+	echo "if [ ! -d \"\$REPO_OPTION\" ]; then" >> "${DIR_TEMP}/proxy.sh"
+	echo "	mkdir -p \"\$REPO_OPTION\" >>\"\$LOG_ERRS\" 2>&1 || { echo \"ERROR: The storage directory (REPO_OPTION) does not exist and could not be created.\" | tee -a \$LOG_ERRS; exit 1; }" >> "${DIR_TEMP}/proxy.sh"
+	echo "fi" >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	echo '# Start Execution' >> "${DIR_TEMP}/proxy.sh"
+	echo "for RAWFILE in \$(cat proxy.list); do" >> "${DIR_TEMP}/proxy.sh"
+	echo "	processDependencies \"\${RAWFILE}\"" >> "${DIR_TEMP}/proxy.sh"
+	echo "	[ ! \"\$DEPENDENCY\" ] && continue" >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	echo "	while [ \"\$DEPENDENCY\" ] && [ \$INDEX -gt 0 ]; do" >> "${DIR_TEMP}/proxy.sh"
+	echo "		splitName \"\$DEPENDENCY\"" >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	echo "		if [ ! \"\$REPO_SOURCE\" ] && [ -e \"./\${APPFILE}\" ]; then" >> "${DIR_TEMP}/proxy.sh"
+	echo "			SOURCE='local'" >> "${DIR_TEMP}/proxy.sh"
+	echo "		elif [ \"\$REPO_SOURCE\" ] && ( echo \"\$REPO_SOURCE\"|grep -q ^'http' || echo \"\$REPO_SOURCE\"|grep -q ^'ftp' ); then" >> "${DIR_TEMP}/proxy.sh"
+	echo "			cd \"\$REPO_OPTION\" >>\$LOG_ERRS 2>&1" >> "${DIR_TEMP}/proxy.sh"
+	echo "			DOWNLOAD=TRUE" >> "${DIR_TEMP}/proxy.sh"
+	echo "		elif [ \"\$REPO_SOURCE\" ] && ( echo \"\$REPO_SOURCE\"|grep -q ^'/' || echo \"\$REPO_SOURCE\"|grep -q ^'./' ) && ( [ -e \"\${REPO_SOURCE}/\${APPFILE}\" ] || [ -f \"\${REPO_SOURCE}/\${VERFILE}\" ] ); then" >> "${DIR_TEMP}/proxy.sh"
+	echo "			cd \"\$REPO_SOURCE\" >>\$LOG_ERRS 2>&1" >> "${DIR_TEMP}/proxy.sh"
+	echo "			unset DOWNLOAD" >> "${DIR_TEMP}/proxy.sh"
+	echo "		elif [ -e \"\${REPO_SYSTEM}/\${APPFILE}\" ] || [ -f \"\${REPO_SYSTEM}/\${VERFILE}\" ]; then" >> "${DIR_TEMP}/proxy.sh"
+	echo "			cd \"\$REPO_SYSTEM\" >>\$LOG_ERRS 2>&1" >> "${DIR_TEMP}/proxy.sh"
+	echo "			unset DOWNLOAD" >> "${DIR_TEMP}/proxy.sh"
+	echo "		else" >> "${DIR_TEMP}/proxy.sh"
+	echo "			cd \"\$REPO_OPTION\" >>\$LOG_ERRS 2>&1" >> "${DIR_TEMP}/proxy.sh"
+	echo "			( [ -e \"\${REPO_OPTION}/\${APPFILE}\" ] || [ -f \"\${REPO_OPTION}/\${VERFILE}\" ] ) && unset DOWNLOAD || DOWNLOAD=TRUE" >> "${DIR_TEMP}/proxy.sh"
+	echo "		fi" >> "${DIR_TEMP}/proxy.sh"
+	echo >> "${DIR_TEMP}/proxy.sh"
+	echo "		if [ \"\$DOWNLOAD\" ]; then" >> "${DIR_TEMP}/proxy.sh"
+	echo "			( [ \"\$SILENT\" ] || [ \"\$QUIET\" ] ) || echo -n \"\${APPFILE}: [remote] [download]\"" >> "${DIR_TEMP}/proxy.sh"
+	echo "			[ \"\$REPO_TARGET\" ] && cd \"\$REPO_TARGET\" >>\$LOG_ERRS 2>&1 || cd \"\$REPO_OPTION\" >>\$LOG_ERRS 2>&1" >> "${DIR_TEMP}/proxy.sh"
+	echo "			downloadPackage || exitGracefully 1" >> "${DIR_TEMP}/proxy.sh"
+	echo "		elif [ \"\$COPY\" ]; then" >> "${DIR_TEMP}/proxy.sh"
+	echo "			( [ \"\$SILENT\" ] || [ \"\$QUIET\" ] ) || echo -n \"\${APPFILE}: [local] [copy]\"" >> "${DIR_TEMP}/proxy.sh"
+	echo "			copyPackage || exitGracefully 1" >> "${DIR_TEMP}/proxy.sh"
+	echo "		fi" >> "${DIR_TEMP}/proxy.sh"
+	echo "		( [ \"\$SILENT\" ] || [ \"\$QUIET\" ] ) || echo \" [done]\"" >> "${DIR_TEMP}/proxy.sh"
+	echo "		deleteDependency TRUE" >> "${DIR_TEMP}/proxy.sh"
+	echo "	done">> "${DIR_TEMP}/proxy.sh"
+	echo "done">> "${DIR_TEMP}/proxy.sh"
+
+	chmod 755 "${DIR_TEMP}/proxy.sh"
+}
+
+
 # Usage syntax: unloadPackage
 # Overview:	performs the actual work of deleting the package contents from the system no matter if they were copied or symlinked - with the option of a complete uninstallation
 # Notes:	pwd is irrelevent to this function										< UPDATED - this is no longer true as of 2025/11/12
@@ -1733,78 +1744,113 @@ installPackage() {
 unloadPackage() {
 	local PARAMS=''
 	local FILE=''
+	local MODE='copy'
 
 # LEFT OFF 2025/11/10 - there appear to be no checks if the package is depended on by other software before unloading occurs!!!!
 
 	[ $DEBUG -gt 0 ] && { echo -en "unloadPackage:\n\tRAWFILE     |${RAWFILE}|\n\tFILENAME    |${FILENAME}|\n\tBASENAME    |${BASENAME}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${CPU}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tVERBASE     |${VERBASE}|\n\tOPTFILE     |${OPTFILE}|\n\tREPO_SOURCE |${REPO_SOURCE}|\n\tDIRECTORY   |${DIRECTORY}|\n\tpwd         " >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
 
-	[ "$UNLOAD" != 'unload' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {				# if the package has been marked for uninstallation (delete or purge) -AND- it currently is NOT installed, then...
-		uninstallPackage || return 1							#   uninstall the package files
+	showMsg 'step' "[ local] (${FILETYPE}) ${PACKAGE}" 'both' 1 1
+
+	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {				# if the package has been marked for uninstallation (delete or purge) -AND- it currently is NOT installed, then...
+echo "DBUG - uninstalling..."
+# LEFT OFF - implement -Y before uncommenting this
+#		uninstallPackage || return 1							#   uninstall the package files
 		return 0									#   no need to process anything further!
 	}
 
 	# if the package has a service start/stop script, then stop the service before continuing
 	if [ -e "${DIR_INIT}/${PACKAGE}" ]; then
-		[ $DEBUG -gt 0 ] && echo -e "\tPackage has service script...\n\tCalling: \"${DIR_INIT}/${PACKAGE}\" stop" >>"$LOG_DBUG"
-		"${DIR_INIT}/${PACKAGE}" stop >>"$LOG_ERRS" 2>&1 || return 1
+		[ $DEBUG -gt 0 ] && echo -e "\tPackage has service script...\n\tCalling:    \"${DIR_INIT}/${PACKAGE}\" stop" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && ( "${DIR_INIT}/${PACKAGE}" stop >>"$LOG_ERRS" 2>&1 || return 1 )
 	fi
 
 	# determine how the package was installed (copied or symlinked) -AND- make sure it's not in use by something else
 	if ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ); then	# if the package has been mounted and symlinked, then...
-		[ $DEBUG -gt 0 ] && echo -e "\tPackage is symlinked...\n\tCalling: sudo /bin/umount \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
-		sudo /bin/umount "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
+		MODE='link'
+		[ $DEBUG -gt 0 ] && echo -e "\tPackage is symlinked...\n\tCalling:    sudo /bin/umount -d \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && ( sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1 )				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
+	elif [ $DEBUG -gt 0 ]; then
+		echo -e "\tPackage is copied..." >>"$LOG_DBUG"
+	fi
+# UPDATED 2025/11/17 - now using MODE
+#		[ $DEBUG -gt 0 ] && echo -e "\tCalling: sudo /bin/mount \"./${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\" -t squashfs -o loop,ro,bs=4096" >>"$LOG_DBUG"
+#		[ ! "$DRYRUN" ] && sudo /bin/mount "./${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro,bs=4096 >>"$LOG_ERRS" 2>&1 || return 1			# remount it again for further processing
+#	else											# otherwise it was a copy-to-RAM, so...
+		# NOTE: some of these actions can take place even if it's a DRYRUN
+		[ ! -e "${DIR_LOOP}/${BASENAME}" ] && {			# if the mount point doesn't exist, then create it!
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    mkdir -p \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
+			mkdir -p "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1
+		}
 
-		[ $DEBUG -gt 0 ] && echo -e "\tCalling: sudo /bin/mount \"./${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\" -t squashfs -o loop,ro,bs=4096" >>"$LOG_DBUG"
-		sudo /bin/mount "./${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro,bs=4096 >>"$LOG_ERRS" 2>&1 || return 1			# remount it again for further processing
-	else											# otherwise it was a copy-to-RAM, so...
-		[ ! -e "${DIR_LOOP}/${APPNAME}.${APPTYPE}" ] && { mkdir -p "${DIR_LOOP}/${APPNAME}.${APPTYPE}" >>"$LOG_ERRS" 2>&1 || return 1; }			# if the mount point doesn't exist, then create it!
-
-		[ $DEBUG -gt 0 ] && echo -e "\tCalling: sudo /bin/mount \"./${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\" -t squashfs -o loop,ro,bs=4096" >>"$LOG_DBUG"
-		sudo /bin/mount "./${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro,bs=4096 >>"$LOG_ERRS" 2>&1 || return 1			# now mount it for processing
-
-		for FILE in $(find "${DIR_LOOP}/${BASENAME}" ! -type d 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||"); do		# scan to make sure that no software in the package is being used
-			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && return 1				#   if one of the files in the package is currently in use, then exit this function	https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
-		done
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    sudo /bin/mount \"./${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\" -t squashfs -o loop,ro,bs=4096" >>"$LOG_DBUG"
+		( [ ! "$DRYRUN" ] || ( [ "$DRYRUN" ] && [ "$MODE" = 'copy' ] ) ) && ( sudo /bin/mount "./${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro,bs=4096 >>"$LOG_ERRS" 2>&1 || return 1 )			# now mount it for processing
+	if [ ! "$DRYRUN" ] && [ "$MODE" = 'copy' ]; then
+# UPDATED 2025/11/17 - now using MODE
+#		if [ ! "$DRYRUN" ]; then
+			for FILE in $(find "${DIR_LOOP}/${BASENAME}" ! -type d 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||"); do		# scan to make sure that no software in the package is being used
+				fuser "$FILE" >>"$LOG_ERRS" 2>&1 && return 1				#   if one of the files in the package is currently in use, then exit this function	https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
+			done
+#		fi
 	fi
 
 	# check if the package has any libs we need to unload later						  NOTE: we check this way because simply checking for the directory can produce false positives
-	[ $DEBUG -gt 0 ] && echo -e "\tChecking for modules..." >>"$LOG_DBUG"
-	( ls -1p "${DIR_LOOP}/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE				# NOTE: the "grep -qv '/'$" removes directories from the listing so only files remain (otherwise /lib/modules/ would provide a false positive)
-	( ls -1p "${DIR_LOOP}/lib64" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
-	( ls -1p "${DIR_LOOP}/usr/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
-	( ls -1p "${DIR_LOOP}/usr/local/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
+	[ $DEBUG -gt 0 ] && echo -en "\tChecking for libraries and modules:" >>"$LOG_DBUG"
+	( ls -1p "${DIR_LOOP}/${BASENAME}/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE				# NOTE: the "grep -qv '/'$" removes directories from the listing so only files remain (otherwise /lib/modules/ would provide a false positive)
+	( ls -1p "${DIR_LOOP}/${BASENAME}/lib64" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
+	( ls -1p "${DIR_LOOP}/${BASENAME}/usr/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
+	( ls -1p "${DIR_LOOP}/${BASENAME}/usr/local/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
 	# check if the package has a [/usr[/local]]'/lib/modules' directory to indicate we need to load modules later
-	[ -d "${DIR_LOOP}/lib/modules" ] || [ -d "${DIR_LOOP}/usr/lib/modules" ] || [ -d "${DIR_LOOP}/usr/local/lib/modules" ] && MODULES=TRUE	# NOTE: we CAN simply check for directories here since files would be packaged under them
+	[ -d "${DIR_LOOP}/${BASENAME}/lib/modules" ] || [ -d "${DIR_LOOP}/${BASENAME}/usr/lib/modules" ] || [ -d "${DIR_LOOP}/${BASENAME}/usr/local/lib/modules" ] && MODULES=TRUE	# NOTE: we CAN simply check for directories here since files would be packaged under them
+	[ $DEBUG -gt 0 ] && [ "$LIBRARIES" ] && echo -n " [libraries]" >>"$LOG_DBUG"
+	[ $DEBUG -gt 0 ] && [ "$MODULES" ] && echo -n " [modules]" >>"$LOG_DBUG"
+	[ $DEBUG -gt 0 ] && echo " [done]" >>"$LOG_DBUG"
 
 	# if we've made it here, delete all the files/dirs contained in the package from the OS
-	[ "$UNLOAD" != 'purge' ] && PARAMS='! -path "*/etc/*"'					# if we have been instructed to NOT purge any 'etc' files, then add these parameters to the 'find' calls below   http://www.cyberciti.biz/faq/find-command-exclude-ignore-files/
+	[ "$UNLOAD" != 'purge2' ] && PARAMS='! -path "*/etc/*"'					# if we have been instructed to NOT purge any 'etc' files, then add these parameters to the 'find' calls below   http://www.cyberciti.biz/faq/find-command-exclude-ignore-files/
 
 	[ $DEBUG -gt 0 ] && echo -e "\tRemoving package contents from filesystem..." >>"$LOG_DBUG"
 	for FILE in $(eval find "${DIR_LOOP}/${BASENAME}" $PARAMS 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||" | sort -r); do		# NOTE: we 'sort -r' to place the file above the directories since they have to be removed first!
 		if [ ! -d "$FILE" ]; then						#   if the iterated FILE is anything but a directory (e.g. device file, symlink, text file, ...), then delete it!
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIRECTORY}${FILE}\"" >>"$LOG_DBUG"
-			rm -f "${DIRECTORY}/${FILE}" >>"$LOG_ERRS" 2>&1 || return 1
-		elif [ -d "$FILE" ] && [ ! "$(ls -A "$FILE" 2>/dev/null)" ]; then				#   otherwise it is a directory, so check if it's empty and delete it if so! NOTE: we do NOT error out here if we can't delete it!
+			[ ! "$DRYRUN" ] && ( rm -f "${DIRECTORY}/${FILE}" >>"$LOG_ERRS" 2>&1 || return 1 )
+		elif [ -d "$FILE" ] && [ ! "$(ls -A "$FILE" 2>/dev/null)" ]; then				#   otherwise it is a directory, so check if it's empty and delete it if so!
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rmdir \"${DIRECTORY}${FILE}\"" >>"$LOG_DBUG"
-			rmdir "${DIRECTORY}${FILE}" >>"$LOG_ERRS" 2>&1
+			[ ! "$DRYRUN" ] && rmdir "${DIRECTORY}${FILE}" >>"$LOG_ERRS" 2>&1			#   NOTE: we do NOT error out here if we can't delete it!
 		fi
 	done
 
-	[ -e "${DIR_LIST}/${FILENAME}" ] && rm -f "${DIR_LIST}/${FILENAME}" >>"$LOG_ERRS" 2>&1		# delete the installed marker
-	[ -e "${DIR_LIST}/${BASENAME}.${EXT_HASH}" ] && rm -f "${DIR_LIST}/${BASENAME}.${EXT_HASH}" >>"$LOG_ERRS" 2>&1
-	[ -e "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" ] && rm -f "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" >>"$LOG_ERRS" 2>&1
-	sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1					# finally umount the package
-	rmdir "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1								# delete the packages mount point
+	[ -e "${DIR_LIST}/${FILENAME}" ] && {
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${FILENAME}\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${FILENAME}" >>"$LOG_ERRS" 2>&1		# delete the installed marker
+	}
+	[ -e "${DIR_LIST}/${BASENAME}.${EXT_HASH}" ] && {
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${BASENAME}.${EXT_HASH}\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${BASENAME}.${EXT_HASH}" >>"$LOG_ERRS" 2>&1
+	}
+	[ -e "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" ] && {
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${BASENAME}.${EXT_DEPS}\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" >>"$LOG_ERRS" 2>&1
+	}
+	if [ ! "$DRYRUN" ] || ( [ "$DRYRUN" ] && [ "$MODE" = 'copy' ] ); then
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    sudo /bin/umount -d \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
+		sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1					# finally umount the package
+
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rmdir \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
+		rmdir "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1								# delete the packages mount point
+	fi
 
 	# if we also need to uninstall (delete or purge), then...
-	[ "$UNLOAD" != 'unload' ] && {
-		showMsg 'step' " [uninstall]" 'both' 0 0
-		uninstallPackage || return 1											# if the package has been marked for uninstallation, then...
+	[ "$UNLOAD" != 'unload2' ] && {
+echo "DBUG - uninstalling..."
+# LEFT OFF - implement -Y before uncommenting this
+#		showMsg 'step' " [uninstall]" 'both' 0 0
+#		uninstallPackage || return 1											# if the package has been marked for uninstallation, then...
 	}
 # LEFT OFF - when installing, and a file exists (e.g. grep symlink to busybox), then rename to FILE.-PACK.TYPE (or 'SYS' if not part of package); when the PACK.TYPE is uninstalled and one of those files exists, restore it
 #		is this necessary if we are creating restore points?
 
-	[ "$INDEX" -eq 1 ] && [ "$UNLOAD" != 'unload' ] && sed -i "/${FILENAME}/d" "${REPO_PREFIX}/$LIST" 2>>"$LOG_ERRS"		# if this is a requested package and not one of its dependencies (via INDEX==1) -AND- we're are actually uninstalling (deleting or purging), then remove the package from the LIST file
+	[ ! "$DRYRUN" ] && [ "$INDEX" -eq 1 ] && [ "$UNLOAD" != 'unload2' ] && sed -i "/${FILENAME}/d" "${REPO_PREFIX}/$LIST" 2>>"$LOG_ERRS"		# if this is a requested package and not one of its dependencies (via INDEX==1) -AND- we're are actually uninstalling (deleting or purging), then remove the package from the LIST file
 
 	return 0
 
@@ -3462,10 +3508,14 @@ elif [ "$PROXY" ]; then
 	showMsg 'success' "" 'both' 1 6
 	exitGracefully 0
 elif [ "$UNLOAD" ]; then
-	showMsg 'action' "Updating list for packages that can be unloaded..." 'both' 1 4
+	showMsg 'action' "Updating list for packages that can't be unloaded..." 'both' 1 4
+
+	UNLOAD="${UNLOAD}2"							# indicate we are in the second stage of the unload process
 
 	# finalize the packages to unload
 	for FILE in $(cat "${DIR_TEMP}/unload.${EXEID}"); do					# for each package listed for removal (in the unload list from processDependencies() above)...
+		[ $DEBUG -gt 0 ] && echo -e "Body (final):\n\tFILE        |${FILE}|" >>"$LOG_DBUG"
+
 # [x] check if it is in any REPO_SOURCE/.deps file
 # [x] if it isn't - remove it
 # [x] if it is, check that the corresponding .soft file is not also in this list to remove
@@ -3479,16 +3529,22 @@ elif [ "$UNLOAD" ]; then
 #			DEPTYPE="$(echo "$DEPFILE" | grep -oE '[\._\-](bin|dev|doc|drv|gir|lib|loc)' | sed -E 's/^[\._\-]//')"	# search for any variation of known type abbreviations and remove the preceeding separation character
 #			[ "$DEPTYPE" = '' ] && DEPTYPE='bin'					#   if the line above did not return any value, then default to 'bin'
 
-			if ( grep -q ^"$DEPBASE" "${DIR_TEMP}/unload.${EXEID}" ); then		#      if the corresponding .soft file of the iterated .deps file, is also listed for removal (in the unload list), then...
-				continue							#         we need to unload it, so leave it in the list and go to the next DEPFILE to process
-			else									#      otherwise a package that is NOT being unloaded still needs this package, so we can't unload it
-# LEFT OFF - update processDependencies to create the upload.EXEID file on the first run (to build the list), but use variables on the second run (to remove from the list)
-				processDependencies ${FILE}					#         store all it's dependencies
-				while [ "$DEPENDENCY" ] && [ $INDEX -gt 0 ]; do			#         and delete them from the removal list (the unload list)
-					[ $DEBUG -gt 0 ] && echo -e "\tRemoving: ${DEPENDENCY} from unload list; ${DEPBASE}.${EXT_SOFT} depends on it" >>"$LOG_DBUG"
-					sed -i "s/^${DEPENDENCY}//;/^$/d" "${DIR_TEMP}/unload.${EXEID}"
-				done
-			fi
+			( grep -q ^"$DEPBASE" "${DIR_TEMP}/unload.${EXEID}" ) && continue	#      if the corresponding .soft file of the iterated .deps file, is also listed for removal (in the unload list), then we need to unload so leave it in the list and go to the next DEPFILE
+												#      otherwise a package that is NOT being unloaded still needs this package, so we can't unload it
+# UPDATED 2025/11/17
+#			[ $DEBUG -gt 0 ] && echo -e "\tRemoving:    ${FILE} from unload list; ${DEPBASE}.${EXT_SOFT} depends on it" >>"$LOG_DBUG"
+			[ $DEBUG -gt 0 ] && echo -e "\tOther installed packages depend on ${FILE}, processing its dependencies..." >>"$LOG_DBUG"
+			processDependencies ${FILE}					#         store all it's dependencies
+
+			[ $DEBUG -gt 0 ] && echo -e "Body (final - returned):\n\tFILE        |${FILE}|\n\tRemoving ${FILE} and its dependencies from the unload list..." >>"$LOG_DBUG"
+# UPDATED 2025/11/17
+#			while [ "$DEPENDENCY" ] && [ $INDEX -gt 0 ]; do			#         and delete them from the removal list (the unload list)
+			while [ "$DEPENDENCY" ]; do					#         and delete them from the removal list (the unload list)
+				sed -i "s/^${DEPENDENCY}//;/^$/d" "${DIR_TEMP}/unload.${EXEID}"
+				deleteDependency TRUE
+			done
+
+			break									# we only need to check that one other installed, unmarked package depends on the iterated package, so we can exit the inner 'for' loop
 		done
 
 
@@ -3505,8 +3561,9 @@ elif [ "$UNLOAD" ]; then
 	done
 
 	showMsg 'action' "Unloading packages remaining in the list..." 'both' 1 4
-# LEFT OFF - have the below function just unload all the files in the list
-	unloadPackage || exitGracefully 4 'screen' 5 'step'				#   if it's NOT in any REPO_SOURCE/*.deps file -OR- 
+	for FILE in $(cat "${DIR_TEMP}/unload.${EXEID}"); do					# for each package remaining in the list for removal...
+		unloadPackage || exitGracefully 4 'screen' 5 'step'				#   unload it
+	done
 fi
 
 
@@ -3544,6 +3601,7 @@ if [ "$INSTALL" ] || [ "$RESTORE" ]; then
 		done
 		rm -f ${DIR_TEMP}/installs.list 2>>"$LOG_ERRS"
 	fi
+	# NOTE: these are two separate 'if' statements on purpose!
 	if [ -s ${DIR_TEMP}/services.list ]; then
 # UPDATED 2025/10/28
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "Running deferred service scripts..." | tee -a "$LOG_ERRS"
@@ -3620,13 +3678,15 @@ exitGracefully 0
 # ask where to install: system (/), everyone (/Users/Public/.{bin|sbin|lib|...}), personal (/Users/$USER/.{bin|sbin|lib|...})		NOTE: there are no sbin's any more; also /Users/Public is for system-wide usage WITHOUT having elevated installation credentials (compared to system installations to /)
 #	how do we address where to install during boot?		maybe utilize .list files for this?
 
-# file	description
-# -------------------
-# pre	checks that the account has permission to install the value
+# file	description				these are files included in the root of the package			OR, just have the install script put a file somewher indicating a device reboot (since that's the only meaningful follow-up; services already restart)
+# -------------------				the files would be good to indicate beforehand packages that would require a reboot so the user can choose whether to install them or not
+# .pre	checks that the account has permission to install the value
 #	Example values: group	advanced	(to indicate the user needs to be a member of the 'advanced' group to install this package; can issue UI prompt for elevated account status)
 #			location /
 #
-# post	indicates any actions required post-install
+# .post	indicates any actions required post-install
 #	Example values: device	reboot		(to indicate that a reboot is neccessary to complete install)
 #			service	restart		(to indicate a service needs to restart)
+#
+# .reboot	indicates the package will require a reboot
 
