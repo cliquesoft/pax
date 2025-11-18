@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/11/17 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/11/18 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -128,6 +128,7 @@ LIST=''												# stores a specified secondary boot list
 FLAG=''												# store an accompanying blacklist flag file for packages that should NOT be installed from the secondary boot list (or their dependencies)
 MODE=''												# the install mode: copy, (sym)link	NOTE: symlink by default if we are in a 'conservative' operation mode -OR- we are using DATA as the source of the repo
 DRYRUN=''
+PROMPT=''
 
 OUTPUT='text'											# the output format to display: none, text, xml
 XML=''												# used to store XML until there's a final success/failure
@@ -200,7 +201,8 @@ exitGracefully() {
 	[ $DEBUG -eq 0 ] && rm -f "${DIR_TEMP}/installs.${EXEID}" 2>/dev/null					# remove any installation temp files
 	[ $DEBUG -eq 0 ] && rm -f "${DIR_TEMP}/services.${EXEID}" 2>/dev/null
 	[ $DEBUG -eq 0 ] && rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>/dev/null
-	[ "$MODE" = 'copy' ] && [ $1 -gt 0 ] && ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && sudo /bin/umount "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1	# if we're copying and an error was encountered, then umount the package
+	[ $DEBUG -eq 0 ] && rm -f "${DIR_TEMP}/unload.${EXEID}" 2>/dev/null
+	[ "$MODE" = 'copy' ] && [ $1 -gt 0 ] && ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1	# if we're copying and an error was encountered, then umount the package
 
 	( [ ! "$1" ] || [ $1 -eq 0 ] ) && exit 0
 
@@ -590,6 +592,23 @@ deleteDependency() {
 }
 
 
+# Usage syntax: listDependencies
+# Overview:	lists the currently stored dependencies
+listDependencies() {
+	local I=$INDEX
+	local D=''
+
+	TEMP="$DEPENDENCY"
+
+	while [ "$DEPENDENCY" ]; do					#         and delete them from the removal list (the unload list)
+		I=$(( I - 1 ))
+		eval "D=\$DEP${I}"
+		TEMP="${DEPENDENCY}\n${TEMP}"
+	done
+	return $TEMP
+}
+
+
 # Usage syntax: processDependencies PACKAGE [INDENT]
 # Overview:	adds all the dependencies for the passed package onto the stack of dependencies to be installed
 # Notes:	pwd is mostly irrelevent to this function as it will dynamically change internally					< DELETE this
@@ -797,9 +816,11 @@ processDependencies() {
 	[ "$UNLOAD" ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && {	# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then go to the next one!
 # UPDATED 2025/11/07
 #		[ $DEBUG -gt 0 ] && echo -e "\tPackage is being ignored (FIRMWARE package)..." >>"$LOG_DBUG"
+		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The package is part of the base OS and can't be modified." >>"$LOG_DBUG"
 		showMsg 'step' "[SYSTEM] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-		showMsg 'failure' "The package is part of the base OS and can't be modified." 'log'
-		return 1
+# REMOVED 2025/11/18 - this is no longer a failure
+#		showMsg 'failure' "The package is part of the base OS and can't be modified." 'log'
+		return 0												# NOTE: we don't exit with failure since this could just be a dependency and left installed
 	}
 # UPDATED 2025/11/07 - removed COPY since it would already error out with the other check above; also we simply need to check if it's local or not
 #	( [ "$COPY" ] || [ "$UNLOAD" ] || [ "$VALIDATE" ] ) && [ "$SOURCE" = 'remote' ] && {				# if we are copying, unloading/uninstalling, or validating -AND- the iterated dependency is considered 'remote' (can't be found due to needing a proper -S value) then, go to the next one!
@@ -819,22 +840,31 @@ processDependencies() {
 	if [ ! "$TREE" ]; then									# if we're not displaying a dependency tree, then...
 		[ $DEBUG -gt 0 ] && echo -en "\tChecking if dependency is already marked for processing:" >>"$LOG_DBUG"
 #echo 'checking deps listing'
-		for DEPFILE in $(seq 1 $INDEX); do						# check if the dependencies has already been added to the list to be processed, so...
-			eval TEMP="\$DEP$DEPFILE"						#   since busybox 'sh' does not support arrays, we have to use this method to check each stored dependency
+#		if [ "$UNLOAD" ]; then
+if [ "$UNLOAD" ] && ( ! echo "${UNLOAD}" | grep -q 2 ); then
+			( grep -q "$FILENAME" "${DIR_TEMP}/unload.${EXEID}" ) && {
+				[ $DEBUG -gt 0 ] && echo " [yes]" >>"$LOG_DBUG"
+				showMsg 'step' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
+				return 0
+			}
+		else
+			for DEPFILE in $(seq 1 $INDEX); do						# check if the dependencies has already been added to the list to be processed, so...
+				eval TEMP="\$DEP$DEPFILE"						#   since busybox 'sh' does not support arrays, we have to use this method to check each stored dependency
 #echo "comparing |$TEMP|$FILENAME|"
 # UPDATED 2025/11/05 - updated to be the full filename to prevent any issues with different TYPEs
-#			if [ "$TEMP" = "$RAWFILE" ]; then					#   if the iterated dependency is already in the list (including any specific version number), then...
-			if [ "$TEMP" = "$FILENAME" ]; then					#   if the iterated dependency is already in the list (including any specific version number), then...
-				[ $DEBUG -gt 0 ] && echo " [yes]" >>"$LOG_DBUG"
+#				if [ "$TEMP" = "$RAWFILE" ]; then					#   if the iterated dependency is already in the list (including any specific version number), then...
+				if [ "$TEMP" = "$FILENAME" ]; then					#   if the iterated dependency is already in the list (including any specific version number), then...
+					[ $DEBUG -gt 0 ] && echo " [yes]" >>"$LOG_DBUG"
 
-				[ "$VALIDATE" ] && showMsg 'step' "[duplicate] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1	# other possible values: processed
+					[ "$VALIDATE" ] && showMsg 'step' "[duplicate] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1	# other possible values: processed
 # UPDATED 2025/10/31 - replace APP* variables and using showMsg()
-#				( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[marked] ${APPNAME}.${APPTYPE}"
-	#			showMsg 'step' "[marked] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-				[ ! "$VALIDATE" ] && showMsg 'step' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
-				return 0
-			fi
-		done
+#					( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[marked] ${APPNAME}.${APPTYPE}"
+	#				showMsg 'step' "[marked] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+					[ ! "$VALIDATE" ] && showMsg 'step' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
+					return 0
+				fi
+			done
+		fi
 		[ $DEBUG -gt 0 ] && echo " [no]" >>"$LOG_DBUG"
 	fi
 
@@ -987,7 +1017,7 @@ fi
 # UPDATED 2025/11/14 - so that DRYRUN would work correctly
 #			for DEPFILE in $(cat "./${BASENAME}.${EXT_DEPS}" 2>/dev/null); do			# if the passed dependency also has dependencies, then...
 			# NOTE: we have to include DRYRUN as part of the command so the file gets deleted correctly; BASENAME would only have the name of the last dependency for an after-for-loop removal
-			for DEPFILE in $(cat "./${BASENAME}.${EXT_DEPS}" 2>/dev/null && [ "$DRYRUN" ] && rm -f "./${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"); do			# if the passed dependency also has dependencies, then...
+			for DEPFILE in $(cat "./${BASENAME}.${EXT_DEPS}" 2>/dev/null && [ "$DRYRUN" ] && ( [ "$COPY" ] || [ "$DOWNLOAD" ] ) && rm -f "./${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"); do			# if the passed dependency also has dependencies, then...
 #echo "DEPFILE |$DEPFILE|" >>$LOG_DBUG
 				processDependencies "$DEPFILE" "$INDENT  " || return 1				# WARNING: this line needs to execute no matter the outcome of the 'wget' call above (so the addDependency() call can be made if needed) -AND- it needs to be the unaltered DEPFILE variable with any contained version number!!!
 			done
@@ -1344,9 +1374,10 @@ installPackage() {
 #	}
 # UPDATED 2025/11/12
 #	md5sum -c "${BASENAME}.${EXT_HAS}" >/dev/null 2>>"$LOG_ERRS" || {				# validate the package checksum before we install anything!!!
-	[ ! "$DRYRUN" ] && ( md5sum -c "${BASENAME}.${EXT_HASH}" >/dev/null 2>&1 | sed "s/^${FILENAME}: OK//;s/^m/ \[failure\]\nm/" | tee -a "$LOG_ERRS" | grep -q ^'md5sum: ' ) && {	# download the corresponding manifest file
+	( md5sum -c "${BASENAME}.${EXT_HASH}" >/dev/null 2>&1 | sed "s/^${FILENAME}: OK//;s/^m/ \[failure\]\nm/" | tee -a "$LOG_ERRS" | grep -q ^'md5sum: ' ) && {
 		showMsg 'failure' "The package file failed hash checksum (${BASENAME}.${EXT_HASH})." 'log'
-		rm -f "${BASENAME}".* >>"$LOG_ERRS" 2>&1						# remove the files if they fail (since something is wrong with the package)
+# REMOVED 2025/11/18 - this was removed so the user could take care of this.  nothing will be installed as long as the hash doesn't match the package
+#		[ ! "$DRYRUN" ] && rm -f "${BASENAME}".* >>"$LOG_ERRS" 2>&1						# remove the package files if they fail (since something is wrong with the package)
 		return 1
 	}
 
@@ -1487,7 +1518,7 @@ installPackage() {
 	[ -e "${DIR_TEMP}/filelist.${EXEID}" ] && rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>>"$LOG_ERRS"
 
 	# unmount if we copied -OR- are doing a dryrun
-	( [ "$MODE" = 'copy' ] || [ "$DRYRUN" ] ) && ( sudo /bin/umount "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1 )
+	( [ "$MODE" = 'copy' ] || [ "$DRYRUN" ] ) && ( sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1 )
 
 # REMOVED 2025/11/10 - this doesn't look like it's necessary, but left until confirmed
 #	MARKER="$(ls -1 "${DIR_LOOP}/${BASENAME}${DIR_INST}" 2>/dev/null)"							# check for installation scripts
@@ -1515,9 +1546,9 @@ installPackage() {
 	[ ! "$VALIDATE" ] && [ -e "${DIR_INIT}/${BASENAME}" ] && ( ! grep -q "${DIR_INIT}/${BASENAME}" ${DIR_TEMP}/services.${EXEID} 2>/dev/null ) && echo "${BASENAME}" >>${DIR_TEMP}/services.${EXEID} 2>>"$LOG_ERRS"
 
 	# now add to the 'catalog' of installed packages	
-	[ ! "$DRYRUN" ] && ln -sf "$(pwd)/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
-	[ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "$(pwd)/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
-	[ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "$(pwd)/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
+	[ ! "$DRYRUN" ] && ln -sf "${REPO_SOURCE}/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
+	[ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "${REPO_SOURCE}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
+	[ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "${REPO_SOURCE}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
 
 	return 0
 
@@ -1735,18 +1766,20 @@ proxyAction() {
 }
 
 
-# Usage syntax: unloadPackage
+# Usage syntax: unloadPackage PACKAGE
 # Overview:	performs the actual work of deleting the package contents from the system no matter if they were copied or symlinked - with the option of a complete uninstallation
-# Notes:	pwd is irrelevent to this function										< UPDATED - this is no longer true as of 2025/11/12
+# Notes:	the package unload-able checking is performed in processDependencies()
 # 		the directory containing the package(s) should already be entered BEFORE calling this function!
 #		if [ "$RAWFILE" != "$APPFILE" ] then a specific version was passed
 #		http://forum.tinycorelinux.net/index.php/topic,5012.msg26650.html#msg26650
+# Parameters:
+# PACKAGE	[string] the package name that is being installed
 unloadPackage() {
 	local PARAMS=''
 	local FILE=''
 	local MODE='copy'
 
-# LEFT OFF 2025/11/10 - there appear to be no checks if the package is depended on by other software before unloading occurs!!!!
+	splitName "$1"
 
 	[ $DEBUG -gt 0 ] && { echo -en "unloadPackage:\n\tRAWFILE     |${RAWFILE}|\n\tFILENAME    |${FILENAME}|\n\tBASENAME    |${BASENAME}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${CPU}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tVERBASE     |${VERBASE}|\n\tOPTFILE     |${OPTFILE}|\n\tREPO_SOURCE |${REPO_SOURCE}|\n\tDIRECTORY   |${DIRECTORY}|\n\tpwd         " >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
 
@@ -2067,6 +2100,9 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #			check		simply checks for updates and notifies
 #			download	checks and downloads updates
 #			install		checks, downloads, and installs updates
+#			checks(etup)	installs a cron job to check and notify
+#			downloads(etup)	installs a cron job to check and download
+#			installs(etup)	installs a cron job to do everything	
 #	echo '	-q   '
 	echo '	-r   restore package(s) from a restore point'					# NOTE: this does not perform any uninstallation of newer running version or installation of the restored version, just restores the software (and deps) to the 'optional' directory (as if the package had just be downloaded)
 # LEFT OFF - implement the below; it's like apt-search; this needs to work with both directory structure and URL submissions; make it so you can search for packages (names) or files (within a package, like the -f action but for all packages in the repo)
@@ -2080,9 +2116,10 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #	echo '	-w   '
 #	echo '	-x   '
 #	echo '	-y   '
-#	echo '	-z   '
+	echo '	-z   populates DIR_LIST with package files'
 	echo
 	echo '	--help      shows this screen'
+	echo '	--install   installs pax as the default package manager'
 	echo '	--version   displays the software version'
 	echo
 	echo '  OPTIONS:'
@@ -2105,11 +2142,11 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-L   prevent package addition to (optional.)list when installing'			# this only is useful when installing
 	echo '	-M   defines the package install mode: copy, link (default)'		# old '-R' > new '-M copy'		NOTE: if the OS is run from RAM, then the 'copy' value will copy into RAM, if it is on a disk, then it copies to the disk
 	echo '	-N   do NOT install all files in the package, just those specified'		# allows users to install desired file(s) from a package so all the contents don't get installed (to keep the system as small as possible); keeps attack vector to a minimum
-# LEFT OFF - implement the 'html' and 'xml' values
+# LEFT OFF - implement the 'html' values
 	echo '	-O   how output is displayed: none, fifo, text, xml, xmLive'		# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
 # UPDATED 2025/10/22 - merged -P with -U
 #	echo '	-P   purges all files of the uninstalled packages including configs'		# data ALWAYS is retained though! (e.g. mysql databases)
-#	echo '	-P   '
+	echo '	-P   prompt before taking action'
 # VER2 - merge -Q with '-O errors'
 	echo '	-Q   quiets the output to only show errors'				# old '-q' > new '-Q'
 	echo '	-R   create a restore point when uninstalling'				# old '-N' > new 'absence of value'; if you want to create a restore point, you must now specify the flag!
@@ -2251,6 +2288,20 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	     ${0##*/} -u purge package"
 	echo
 	exit 0
+elif [ "$1" = '--install' ] || [ "$3" = '--install' ]; then			# so a user can do 'pax -O xml --install'
+	if [ $# -gt 1 ]; then							# if we were passed more than just the '--version' option, it has to be '-O', so...
+		if [ "$2" != 'none' ] && [ "$2" != 'text' ] && [ "$2" != 'xml' ]; then						# validate the passed '-O' value
+			[ "$SILENT" ] || echo "ERROR: you must supply a proper value to the -O option." | tee -a "$LOG_ERRS"	# NOTE: we can't use showMsg() yet because we don't have it's value, so...
+			exit 1
+		fi
+		OUTPUT=$2													# set that value to use from now on
+	fi
+	[ ! -e "${DIR_CONF}/install" ] && {
+		showMsg 'failure' "The install script is missing to make pax the default package manager." 'screen'
+		exit 1
+	}
+	"${DIR_CONF}/install" || exit 1
+	exit 0
 elif [ "$1" = '--version' ] || [ "$3" = '--version' ]; then			# so a user can do 'pax -O xml --version'
 # UPDATED 2025/10/25
 #	head -10 $(which pax) | grep ^'# updated' | sed "s/.*\\t//;s/ .*//;s:/:.:g"
@@ -2267,7 +2318,7 @@ elif [ "$1" = '--version' ] || [ "$3" = '--version' ]; then			# so a user can do
 else
 	# PROCESS PASSED PARAMETERS
 
-	while getopts BcC:dD:eE:fFiI:JK:lLmM:N:oO:Qr:RS:tT:u:v:VW:X:Y OPTION; do			# NOTE: the 'V:' indicates that the '-V' parameter requires a value!
+	while getopts BcC:dD:eE:fFiI:JK:lLmM:N:oO:PQr:RS:tT:u:v:VW:X:Yz OPTION; do			# NOTE: the 'V:' indicates that the '-V' parameter requires a value!
 		case ${OPTION} in
 			B) BOOTING=TRUE ;;
 			c) COPY=TRUE ;;
@@ -2491,6 +2542,7 @@ else
 			   OUTPUT=$OPTARG ;;
 # MERGED 2025/10/22 - this was merged with -U
 #			P) PURGE=2 ;;
+			P) PROMPT=TRUE ;;
 			Q) QUIET=TRUE ;;
 			r) ( echo ${OPTARG:0:1} | grep -q ^[0-9] ) || {
 # UPDATED 2025/10/26
@@ -2607,6 +2659,27 @@ else
 			   proxyAction
 			   PROXY="$OPTARG" ;;
 			Y) DRYRUN=TRUE ;;
+# DEV NOTE: -z must be called for any non-consecutive package manager call to make sure the files represent an up-to-date system (e.g. if pax is used to install something, then tce-load is, the catalog list with become out-of-sync and pax could malfunction)
+			z) # remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
+			   unalias cp >/dev/null 2>&1
+			   unalias ln >/dev/null 2>&1
+
+			   # remove any existing of these files (in case the original package manager was used between runs)
+			   showMsg 'action' "Clearing any prior -z action contents:" 'screen' 0 3
+			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_SOFT}
+			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_HASH}
+			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_DEPS}
+			   showMsg 'action' " [done]" 'screen' 1 5
+
+			   # (re-)sync the package contents
+			   showMsg 'action' "Sync'ing necessary package files:" 'screen' 0 3
+			   for BASENAME in $(ls -1 "$DIR_LIST"); do
+				[ ! "$DRYRUN" ] && ( ln -sf "${BASENAME}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1 )
+				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" ] && ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
+				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" ] && ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
+			   done
+			   showMsg 'action' " [done]" 'screen' 1 5
+			   exit 0 ;;
 			*) exit 1 ;;								# NOTE: since 'getopts' presents it own error, we don't need to do so here
 		esac
 	done
@@ -2729,6 +2802,8 @@ fi
 [ "$PROXY" ] && [ "$DRYRUN" ] && { showMsg 'failure' "The -X option can't be used with the -Y option." 'screen'; exit 1; }
 # MOVED 2025/11/12 - this has to be moved below were the directory values are set
 #[ "$RESTORE" ] && [ ! -e "${REPO_RESTOR}/${RESTORE}" ] && { showMsg 'failure' "The provided path does not contain any valid restore points." 'screen'; exit 1; }
+( ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) || { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
+
 
 # check the directories		NOTE: we can't write to a log yet since those checks are occurring
 if [ ! -d "${DIR_LIST}" ]; then
@@ -2874,6 +2949,7 @@ elif [ "$PROXY" ]; then										# if we are proxying an action, then...
 elif [ "$UNLOAD" ]; then									# if we are unloading/uninstalling package(s), then...
 	[ "$PREFIX" ] && DIRECTORY="${PREFIX}"							#   if the -D option was passed, add it to the directory structure
 	[ ! "$PREFIX" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && DIRECTORY="$DIR_LIVE"		#   if the -D option was NOT passed, and the DIRECTORY was NOT passed, then set to the default installation location
+	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only unload local packages
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
 elif [ "$VALIDATE" ]; then									# if we are validating package(s) information, then...
 	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only validate local packages
@@ -3259,13 +3335,12 @@ for RAWFILE in $@; do
 
 	# PROCESS THE ACTION (per passed package)						NOTE: this has to be done this way so that (un)installations can create and process proper file lists
 
-	[ $DEBUG -gt 1 ] && {
-		echo -en "   Do you want to proceed with the action? [Y/N] (N): "
-		read
-		( [ "$REPLY" = 'N' ] || [ "$REPLY" = 'n' ] || [ "$REPLY" = '' ] ) || exitGracefully 0
-	}
+	TEMP=''
 
-	[ "$COPY" ] && showMsg 'action' "Copying the specified package(s)..." 'both' 1 4
+	[ "$COPY" ] && {
+		showMsg 'action' "Copying the specified package(s)..." 'both' 1 4
+		[ "$PROMPT" ] && listDependencies
+	}
 	[ "$DOWNLOAD" ] && showMsg 'action' "Downloading the specified package(s)..." 'both' 1 4
 	#[ "$EXTRACT" ]
 	#[ "$FIND" ]
@@ -3282,7 +3357,7 @@ for RAWFILE in $@; do
 		else
 #echo btm
 			[ $DEBUG -gt 0 ] && echo -e '\tInstall using symlinks...' >>"$LOG_DBUG"
-#		showMsg 'step' " [link]" 'both' 0 0
+#			showMsg 'step' " [link]" 'both' 0 0
 			MODE='link'
 		fi
 	}
@@ -3292,6 +3367,13 @@ for RAWFILE in $@; do
 	#[ "$TREE" ]
 	#[ "$UNLOAD" ]
 	[ "$VALIDATE" ] && showMsg 'action' "Validating the package contents..." 'both' 1 4
+
+
+	( [ $DEBUG -gt 1 ] || [ "$PROMPT" ] ) && {
+		echo -en "   Do you want to proceed with the action? [Y/N] (N): "
+		read
+		( [ "$REPLY" = 'N' ] || [ "$REPLY" = 'n' ] || [ "$REPLY" = '' ] ) || exitGracefully 0
+	}
 
 
 	# now process the dependencies obtained from the above segment!
@@ -3407,6 +3489,7 @@ for RAWFILE in $@; do
 		#elif [ "$TREE" ]; then										# if we are showing the dependency tree, then...
 			# this is handled in the script parameter processing section above
 		#elif [ "$UNLOAD" ]; then							# if we're unloading package(s), then...
+			# this is never reached since the overall loop is iterated right after processDependencies() is called, for this action
 # UPDATED 2025/10/28
 #			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [unload]"
 # MOVED 2025/11/14 - this is moved to 'execute final processing' below
@@ -3508,20 +3591,17 @@ elif [ "$PROXY" ]; then
 	showMsg 'success' "" 'both' 1 6
 	exitGracefully 0
 elif [ "$UNLOAD" ]; then
-	showMsg 'action' "Updating list for packages that can't be unloaded..." 'both' 1 4
+	showMsg 'action' "Removing packages that can't be unloaded..." 'both' 1 4
 
 	UNLOAD="${UNLOAD}2"							# indicate we are in the second stage of the unload process
 
 	# finalize the packages to unload
 	for FILE in $(cat "${DIR_TEMP}/unload.${EXEID}"); do					# for each package listed for removal (in the unload list from processDependencies() above)...
+		( grep -q "$FILE" "${DIR_TEMP}/unload.${EXEID}" ) || continue			# if we've removed files from the unload list in the below 'while [ "$DEPENDENCY" ]; do' section, then this skips their processing
+												# NOTE: we have to include the above line since the 'cat' call in the above 'for' loop will retain all the ORIGINAL values of the text file, not the removals of the 'while' below!
 		[ $DEBUG -gt 0 ] && echo -e "Body (final):\n\tFILE        |${FILE}|" >>"$LOG_DBUG"
 
-# [x] check if it is in any REPO_SOURCE/.deps file
-# [x] if it isn't - remove it
-# [x] if it is, check that the corresponding .soft file is not also in this list to remove
-# [x]	if it is - remove it
-# [x]	if it isn't - the remove it from the list (and all it's dependencies)
-		for DEPFILE in $(grep -Hl "$FILE" *.${EXT_DEPS}); do				#   for each .deps file that contains the package (in REPO_SOURCE)...
+		for DEPFILE in $(grep -Hl "$FILE" "${DIR_LIST}/"*.${EXT_DEPS}); do				#   for each .deps file that contains the package (in REPO_SOURCE)...
 #			TEMP="${FILE_SCHEMA#*\}}"						#   remove just the package name portion from the package filename 'schema' - everything before the first '}' character
 #			eval TEMP="${TEMP}.${EXT_DEPS}"						#   combine the 'schema' (less the package name) values and the file extension value (e.g. i32.bin.soft)
 #			DEPNAME="$(echo $DEPFILE | sed "s/${TEMP}//")"				#   remove that combination from the passed package name (in case it was passed like bash.i32.bin.soft) to isolate just the package name (e.g. bash)
@@ -3533,7 +3613,7 @@ elif [ "$UNLOAD" ]; then
 												#      otherwise a package that is NOT being unloaded still needs this package, so we can't unload it
 # UPDATED 2025/11/17
 #			[ $DEBUG -gt 0 ] && echo -e "\tRemoving:    ${FILE} from unload list; ${DEPBASE}.${EXT_SOFT} depends on it" >>"$LOG_DBUG"
-			[ $DEBUG -gt 0 ] && echo -e "\tOther installed packages depend on ${FILE}, processing its dependencies..." >>"$LOG_DBUG"
+			[ $DEBUG -gt 0 ] && echo -e "\tOther installed packages depend on ${FILE},\n\tprocessing its dependencies for removal from the unload list..." >>"$LOG_DBUG"
 			processDependencies ${FILE}					#         store all it's dependencies
 
 			[ $DEBUG -gt 0 ] && echo -e "Body (final - returned):\n\tFILE        |${FILE}|\n\tRemoving ${FILE} and its dependencies from the unload list..." >>"$LOG_DBUG"
@@ -3546,29 +3626,17 @@ elif [ "$UNLOAD" ]; then
 
 			break									# we only need to check that one other installed, unmarked package depends on the iterated package, so we can exit the inner 'for' loop
 		done
-
-
-# REMOVED 2025/11/14 - this is the original way
-#			[ -e "${DIR_LIST}/${DEPBASE}.${EXT_MARK}" ] && continue			# if the iterated dependency is already marked to be unloaded, then go to the next one
-#			[ ! -e "${DIRECTORY}/${DEPBASE}.${EXT_DEPS}" ] || continue		# if no .deps file exists for the iterated installed package, then continue since it does not depend on the package we are trying to unload
-#
-#			# if there is an EXEID -AND- the requested package is a dependency for the iterated installed software -AND- that iterated installed software is not in the EXEID file that can be uninstalled, then..
-#			( grep -q ^"$RAWFILE" "${DIRECTORY}/${DEPBASE}.${EXT_DEPS}" ) && ( ! grep -q ^"${DEPFILE}" "${DIR_TEMP}/installed.${EXEID}" >/dev/null 2>&1 ) && {
-#				[ $DEBUG -gt 0 ] && echo -e "\tOther software depends on this dependency..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
-#				showMsg 'step' "[depend] [(${DEPTYPE}) ${DEPNAME}] (${FILETYPE})${INDENT} ${PACKAGE}" 'both' 1 1
-#				return 0
-#			}
 	done
 
 	showMsg 'action' "Unloading packages remaining in the list..." 'both' 1 4
 	for FILE in $(cat "${DIR_TEMP}/unload.${EXEID}"); do					# for each package remaining in the list for removal...
-		unloadPackage || exitGracefully 4 'screen' 5 'step'				#   unload it
+		unloadPackage $FILE || exitGracefully 4 'screen' 5 'step'				#   unload it
 	done
 fi
 
 
 echo DBUG
-exit 0
+exitGracefully 0
 
 
 # now update the system that all the packages contents have been installed
