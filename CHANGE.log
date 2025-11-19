@@ -154,6 +154,15 @@
 - Updated umount calls to use the -d switch
 - Added the -z action
 - Added the --install action
-- Updated the --help output
 - Started to implement the -P option
+- Updated the --help output
+
+2025/11/19
+- Added listDependencies() to use with the -P option
+- Completed the implementation of the -P option
+- Updated exitGracefully() to use showMsg() when 'exit 0'
+- Removed SILENT
+- Expanded the -Q option to take multiple values
+- Updated the --help output
+
 

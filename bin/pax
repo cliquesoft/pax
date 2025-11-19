@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/11/18 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/11/19 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -130,7 +130,8 @@ MODE=''												# the install mode: copy, (sym)link	NOTE: symlink by default 
 DRYRUN=''
 PROMPT=''
 
-OUTPUT='text'											# the output format to display: none, text, xml
+OUTPUT='text'											# the output format to display: fifo, text, xml, xmLive
+QUIET='default'											# the verbosity of the output: none, errors, default, verbose, all
 XML=''												# used to store XML until there's a final success/failure
 XML_TAGS=''											# stores the tags that are currently opened (e.g. containing children)
 
@@ -204,7 +205,10 @@ exitGracefully() {
 	[ $DEBUG -eq 0 ] && rm -f "${DIR_TEMP}/unload.${EXEID}" 2>/dev/null
 	[ "$MODE" = 'copy' ] && [ $1 -gt 0 ] && ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1	# if we're copying and an error was encountered, then umount the package
 
-	( [ ! "$1" ] || [ $1 -eq 0 ] ) && exit 0
+	( [ ! "$1" ] || [ $1 -eq 0 ] ) && {
+		[ "$4" ] && showMsg "$4" '' "$2" 1 $3
+		exit 0
+	}
 
 	[ $1 -gt 2 ] && {
 #echo "top |$3|"
@@ -280,9 +284,19 @@ showMsg() {
 		echo -e${CR} "${TEMP}${2}" >>"$LOG_ERRS"					# writes to log if value is: both, log		NOTE: we use $2 instead of $MSG to prevent '<br />' contamination
 		[ $DEBUG -gt 0 ] && [ "$TARGET" = 'log' ] && echo -e${CR} "${TEMP}${2}" >>"$LOG_DBUG"
 	}
-	( [ "$SILENT" ] || [ "$QUIET" ] ) && return 1						# if we need to be quiet or silent, then no visual, but write to log if desired
+# UPDATED 2025/11/29
+#	( [ "$SILENT" ] || [ "$QUIET" ] ) && return 1						# if we need to be quiet or silent, then no visual, but write to log if desired
+#echo "before |$2|"
+	[ "$QUIET" = 'all' ] && [ "$TAG" != 'success' ] && return 1							# if we need to supress all visual output (except succes to close XML tags), then only write to the log if desired
+#echo 01
+	[ "$QUIET" = 'errors' ] && [ "$TAG" != 'failure' ] && [ "$TAG" != 'success' ] && return 1				# if we need to only show errors (or success to close XML tags), but this isn't one of them, then exit (writing to the log if desired)
+#echo 02
+	[ "$QUIET" = 'default' ] && [ "$TAG" != 'failure' ] && [ "$TAG" != 'success' ] && [ "$TAG" != 'action' ] && [ "$TAG" != 'package' ] && [ "$TAG" != 'file' ] && [ "$TAG" != 'prompt' ] && return 1			# if we need to show most output, but this is excess, then exit (writing to the log if desired)
+#echo 03
+	[ "$QUIET" = 'verbose' ] && [ "$TAG" = 'duplicate' ] && return 1				# if we need to only show errors, but this isn't one of them, then exit (writing to the log if desired)
+#echo 04
 	[ "$TARGET" = 'log' ] && return 1							# if we're only logging messages, then we can exit
-
+#echo after
 	# ADJUST MESSAGE AND OUTPUT TO SCREEN
 	if [ "$OUTPUT" = 'fifo' ]; then
 # UPDATED 2025/10/30
@@ -596,16 +610,19 @@ deleteDependency() {
 # Overview:	lists the currently stored dependencies
 listDependencies() {
 	local I=$INDEX
-	local D=''
+	local D=' '
 
 	TEMP="$DEPENDENCY"
 
-	while [ "$DEPENDENCY" ]; do					#         and delete them from the removal list (the unload list)
+	while [ "$D" ]; do
 		I=$(( I - 1 ))
 		eval "D=\$DEP${I}"
-		TEMP="${DEPENDENCY}\n${TEMP}"
+		TEMP="${D}\n${TEMP}"
+		[ $I -eq 1 ] && unset D
+#echo "TEMP |$TEMP|$I|, press any key..."
+#read
 	done
-	return $TEMP
+	echo -e $TEMP
 }
 
 
@@ -842,9 +859,11 @@ processDependencies() {
 #echo 'checking deps listing'
 #		if [ "$UNLOAD" ]; then
 if [ "$UNLOAD" ] && ( ! echo "${UNLOAD}" | grep -q 2 ); then
-			( grep -q "$FILENAME" "${DIR_TEMP}/unload.${EXEID}" ) && {
+			[ -e "${DIR_TEMP}/unload.${EXEID}" ] && ( grep -q "$FILENAME" "${DIR_TEMP}/unload.${EXEID}" ) && {
 				[ $DEBUG -gt 0 ] && echo " [yes]" >>"$LOG_DBUG"
-				showMsg 'step' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
+# UPDATED 2025/11/19
+#				showMsg 'step' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
+				showMsg 'duplicate' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
 				return 0
 			}
 		else
@@ -856,11 +875,15 @@ if [ "$UNLOAD" ] && ( ! echo "${UNLOAD}" | grep -q 2 ); then
 				if [ "$TEMP" = "$FILENAME" ]; then					#   if the iterated dependency is already in the list (including any specific version number), then...
 					[ $DEBUG -gt 0 ] && echo " [yes]" >>"$LOG_DBUG"
 
-					[ "$VALIDATE" ] && showMsg 'step' "[duplicate] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1	# other possible values: processed
+# UPDATED 2025/11/19
+#					[ "$VALIDATE" ] && showMsg 'step' "[duplicate] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1	# other possible values: processed
+					[ "$VALIDATE" ] && showMsg 'duplicate' "[duplicate] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1	# other possible values: processed
 # UPDATED 2025/10/31 - replace APP* variables and using showMsg()
 #					( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[marked] ${APPNAME}.${APPTYPE}"
 	#				showMsg 'step' "[marked] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-					[ ! "$VALIDATE" ] && showMsg 'step' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
+# UPDATED 2025/11/19
+#					[ ! "$VALIDATE" ] && showMsg 'step' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
+					[ ! "$VALIDATE" ] && showMsg 'duplicate' "[duplct] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1			# other possible values: marked, double, listed
 					return 0
 				fi
 			done
@@ -955,7 +978,9 @@ fi
 #	elif [ "$UNLOAD" ]; then
 #		showMsg 'step' "[marked] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 	else
-		showMsg 'step' "[${SOURCE}] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+# UPDATED 2025/11/19
+#		showMsg 'step' "[${SOURCE}] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+		showMsg 'dependency' "[${SOURCE}] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 	fi
 
 	# add the passed dependency to the stack
@@ -996,7 +1021,6 @@ fi
 # UPDATED 2025/11/14
 #	if ( [ "$COPY" ] || [ "$DOWNLOAD" ] || [ "$INSTALL" ] ); then 				# if copying, downloading, or installing from an external source, then...	NOTE: we are already in the target storage directory
 	if ( [ "$COPY" ] || [ "$DOWNLOAD" ] || [ "$INSTALL" ] || [ "$UNLOAD" ] ); then 				# if we're copying, downloading, installing, or unloading, then...	NOTE: we are already in the target storage directory
-		[ $DEBUG -gt 0 ] && echo -en "\tChecking for package dependency file:" >>"$LOG_DBUG"
 		if [ ! "$COPY" ] && [ "$SOURCE" = 'remote' ]; then
 			eval SOURCE="${REPO_SOURCE}/${BASENAME}.${EXT_DEPS}"				#   re-purpose SOURCE (since we're done using it for its original intention) incase REPO_SOURCE has any variables in it
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    wget -cq \"${SOURCE}\"" >>"$LOG_DBUG"
@@ -1010,6 +1034,7 @@ fi
 		fi
 
 		# process all the dependencies of the passed software
+		[ $DEBUG -gt 0 ] && echo -en "\tChecking for package dependency file:" >>"$LOG_DBUG"
 		[ ! -e "${BASENAME}.${EXT_DEPS}" ] && [ $DEBUG -gt 0 ] && echo -e " [absent] [done]" >>"$LOG_DBUG"
 		if [ -e "${BASENAME}.${EXT_DEPS}" ]; then
 			[ $DEBUG -gt 0 ] && echo -e " [exists] [processing]" >>"$LOG_DBUG"
@@ -1073,7 +1098,7 @@ copyPackage() {
 		return 1
 	}
 
-	showMsg 'step' " [pack]" 'both' 0 0
+	showMsg 'file' " [pack]" 'both' 0 0
 	[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${REPO_SOURCE}/${BASENAME}.${EXT_SOFT}\" './'" >>"$LOG_DBUG"
 # UPDATED 2025/11/10
 #	cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_SOFT}" './' >>"$LOG_ERRS" 2>&1 || {		# copy the .soft file from the source directory
@@ -1082,7 +1107,7 @@ copyPackage() {
 		return 1
 	}
 
-	showMsg 'step' " [hash]" 'both' 0 0
+	showMsg 'file' " [hash]" 'both' 0 0
 	[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${REPO_SOURCE}/${BASENAME}.${EXT_HASH}\" './'" >>"$LOG_DBUG"
 # UPDATED 2025/11/10
 #	cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_HASH}" './' >>"$LOG_ERRS" 2>&1 || {		# copy the corresponding hash file
@@ -1094,7 +1119,7 @@ copyPackage() {
 	if [ "$EXTRA" ]; then
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'code' ]; then
 			if [ -e "${REPO_SOURCE}/${BASENAME}.${EXT_CODE}" ]; then
-				showMsg 'step' " [code]" 'both' 0 0
+				showMsg 'file' " [code]" 'both' 0 0
 				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"./${BASENAME}.${EXT_CODE}\" './'" >>"$LOG_DBUG"
 # UPDATED 2025/11/10
 #				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_CODE}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding code file
@@ -1106,7 +1131,7 @@ copyPackage() {
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'cpio' ]; then
 			if [ -e "${REPO_SOURCE}/${BASENAME}.cpio" ]; then
-				showMsg 'step' " [cpio]" 'both' 0 0
+				showMsg 'file' " [cpio]" 'both' 0 0
 				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"./${BASENAME}.cpio\" './'" >>"$LOG_DBUG"
 # UPDATED 2025/11/10
 #				cp -f "${REPO_SOURCE}/${BASENAME}.cpio" './' >>"$LOG_ERRS" 2>&1 || {		# copy the corresponding cpio file
@@ -1118,7 +1143,7 @@ copyPackage() {
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'info' ]; then
 			if [ -e "${REPO_SOURCE}/${BASENAME}.${EXT_INFO}" ]; then
-				showMsg 'step' " [info]" 'both' 0 0
+				showMsg 'file' " [info]" 'both' 0 0
 				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"./${BASENAME}.${EXT_INFO}\" './'" >>"$LOG_DBUG"
 # UPDATED 2025/11/10
 #				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_INFO}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding info file
@@ -1130,7 +1155,7 @@ copyPackage() {
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'list' ]; then
 			if [ -e "${REPO_SOURCE}/${BASENAME}.${EXT_LIST}" ]; then
-				showMsg 'step' " [list]" 'both' 0 0
+				showMsg 'file' " [list]" 'both' 0 0
 				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"./${BASENAME}.${EXT_LIST}\" './'" >>"$LOG_DBUG"
 # UPDATED 2025/11/10
 #				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_LIST}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding list file
@@ -1142,7 +1167,7 @@ copyPackage() {
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'make' ]; then
 			if [ -e "${REPO_SOURCE}/${BASENAME}.${EXT_MAKE}" ]; then
-				showMsg 'step' " [make]" 'both' 0 0
+				showMsg 'file' " [make]" 'both' 0 0
 				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"./${BASENAME}.${EXT_MAKE}\" './'" >>"$LOG_DBUG"
 # UPDATED 2025/11/10
 #				cp -f "${REPO_SOURCE}/${BASENAME}.${EXT_MAKE}" './' >>"$LOG_ERRS" 2>&1 || {	# copy the corresponding make file
@@ -1209,7 +1234,7 @@ downloadPackage() {
 		return 1
 	}
 
-	showMsg 'step' " [pack]" 'both' 0 0
+	showMsg 'file' " [pack]" 'both' 0 0
 	[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_SOFT}\"" >>"$LOG_DBUG"
 # UPDATED 2025/11/07 - updated to output to the log correctly
 #	wget -cq "${REPO_SOURCE}/${BASE}.${EXT_SOFT}" >>"$LOG_ERRS" 2>&1 || {			# download the package file from the repo
@@ -1219,7 +1244,7 @@ downloadPackage() {
 		return 1
 	}
 
-	showMsg 'step' " [hash]" 'both' 0 0
+	showMsg 'file' " [hash]" 'both' 0 0
 	[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_HASH}\"" >>"$LOG_DBUG"
 # UPDATED 2025/11/07 - updated to output to the log correctly
 #	wget -cq "${REPO_SOURCE}/${BASE}.${EXT_HASH}" >>"$LOG_ERRS" 2>&1			# download the corresponding hash file
@@ -1243,7 +1268,7 @@ downloadPackage() {
 				showMsg 'warning' "The package source code file download failed (${BASE}.${EXT_CODE})." 'log'
 				#return 1							  NOTE: since every package may not have one of these, don't error out here...
 			}
-			[ -e "./${BASE}.${EXT_CODE}" ] && showMsg 'step' " [code]" 'both' 0 0
+			[ -e "./${BASE}.${EXT_CODE}" ] && showMsg 'file' " [code]" 'both' 0 0
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'cpio' ]; then
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.cpio\"" >>"$LOG_DBUG"
@@ -1254,7 +1279,7 @@ downloadPackage() {
 				showMsg 'warning' "The package cpio file download failed (${BASE}.cpio)." 'log'
 				#return 1							  NOTE: since every package may not have one of these, don't error out here...
 			}
-			[ -e "./${BASE}.cpio" ] && showMsg 'step' " [cpio]" 'both' 0 0
+			[ -e "./${BASE}.cpio" ] && showMsg 'file' " [cpio]" 'both' 0 0
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'info' ]; then
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_INFO}\"" >>"$LOG_DBUG"
@@ -1265,7 +1290,7 @@ downloadPackage() {
 				showMsg 'warning' "The package info file download failed (${BASE}.${EXT_INFO})." 'log'
 				#return 1							  NOTE: since every package may not have one of these, don't error out here...
 			}
-			[ -e "./${BASE}.${EXT_INFO}" ] && showMsg 'step' " [info]" 'both' 0 0
+			[ -e "./${BASE}.${EXT_INFO}" ] && showMsg 'file' " [info]" 'both' 0 0
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'list' ]; then
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_LIST}\"" >>"$LOG_DBUG"
@@ -1276,7 +1301,7 @@ downloadPackage() {
 				showMsg 'warning' "The package manifest file download failed (${BASE}.${EXT_LIST})." 'log'
 				#return 1							  NOTE: since every package may not have one of these, don't error out here...
 			}
-			[ -e "./${BASE}.${EXT_LIST}" ] && showMsg 'step' " [list]" 'both' 0 0
+			[ -e "./${BASE}.${EXT_LIST}" ] && showMsg 'file' " [list]" 'both' 0 0
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'make' ]; then
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_MAKE}\"" >>"$LOG_DBUG"
@@ -1284,7 +1309,7 @@ downloadPackage() {
 				showMsg 'warning' "The package make file download failed (${BASE}.${EXT_MAKE})." 'log'
 				#return 1							  NOTE: since every package may not have one of these, don't error out here...
 			}
-			[ -e "./${BASE}.${EXT_MAKE}" ] && showMsg 'step' " [make]" 'both' 0 0
+			[ -e "./${BASE}.${EXT_MAKE}" ] && showMsg 'file' " [make]" 'both' 0 0
 		fi
 	fi
 
@@ -1783,7 +1808,7 @@ unloadPackage() {
 
 	[ $DEBUG -gt 0 ] && { echo -en "unloadPackage:\n\tRAWFILE     |${RAWFILE}|\n\tFILENAME    |${FILENAME}|\n\tBASENAME    |${BASENAME}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${CPU}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tVERBASE     |${VERBASE}|\n\tOPTFILE     |${OPTFILE}|\n\tREPO_SOURCE |${REPO_SOURCE}|\n\tDIRECTORY   |${DIRECTORY}|\n\tpwd         " >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
 
-	showMsg 'step' "[ local] (${FILETYPE}) ${PACKAGE}" 'both' 1 1
+	showMsg 'file' "[ local] (${FILETYPE}) ${PACKAGE}" 'both' 1 1
 
 	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {				# if the package has been marked for uninstallation (delete or purge) -AND- it currently is NOT installed, then...
 echo "DBUG - uninstalling..."
@@ -2143,12 +2168,15 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-M   defines the package install mode: copy, link (default)'		# old '-R' > new '-M copy'		NOTE: if the OS is run from RAM, then the 'copy' value will copy into RAM, if it is on a disk, then it copies to the disk
 	echo '	-N   do NOT install all files in the package, just those specified'		# allows users to install desired file(s) from a package so all the contents don't get installed (to keep the system as small as possible); keeps attack vector to a minimum
 # LEFT OFF - implement the 'html' values
-	echo '	-O   how output is displayed: none, fifo, text, xml, xmLive'		# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
+# UPDATED 2025/11/19
+#	echo '	-O   how output is displayed: none, fifo, text, xml, xmLive'		# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
+	echo '	-O   how output is displayed: fifo, text, xml, xmLive'			# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
 # UPDATED 2025/10/22 - merged -P with -U
 #	echo '	-P   purges all files of the uninstalled packages including configs'		# data ALWAYS is retained though! (e.g. mysql databases)
 	echo '	-P   prompt before taking action'
-# VER2 - merge -Q with '-O errors'
-	echo '	-Q   quiets the output to only show errors'				# old '-q' > new '-Q'
+# UPDATED 2025/11/19
+#	echo '	-Q   quiets the output to only show errors'				# old '-q' > new '-Q'
+	echo '	-Q   quiets the output: all, errors, default, verbose, none'		# old '-q' > new '-Q'
 	echo '	-R   create a restore point when uninstalling'				# old '-N' > new 'absence of value'; if you want to create a restore point, you must now specify the flag!
 	echo '	-S   changes the source directory/repo to obtain software from'			# mainly used when creating installation media to pull the files from an existing BOOT instead of an online repo
 	echo '	-T   specifies the package type: bin, dev, doc, drv, gir, lib, loc'
@@ -2195,7 +2223,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	The '-I' OPTION value must be comma separated."
 	echo "	The '-L', '-M', and '-V' OPTIONS can only be used with the '-i' ACTION."
 	echo "	The '-N' OPTION takes a comma separated list of filenames."
-	echo "	The '-O' OPTION must be the first parameter (to catch init errs)."
+	echo "	The '-O' and '-Q' OPTIONS need to start the parameters (for init errs)."
 	echo "	The '-S' OPTION can take a directory or URL as its value."
 	echo "	The '-T' OPTION can only be used once per call, so all the packages"
 	echo "	     need to be of the same type. Alternatively, you can skip using"
@@ -2290,7 +2318,9 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	exit 0
 elif [ "$1" = '--install' ] || [ "$3" = '--install' ]; then			# so a user can do 'pax -O xml --install'
 	if [ $# -gt 1 ]; then							# if we were passed more than just the '--version' option, it has to be '-O', so...
-		if [ "$2" != 'none' ] && [ "$2" != 'text' ] && [ "$2" != 'xml' ]; then						# validate the passed '-O' value
+# UPDATED 2025/11/19
+#		if [ "$2" != 'none' ] && [ "$2" != 'text' ] && [ "$2" != 'xml' ]; then						# validate the passed '-O' value
+		if ( echo "$2" | grep -qE ^'(fifo|text|xml|xmLive)'$ ); then
 			[ "$SILENT" ] || echo "ERROR: you must supply a proper value to the -O option." | tee -a "$LOG_ERRS"	# NOTE: we can't use showMsg() yet because we don't have it's value, so...
 			exit 1
 		fi
@@ -2306,7 +2336,9 @@ elif [ "$1" = '--version' ] || [ "$3" = '--version' ]; then			# so a user can do
 # UPDATED 2025/10/25
 #	head -10 $(which pax) | grep ^'# updated' | sed "s/.*\\t//;s/ .*//;s:/:.:g"
 	if [ $# -gt 1 ]; then							# if we were passed more than just the '--version' option, it has to be '-O', so...
-		if [ "$2" != 'none' ] && [ "$2" != 'text' ] && [ "$2" != 'xml' ]; then						# validate the passed '-O' value
+# UPDATED 2025/11/19
+#		if [ "$2" != 'none' ] && [ "$2" != 'text' ] && [ "$2" != 'xml' ]; then						# validate the passed '-O' value
+		if ( echo "$2" | grep -qE ^'(fifo|text|xml|xmLive)'$ ); then
 			[ "$SILENT" ] || echo "ERROR: you must supply a proper value to the -O option." | tee -a "$LOG_ERRS"	# NOTE: we can't use showMsg() yet because we don't have it's value, so...
 			exit 1
 		fi
@@ -2318,7 +2350,7 @@ elif [ "$1" = '--version' ] || [ "$3" = '--version' ]; then			# so a user can do
 else
 	# PROCESS PASSED PARAMETERS
 
-	while getopts BcC:dD:eE:fFiI:JK:lLmM:N:oO:PQr:RS:tT:u:v:VW:X:Yz OPTION; do			# NOTE: the 'V:' indicates that the '-V' parameter requires a value!
+	while getopts BcC:dD:eE:fFiI:JK:lLmM:N:oO:PQ:r:RS:tT:u:v:VW:X:Yz OPTION; do			# NOTE: the 'V:' indicates that the '-V' parameter requires a value!
 		case ${OPTION} in
 			B) BOOTING=TRUE ;;
 			c) COPY=TRUE ;;
@@ -2391,6 +2423,9 @@ else
 			   PURPLE="\e[0;35m"
 			   CYAN="\e[1;36m"
 			   WHITE="\e[1;37m"
+# LEFT OFF - move this into the the appropriate sections below
+			   [ "$QUIET" = 'all' ] && { echo "The -f action can't be used with the '-Q all' option."; exit 1; }		# NOTE: this has to be an 'echo' statement because showMsg() won't show it otherwise!
+			   [ "$QUIET" = 'errors' ] && { showMsg 'failure' "The -f action can't be used with the '-Q errors' option." 'screen'; exit 1; }
 
 			   # if we are looking for specific packages passed on the command line, then...
 			   shift $(expr $OPTIND - 1)							# now that the OPTIONS have been processed, lets process the package name(s)
@@ -2522,14 +2557,16 @@ else
 			   exit 0 ;;
 # UPDATED 2025/11/03
 #			O) if [ "$OPTARG" != 'none' ] && [ "$OPTARG" != 'fifo' ] && [ "$OPTARG" != 'text' ] && [ "$OPTARG" != 'xml' ] && [ "$OPTARG" != 'xmLive' ]; then
-			O) ( echo ${OPTARG} | grep -qE ^'(none|fifo|text|xml|xmLive)'$ ) || {
+# UPDATED 2025/11/19
+#			O) ( echo ${OPTARG} | grep -qE ^'(none|fifo|text|xml|xmLive)'$ ) || {
+			O) ( echo ${OPTARG} | grep -qE ^'(fifo|text|xml|xmLive)'$ ) || {
 # UPDATED 2025/10/26
 #				[ "$SILENT" ] || echo "ERROR: you must supply a proper value to the -O option." | tee -a "$LOG_ERRS"
 				showMsg 'failure' "You must provide a proper value to the -O option." 'screen'
 				exit 1
-#			   fi
 			   }
-			   [ "$OPTARG" = 'none' ] && SILENT=TRUE
+# REMOVED 2025/11/19 - this is now part of -Q
+#			   [ "$OPTARG" = 'none' ] && SILENT=TRUE
 			   [ "$OPTARG" = 'fifo' ] && [ ! -e "${DIR_TEMP}/output" ] && {
 				showMsg 'failure' "The fifo does not exist, aborting execution." 'screen'
 				exit 1
@@ -2543,7 +2580,13 @@ else
 # MERGED 2025/10/22 - this was merged with -U
 #			P) PURGE=2 ;;
 			P) PROMPT=TRUE ;;
-			Q) QUIET=TRUE ;;
+# UPDATED 2025/11/19
+#			Q) QUIET=TRUE ;;
+			Q) ( echo ${OPTARG} | grep -qE ^'(all|errors|default|verbose|none)'$ ) || {
+				showMsg 'failure' "You must provide a proper value to the -Q option." 'screen'
+				exit 1
+			   }
+			   QUIET=$OPTARG ;;
 			r) ( echo ${OPTARG:0:1} | grep -q ^[0-9] ) || {
 # UPDATED 2025/10/26
 #				[ "$SILENT" ] || echo "ERROR: you must supply a restore date to the -r action." | tee -a "$LOG_ERRS"
@@ -2784,6 +2827,10 @@ fi
 #[ "$MAKE" ] && [ "$(echo $REPO_PREFIX | head -c 1)" != '/' ] && { [ "$SILENT" ] || echo "ERROR: you must include the full path (not relative) when creating a package." | tee -a "$LOG_ERRS"; exit 1; }
 #[ "$RESTORE" ] && [ ! -e "${REPO_RESTOR}/${RESTORE}" ] && { [ "$SILENT" ] || echo "ERROR: the passed path is not a valid restore point." | tee -a "$LOG_ERRS"; exit 1; }
 [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$EXTRACT" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$MAKE" ] && [ ! "$RESTORE" ] && [ ! "$TREE" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { showMsg 'failure' "You must provide an ACTION when executing this script." 'screen'; exit 1; }
+[ "$EXTRACT" ] && [ "$PROMPT" ] && { showMsg 'failure' "The -e action can't be used with the -P option." 'screen'; exit 1; }
+[ "$FIND" ] && [ "$PROMPT" ] && { showMsg 'failure' "The -f action can't be used with the -P option." 'screen'; exit 1; }
+[ "$FIND" ] && [ "$QUIET" = 'all' ] && { echo "The -f action can't be used with the '-Q all' option."; exit 1; }		# NOTE: this has to be an 'echo' statement because showMsg() won't show it otherwise!
+[ "$FIND" ] && [ "$QUIET" = 'errors' ] && { showMsg 'failure' "The -f action can't be used with the '-Q errors' option." 'screen'; exit 1; }
 [ "$FIND" ] && [ "$DRYRUN" ] && { showMsg 'failure' "The -f action can't be used with the -Y option." 'screen'; exit 1; }
 # REMOVED 2025/11/03 - this never gets triggered as the mandatory checks above catches this
 #[ ! "$FIND" ] && [ ! "$1" ] && { showMsg 'failure' "You must provide a package name before processing can begin."; exit 1; }
@@ -2800,9 +2847,13 @@ fi
 # MOVED 2025/11/12 - this has to be moved below were the directory values are set
 #[ "$PROXY" ] && [ "$DIRECTORY" != "$REPO_OPTION" ] && { showMsg 'failure' "The DIRECTORY value is not used with this action." 'screen'; exit 1; }
 [ "$PROXY" ] && [ "$DRYRUN" ] && { showMsg 'failure' "The -X option can't be used with the -Y option." 'screen'; exit 1; }
+[ "$OUTPUT" = 'fifo' ] && [ "$PROMPT" ] && [ ! -e "$FIFO_SERVER" ] && { showMsg 'failure' "The -P option can't be used with '-O fifo' without a FIFO_SERVER." 'screen'; exit 1; }
+[ "$OUTPUT" != 'fifo' ] && [ "$OUTPUT" != 'text' ] && [ "$PROMPT" ] && [ ! -e "$FIFO_SERVER" ] && { showMsg 'failure' "The -P option can only be used with '-O fifo' or '-O text'." 'screen'; exit 1; }
 # MOVED 2025/11/12 - this has to be moved below were the directory values are set
 #[ "$RESTORE" ] && [ ! -e "${REPO_RESTOR}/${RESTORE}" ] && { showMsg 'failure' "The provided path does not contain any valid restore points." 'screen'; exit 1; }
 ( ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) || { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
+[ "$QUIET" = 'all' ] && [ "$PROMPT" ] && { echo "The -P option can't be used with the '-Q all' option."; exit 1; }		# NOTE: this has to be an 'echo' statement because showMsg() won't show it otherwise!
+[ "$QUIET" = 'errors' ] && [ "$PROMPT" ] && { showMsg 'failure' "The -P option can't be used with the '-Q errors' option." 'screen'; exit 1; }
 
 
 # check the directories		NOTE: we can't write to a log yet since those checks are occurring
@@ -3042,13 +3093,13 @@ for RAWFILE in $@; do
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "Extracting the '${PACKAGE}' package:"
 # UPDATED 2025/10/30
 #		showMsg 'package' "Extracting the '${PACKAGE}' package:" 'screen' 1 0 0 1
-		showMsg 'package' "Extracting the '${PACKAGE}' package:" 'both' 0 3
+		showMsg 'action' "Extracting the '${PACKAGE}' package:" 'both' 0 3
 # UPDATED 2025/11/03 - implementing DIRECTORY
 #		[ ! "$REPO_TARGET" ] && REPO_TARGET='./'					# if no directory was passed, then set the current directory as the target
 #		[ $DEBUG -gt 0 ] && echo -e "unsquashfs -f -d \"$REPO_TARGET\" ${FILENAME}" >>"$LOG_DBUG"
 #		unsquashfs -f -d "$REPO_TARGET" ${FILENAME} 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 2
 		[ $DEBUG -gt 0 ] && echo -e "unsquashfs -f -d \"$DIRECTORY\" \"${REPO_SOURCE}/${FILENAME}\"" >>"$LOG_DBUG"
-		[ "$DRYRUN" ] && showMsg 'package' " [dryrun]" 'both' 0 0
+		[ "$DRYRUN" ] && showMsg 'action' " [dryrun]" 'both' 0 0
 # UPDATED 2025/11/05 - the directory is changed into above now
 #		unsquashfs -f -d "$DIRECTORY" "${REPO_SOURCE}/${FILENAME}" 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 2
 		[ ! "$DRYRUN" ] && ( unsquashfs -f -d './' "${REPO_SOURCE}/${FILENAME}" 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'package' )
@@ -3056,7 +3107,7 @@ for RAWFILE in $@; do
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo " [done]"
 # UPDATED 2025/10/30
 #		showMsg 'package' " [done]" 'screen' 2
-		showMsg 'package' " [done]" 'both' 1 5 
+		showMsg 'action' " [done]" 'both' 1 5 
 		continue
 	elif [ "$FIND" ]; then									# if we are finding file(s) in packages, then...
 # UPDATED 2025/10/29
@@ -3078,7 +3129,7 @@ for RAWFILE in $@; do
 #				showMsg 'package' "$FILE" 'screen' 0 5
 #				showMsg 'matches' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/   /' | grep "$PACKAGE")" 'screen' 0 3 1
 				showMsg 'package' "   $FILE" 'screen' 1 4 1
-				showMsg 'matches' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/      /' | grep "$PACKAGE")" 'screen' 1 2 1
+				showMsg 'file' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/      /' | grep "$PACKAGE")" 'screen' 1 2 1
 # REMOVED 2025/10/30
 #				showMsg 'package' "" 'screen' 0 4
 			}
@@ -3335,12 +3386,34 @@ for RAWFILE in $@; do
 
 	# PROCESS THE ACTION (per passed package)						NOTE: this has to be done this way so that (un)installations can create and process proper file lists
 
-	TEMP=''
+	if ( [ $DEBUG -gt 1 ] || [ "$PROMPT" ] ); then
+		if [ "$PROMPT" ] && [ ! "$PROXY" ] && [ ! "$VALIDATE" ]; then
+			[ "$COPY" ] && TEMP='copied'
+			[ "$DOWNLOAD" ] && TEMP='downloaded'
+			#[ "$EXTRACT" ]
+			#[ "$FIND" ]
+			[ "$INSTALL" ] && TEMP='installed'
+			#[ "$LIST" ]
+			#[ "$MAKE" ]
+			#[ "$PROXY" ]
+			#[ "$TREE" ]
+			[ "$UNLOAD" ] && TEMP='unloaded'
+			#[ "$VALIDATE" ]
 
-	[ "$COPY" ] && {
-		showMsg 'action' "Copying the specified package(s)..." 'both' 1 4
-		[ "$PROMPT" ] && listDependencies
-	}
+			showMsg 'action' "The following package(s) will be ${TEMP}:" 'both' 1 4
+			listDependencies
+		fi
+
+# UPDATED 2025/11/19
+#		echo -en "   Do you want to proceed with the action? [Y/N] (N): "
+		showMsg 'prompt' "   Do you want to proceed with the action? [Y/N] (N): " 'both' 0 1 1
+		[ "$OUTPUT" = 'fifo' ] && read <"$FIFO_SERVER" || read
+		( [ "$REPLY" = 'N' ] || [ "$REPLY" = 'n' ] || [ "$REPLY" = '' ] ) && exitGracefully 0 'both' 6 'success'
+	fi
+
+
+# left off - THE -Q is for verbosity
+	[ "$COPY" ] && showMsg 'action' "Copying the specified package(s)..." 'both' 1 4
 	[ "$DOWNLOAD" ] && showMsg 'action' "Downloading the specified package(s)..." 'both' 1 4
 	#[ "$EXTRACT" ]
 	#[ "$FIND" ]
@@ -3367,13 +3440,6 @@ for RAWFILE in $@; do
 	#[ "$TREE" ]
 	#[ "$UNLOAD" ]
 	[ "$VALIDATE" ] && showMsg 'action' "Validating the package contents..." 'both' 1 4
-
-
-	( [ $DEBUG -gt 1 ] || [ "$PROMPT" ] ) && {
-		echo -en "   Do you want to proceed with the action? [Y/N] (N): "
-		read
-		( [ "$REPLY" = 'N' ] || [ "$REPLY" = 'n' ] || [ "$REPLY" = '' ] ) || exitGracefully 0
-	}
 
 
 	# now process the dependencies obtained from the above segment!
@@ -3423,7 +3489,9 @@ for RAWFILE in $@; do
 #			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "${FILENAME}: [local]"
 # UPDATED 2025/11/05
 #			showMsg 'step' "${FILENAME}: [local]" 'screen' 1
-			showMsg 'step' "${DEPENDENCY}: [local]" 'both' 0 3
+# UPDATED 2025/11/19 - adjusted for the -Q value
+#			showMsg 'step' "${DEPENDENCY}: [local]" 'both' 0 3
+			showMsg 'file' "${DEPENDENCY}: [local]" 'both' 0 3
 # UPDATED 2025/11/06
 #		elif [ "$DOWNLOAD" ] && [ ! "$VALIDATE" ]; then
 		elif [ "$DOWNLOAD" ]; then
@@ -3434,8 +3502,11 @@ for RAWFILE in $@; do
 # UPDATED 2025/11/05
 #			showMsg 'step' "${FILENAME}: [remote]" 'screen' 1
 #			[ "$REPO_TARGET" ] && cd "$REPO_TARGET" >>"$LOG_ERRS" 2>&1 || cd "$REPO_OPTION" >>"$LOG_ERRS" 2>&1		# if a different target was specified, then cd into it now, otherwise use the default location!
-			[ "$DRYRUN" ] && showMsg 'step' "${DEPENDENCY}: [remote] [dryrun]" 'both' 0 3
-			[ ! "$DRYRUN" ] && showMsg 'step' "${DEPENDENCY}: [remote]" 'both' 0 3
+# UPDATED 2025/11/19 - adjusted for the -Q value
+#			[ "$DRYRUN" ] && showMsg 'step' "${DEPENDENCY}: [remote] [dryrun]" 'both' 0 3
+#			[ ! "$DRYRUN" ] && showMsg 'step' "${DEPENDENCY}: [remote]" 'both' 0 3
+			[ "$DRYRUN" ] && showMsg 'file' "${DEPENDENCY}: [remote] [dryrun]" 'both' 0 3
+			[ ! "$DRYRUN" ] && showMsg 'file' "${DEPENDENCY}: [remote]" 'both' 0 3
 			downloadPackage || exitGracefully 4 'screen' 5 'step'
 		fi
 
@@ -3445,7 +3516,7 @@ for RAWFILE in $@; do
 #			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [copy]"
 # REMVOED 2025/11/14 - we already know we're copying, no need to state again
 #			showMsg 'step' " [copy]" 'both' 0 0
-			[ "$DRYRUN" ] && showMsg 'package' " [dryrun]" 'both' 0 0
+			[ "$DRYRUN" ] && showMsg 'file' " [dryrun]" 'both' 0 0
 # UPDATED 2025/11/05
 #			copyPackage || exitGracefully 1
 			copyPackage || exitGracefully 4 'screen' 5 'step'
@@ -3506,7 +3577,7 @@ for RAWFILE in $@; do
 		fi
 # UPDATED 2025/10/28
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo " [done]"
-		showMsg 'step' " [done]" 'both' 1 5
+		showMsg 'file' " [done]" 'both' 1 5
 
 # LEFT OFF - installing doesn't appear to process dependencies without a trailing TRUE
 		deleteDependency								# delete the dependency before assigning the next one below
@@ -3530,8 +3601,11 @@ done
 #	showMsg 'success' "" 'screen' 1 6
 #fi
 if ( [ "$COPY" ] || [ "$EXTRACT" ] || [ "$FIND" ] ) && ( [ "$OUTPUT" = 'xml' ] || [ "$OUTPUT" = 'xmLive' ] ); then		# if we're copying, extracting, or finding, then...
-	showMsg 'success' "" 'both' 1 6
-	exitGracefully 0
+# UPDATED 2025/11/19
+#	showMsg 'success' "" 'both' 1 6
+#	exitGracefully 0
+	exitGracefully 0 'both' 6 'success'
+# LEFT OFF - this may just be the default exit code at the end of the script and we can get rid of this block of code
 
 # now move the proxy files to the external storage device
 elif [ "$PROXY" ]; then
@@ -3591,12 +3665,13 @@ elif [ "$PROXY" ]; then
 	showMsg 'success' "" 'both' 1 6
 	exitGracefully 0
 elif [ "$UNLOAD" ]; then
-	showMsg 'action' "Removing packages that can't be unloaded..." 'both' 1 4
+	[ ! "$FORCE" ] && showMsg 'action' "Removing packages that can't be unloaded..." 'both' 1 4
 
 	UNLOAD="${UNLOAD}2"							# indicate we are in the second stage of the unload process
 
 	# finalize the packages to unload
 	for FILE in $(cat "${DIR_TEMP}/unload.${EXEID}"); do					# for each package listed for removal (in the unload list from processDependencies() above)...
+		[ "$FORCE" ] && continue							# if the action is being forced, then we need to remove everything
 		( grep -q "$FILE" "${DIR_TEMP}/unload.${EXEID}" ) || continue			# if we've removed files from the unload list in the below 'while [ "$DEPENDENCY" ]; do' section, then this skips their processing
 												# NOTE: we have to include the above line since the 'cat' call in the above 'for' loop will retain all the ORIGINAL values of the text file, not the removals of the 'while' below!
 		[ $DEBUG -gt 0 ] && echo -e "Body (final):\n\tFILE        |${FILE}|" >>"$LOG_DBUG"
@@ -3628,6 +3703,16 @@ elif [ "$UNLOAD" ]; then
 		done
 	done
 
+	if ( [ $DEBUG -gt 1 ] || [ "$PROMPT" ] ); then
+		showMsg 'action' "The following package(s) will be unloaded:" 'both' 1 4
+		cat "${DIR_TEMP}/unload.${EXEID}"
+
+		showMsg 'prompt' "   Do you want to proceed with the action? [Y/N] (N): " 'both' 0 1 1
+		[ "$OUTPUT" = 'fifo' ] && read <"$FIFO_SERVER" || read
+		( [ "$REPLY" = 'N' ] || [ "$REPLY" = 'n' ] || [ "$REPLY" = '' ] ) && exitGracefully 0 'both' 6 'success'
+		echo >>"$LOG_ERRS"
+	fi
+
 	showMsg 'action' "Unloading packages remaining in the list..." 'both' 1 4
 	for FILE in $(cat "${DIR_TEMP}/unload.${EXEID}"); do					# for each package remaining in the list for removal...
 		unloadPackage $FILE || exitGracefully 4 'screen' 5 'step'				#   unload it
@@ -3636,7 +3721,7 @@ fi
 
 
 echo DBUG
-exitGracefully 0
+exitGracefully 0 'both' 6 'success'
 
 
 # now update the system that all the packages contents have been installed
@@ -3686,7 +3771,9 @@ if [ "$INSTALL" ] || [ "$RESTORE" ]; then
 	fi
 fi
 
-exitGracefully 0
+# UPDATED 2025/11/19
+#exitGracefully 0
+exitGracefully 0 'both' 6 'success'
 
 
 #LEFT OFF
