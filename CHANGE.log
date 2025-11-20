@@ -165,4 +165,12 @@
 - Expanded the -Q option to take multiple values
 - Updated the --help output
 
+2025/11/20
+- Moved the -o action into the body of the script
+- Moved the -l action into the body of the script
+- Renamed LIST to BOOT (since -l uses LIST)
+- Streamlined checkBootcode() and getBootcode()
+- Added more checks when pax starts
+- Updated the -o action to use -S or DIRECTORY
+- Started moving the -t action into the body of the script
 
