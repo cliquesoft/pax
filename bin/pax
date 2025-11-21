@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/11/20 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/11/21 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -75,7 +75,7 @@ DIR_CONF='/etc/pax'										# directory containing any alternate/personalized c
 DIR_LIST='/var/cache/Software/catalog'								# directory containing the total list of installed applications
 DIR_INIT='/var/cache/Software/services'								# directory containing daemon/service scripts
 DIR_INST='/var/cache/Software/scripts'								# directory containing other software scripts (taken from /etc/envars)
-DIR_LIVE='/Users/Public'									# directory to install by default after bootup
+DIR_LIVE='/Users/Public/.'									# directory to install by default after bootup	NOTE: this needs to end with a '/' or '.' (so that the packages files can be (un)installed from home directories)
 DIR_LOGS='/var/log'
 DIR_LOOP='/tmp/pax/loop'									# directory that symlinked software needs to use as mountpoint
 DIR_TEMP='/tmp/pax'
@@ -519,7 +519,7 @@ splitName() {
 #		TEMP="${FILE_SCHEMA#*\}}"							#   remove just the package name portion from the package filename 'schema' - everything before the first '}' character
 #		eval TEMP="${TEMP}.${EXT_SOFT}"							#   combine the package filename 'schema' (less the package name) and the file extension value (e.g. i32.bin.soft)
 	fi
-	FILETYPE="$(echo "$FILENAME" | grep -oE '[\._\-](bin|dev|doc|drv|gir|lib|loc)' | sed -E 's/^[\._\-]//')"			# search for any variation of known type abbreviations and remove the preceeding separation character
+	FILETYPE="$(echo "$FILENAME" | grep -oE '[\._\-](bin|dev|doc|drv|gir|lib|loc)' | head -n 1 | sed -E 's/^[\._\-]//')"			# search for any variation of known type abbreviations and remove the preceeding separation character
 	[ "$FILETYPE" = '' ] && FILETYPE="$TYPE"					#   if the line above did not return any value, then default to whatever is specified as TYPE
 
 	[ "$VERSION" ] && VERBASE="${VERSION}$(echo $BASENAME | sed "s/^${PACKAGE}//")" || VERBASE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
@@ -1809,9 +1809,7 @@ unloadPackage() {
 	showMsg 'file' "[ local] (${FILETYPE}) ${PACKAGE}" 'both' 1 1
 
 	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {				# if the package has been marked for uninstallation (delete or purge) -AND- it currently is NOT installed, then...
-echo "DBUG - uninstalling..."
-# LEFT OFF - implement -Y before uncommenting this
-#		uninstallPackage || return 1							#   uninstall the package files
+		uninstallPackage || return 1							#   uninstall the package files
 		return 0									#   no need to process anything further!
 	}
 
@@ -1866,7 +1864,7 @@ echo "DBUG - uninstalling..."
 	[ "$UNLOAD" != 'purge2' ] && PARAMS='! -path "*/etc/*"'					# if we have been instructed to NOT purge any 'etc' files, then add these parameters to the 'find' calls below   http://www.cyberciti.biz/faq/find-command-exclude-ignore-files/
 
 	[ $DEBUG -gt 0 ] && echo -e "\tRemoving package contents from filesystem..." >>"$LOG_DBUG"
-	for FILE in $(eval find "${DIR_LOOP}/${BASENAME}" $PARAMS 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||" | sort -r); do		# NOTE: we 'sort -r' to place the file above the directories since they have to be removed first!
+	for FILE in $(eval find "${DIR_LOOP}/${BASENAME}" $PARAMS 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}/||" | sort -r); do		# NOTE: we 'sort -r' to place the file above the directories since they have to be removed first!
 		if [ ! -d "$FILE" ]; then						#   if the iterated FILE is anything but a directory (e.g. device file, symlink, text file, ...), then delete it!
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIRECTORY}${FILE}\"" >>"$LOG_DBUG"
 			[ ! "$DRYRUN" ] && ( rm -f "${DIRECTORY}/${FILE}" >>"$LOG_ERRS" 2>&1 || return 1 )
@@ -1898,16 +1896,11 @@ echo "DBUG - uninstalling..."
 
 	# if we also need to uninstall (delete or purge), then...
 	[ "$UNLOAD" != 'unload2' ] && {
-echo "DBUG - uninstalling..."
-# LEFT OFF - implement -Y before uncommenting this
-#		showMsg 'step' " [uninstall]" 'both' 0 0
-#		uninstallPackage || return 1											# if the package has been marked for uninstallation, then...
+		showMsg 'step' " [uninstall]" 'both' 0 0
+		uninstallPackage || return 1											# if the package has been marked for uninstallation, then...
 	}
 # LEFT OFF - when installing, and a file exists (e.g. grep symlink to busybox), then rename to FILE.-PACK.TYPE (or 'SYS' if not part of package); when the PACK.TYPE is uninstalled and one of those files exists, restore it
 #		is this necessary if we are creating restore points?
-
-# left off - the below line needs to go into the uninstallPackage function since it would actually remove it from the system; this function just unloads the software from the live system
-	[ ! "$DRYRUN" ] && [ "$INDEX" -eq 1 ] && [ "$UNLOAD" != 'unload2' ] && sed -i "/${FILENAME}/d" "${REPO_PREFIX}/${BOOT}" 2>>"$LOG_ERRS"		# if this is a requested package and not one of its dependencies (via INDEX==1) -AND- we're are actually uninstalling (deleting or purging), then remove the package from the LIST file
 
 	return 0
 
@@ -1993,13 +1986,18 @@ echo "DBUG - uninstalling..."
 # Notes:	this should be called after the package has been unloaded first!!!
 # 		the directory containing the file to uninstall should already be entered BEFORE calling this function!
 uninstallPackage() {
+	if [ ! "$DRYRUN" ] && [ "$INDEX" -eq 1 ] && [ "$UNLOAD" != 'unload2' ]; then
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling: sed -i \"/${FILENAME}/d\" \"${REPO_PREFIX}/${BOOT}\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && sed -i "/${FILENAME}/d" "${REPO_PREFIX}/${BOOT}" 2>>"$LOG_ERRS"		# if this is a requested package and not one of its dependencies (via INDEX==1) -AND- we're are actually uninstalling (deleting or purging), then remove the package from the LIST file
+	fi
+
 	[ $DEBUG -gt 0 ] && echo -e "uninstallPackage:" >>"$LOG_DBUG"
 	if [ ! "$RESTORE" ]; then								# if we do NOT need a restore point, then...
 # UPDATED 2025/11/13
 #		[ $DEBUG -gt 0 ] && echo -e "\tSkip creating a restore point...\n\trm -f ${APPHEAD}.*" >>$LOG_DBUG
 #		rm -f "${APPHEAD}".* >>"$LOG_ERRS" 2>&1 || return 1				# just delete the packages' files (e.g. .deps, .hash, .soft, ...) and exit
 		[ $DEBUG -gt 0 ] && echo -e "\tSkip creating a restore point...\n\trm -f ${BASENAME}.*" >>$LOG_DBUG
-		rm -f "${BASENAME}".* >>"$LOG_ERRS" 2>&1 || return 1				# just delete the packages' files (e.g. .deps, .hash, .soft, ...) and exit
+		[ ! "$DRYRUN" ] && ( rm -f "${BASENAME}".* >>"$LOG_ERRS" 2>&1 || return 1 )				# just delete the packages' files (e.g. .deps, .hash, .soft, ...) and exit
 		return 0
 	fi
 
@@ -2010,22 +2008,31 @@ uninstallPackage() {
 	# For XiniX only so the archives have permanence
 	if [ ! -e "${REPO_RESTOR}" ] && [ -e "${DIR_MOUNT}/DATA/Links" ]; then			# if the root-level restore directory doesn't exist (e.g. /var/restore/2017-01-01 > /var/restore) -AND- there's a DATA, then...
 		if [ ! -e "${DIR_MOUNT}/DATA/Links${REPO_RESTOR}" ]; then
-			mkdir -p "${DIR_MOUNT}/DATA/Links${REPO_RESTOR}" >>"$LOG_ERRS" 2>&1 || {					#   create the restore directory on the DATA partition so that it actually gets preserved between reboots of the device
-				echo "ERROR: the restore directory could not be created." >>"$LOG_ERRS"				# NOTE: we only write this to the log
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling: mkdir -p \"${DIR_MOUNT}/DATA/Links${REPO_RESTOR}\"" >>"$LOG_DBUG"
+			if [ ! "$DRYRUN" ]; then
+				mkdir -p "${DIR_MOUNT}/DATA/Links${REPO_RESTOR}" >>"$LOG_ERRS" 2>&1 || {					#   create the restore directory on the DATA partition so that it actually gets preserved between reboots of the device
+					echo "ERROR: the restore directory could not be created." >>"$LOG_ERRS"				# NOTE: we only write this to the log
+					return 1
+				}
+			fi
+		fi
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling: ln -sf \"${DIR_MOUNT}/DATA/Links${REPO_RESTOR}\" \"${REPO_RESTOR}\"" >>"$LOG_DBUG"
+		if [ ! "$DRYRUN" ]; then
+			ln -sf "${DIR_MOUNT}/DATA/Links${REPO_RESTOR}" "${REPO_RESTOR}" >>"$LOG_ERRS" 2>&1 || {				#   now symlink to it so we can reference its contents
+				echo "ERROR: The symlink to the restore directory could not be created." >>"$LOG_ERRS"			# NOTE: we only write this to the log
 				return 1
 			}
 		fi
-		ln -sf "${DIR_MOUNT}/DATA/Links${REPO_RESTOR}" "${REPO_RESTOR}" >>"$LOG_ERRS" 2>&1 || {				#   now symlink to it so we can reference its contents
-			echo "ERROR: The symlink to the restore directory could not be created." >>"$LOG_ERRS"			# NOTE: we only write this to the log
-			return 1
-		}
 	fi
 
 	# now create a unique name for the restore point: ACTION PACKAGE_NAMES/DIR_NAME (e.g. Updating sdl)
 	TEMP="$(date +%F)/"
 # UPDATED 2025/11/13
 #	[ "$INSTALL" ] && ( [ "$FORCE" ] || [ "$RESTORE" ] ) && TEMP="${TEMP}Updating ${APPNAME}.${APPTYPE}"			# add a description of this process to the restore point
-	[ "$INSTALL" ] && ( [ "$FORCE" ] || [ "$RESTORE" ] ) && TEMP="${TEMP}Updating ${BASENAME}"			# add a description of this process to the restore point
+# UPDATED 2025/11/21
+#	[ "$INSTALL" ] && ( [ "$FORCE" ] || [ "$RESTORE" ] ) && TEMP="${TEMP}Updating ${BASENAME}"			# add a description of this process to the restore point
+	[ "$INSTALL" ] && [ "$FORCE" ] && [ ! "$RESTORE" ] && TEMP="${TEMP}Updating ${BASENAME}"			# add a description of this process to the restore point
+	[ "$INSTALL" ] && [ ! "$FORCE" ] && [ "$RESTORE" ] && TEMP="${TEMP}Restoring ${BASENAME}"			# add a description of this process to the restore point
 # UPDATED 2025/10/22 - merged -P with -U
 #	[ "$UNLOAD" ] && [ "$PURGE" -gt '0' ] && TEMP="${TEMP}Uninstalling ${APPNAME}.${APPTYPE}"
 # UPDATED 2025/11/13
@@ -2033,7 +2040,10 @@ uninstallPackage() {
 	[ "$UNLOAD" != 'unload' ] && TEMP="${TEMP}Uninstalling ${BASENAME}"
 
 	# NOTE: the below line will create the entire REPO_RESTOR directory structure if there is no DATA, or just the date directory in the event there is one
-	[ ! -e "${REPO_RESTOR}/${TEMP}" ] && { mkdir -p "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1; }		# if the restore point directory doesn't exist, then create it!
+	if [ ! -e "${REPO_RESTOR}/${TEMP}" ]; then
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling: mkdir -p \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && ( mkdir -p "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1 )		# if the restore point directory doesn't exist, then create it!
+	fi
 
 # UPDATED 2025/11/13
 #	readlink "$APPFILE" >/dev/null 2>&1 && {												# if a particular prior version of the package that was installed (designated via a symlink), then...
@@ -2043,11 +2053,11 @@ uninstallPackage() {
 #	[ $DEBUG -gt 0 ] && echo -e "\tmv -f ${APPHEAD}.* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
 #	mv -f "${APPHEAD}".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# now move the iterated dependency into the restore point	NOTE: it will be symlinks if VERSION has a value
 	readlink "$FILENAME" >/dev/null 2>&1 && {												# if a particular prior version of the package that was installed (designated via a symlink), then...
-		[ $DEBUG -gt 0 ] && echo -e "\tPrior version...\n\tmv -f \"$(readlink ${FILENAME} | sed "s|\.${EXT_SOFT}||")\".* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
-		mv -f "$(readlink "${FILENAME}" 2>>"$LOG_ERRS" | sed "s|\.${EXT_SOFT}||")".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# move the actual files referenced by the symlinks to the restore point (which would be the numerical named files)
+		[ $DEBUG -gt 0 ] && echo -e "\tPrior version...\n\tCalling: mv -f \"$(readlink ${FILENAME} | sed "s|\.${EXT_SOFT}||")\".* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && mv -f "$(readlink "${FILENAME}" 2>>"$LOG_ERRS" | sed "s|\.${EXT_SOFT}||")".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# move the actual files referenced by the symlinks to the restore point (which would be the numerical named files)
 	}
-	[ $DEBUG -gt 0 ] && echo -e "\tmv -f ${BASENAME}.* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
-	mv -f "${BASENAME}".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# now move the iterated dependency into the restore point	NOTE: it will be symlinks if VERSION has a value
+	[ $DEBUG -gt 0 ] && echo -e "\tCalling: mv -f ${BASENAME}.* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
+	[ ! "$DRYRUN" ] && mv -f "${BASENAME}".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1		# now move the iterated dependency into the restore point	NOTE: it will be symlinks if VERSION has a value
 	return 0
 }
 
@@ -2166,16 +2176,18 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-L   prevent package addition to (optional.)list when installing'			# this only is useful when installing
 	echo '	-M   defines the package install mode: copy, link (default)'		# old '-R' > new '-M copy'		NOTE: if the OS is run from RAM, then the 'copy' value will copy into RAM, if it is on a disk, then it copies to the disk
 	echo '	-N   do NOT install all files in the package, just those specified'		# allows users to install desired file(s) from a package so all the contents don't get installed (to keep the system as small as possible); keeps attack vector to a minimum
-# LEFT OFF - implement the 'html' values
+# VER2 - implement the 'html' values
 # UPDATED 2025/11/19
 #	echo '	-O   how output is displayed: none, fifo, text, xml, xmLive'		# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
 	echo '	-O   how output is displayed: fifo, text, xml, xmLive'			# old '-Q' > new '-O none'		NOTE: this defines the way the output is shown
 # UPDATED 2025/10/22 - merged -P with -U
 #	echo '	-P   purges all files of the uninstalled packages including configs'		# data ALWAYS is retained though! (e.g. mysql databases)
+# LEFT OFF - make this an opt-out, not an opt-in
 	echo '	-P   prompt before taking action'
 # UPDATED 2025/11/19
 #	echo '	-Q   quiets the output to only show errors'				# old '-q' > new '-Q'
 	echo '	-Q   quiets the output: all, errors, default, verbose, none'		# old '-q' > new '-Q'
+# LEFT OFF - make this an opt-out, not an opt-in
 	echo '	-R   create a restore point when uninstalling'				# old '-N' > new 'absence of value'; if you want to create a restore point, you must now specify the flag!
 	echo '	-S   changes the source directory/repo to obtain software from'			# mainly used when creating installation media to pull the files from an existing BOOT instead of an online repo
 	echo '	-T   specifies the package type: bin, dev, doc, drv, gir, lib, loc'
@@ -2252,8 +2264,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	     only takes place if REPO_SYSTEM and REPO_OPTION are different."
 	echo
 	echo '  EXAMPLES:'
-	echo '	Copy packages from optional to specified directory:'
-# LEFT OFF - we need to use -S as the source path
+	echo '	Copy packages from the local repo to specified directory:'
 	echo "	     ${0##*/} -c package1 package2 /target/path"
 	echo '	Copy packages from specific directory to specified directory:'
 	echo "	     ${0##*/} -S /source/path -c package1 package2 /target/path"
@@ -2623,10 +2634,11 @@ fi
 #			t) echo "Dependency trees for package(s)..."
 # UPDATED 2025/10/30
 #			t) showMsg 'action' "Dependency trees for package(s)..." 'screen' 0 0 0 1
-			t) showMsg 'action' "Dependency trees for package(s)..." 'screen' 1 1
+			t) 
 # UPDATED 2025/11/06
 #			   TREE=TRUE ;;
 if [ 1 -eq 0 ]; then
+showMsg 'action' "Dependency trees for package(s)..." 'screen' 1 1
 			   # if we are looking for specific packages passed on the command line, then...
 			   shift $(expr $OPTIND - 1)							# now that the OPTIONS have been processed, lets process the package name(s)
 			   eval TEMP=\${$#}								# store the current last passed value to later check if a directory was passed as the last value	http://stackoverflow.com/questions/1853946/getting-the-last-argument-passed-to-a-shell-script
@@ -2758,7 +2770,7 @@ fi
 	# WARNING: this MUST come before the directory processing!!!
 # UPDATED 2025/11/20
 #	if [ "$TEMP" = "$0" ]; then								# if a blank or null value was given for the package name (since the 'shift' command will go back to $0), then...
-	if [ "$TEMP" = "$0" ] && [ ! "$LIST" ] && [ ! "$OPEN" ]; then						# if a blank or null value was given for the package name (since the 'shift' command will go back to $0) -AND- we're not listing installed packages, then...
+	if [ "$TEMP" = "$0" ] && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ ! "$TREE" ]; then						# if a blank or null value was given for the package name (since the 'shift' command will go back to $0) -AND- we're not listing installed packages, then...
 # UPDATED 2025/10/26
 #		echo "ERROR: you must provide a file or package name before processing can begin." | tee -a "$LOG_ERRS";
 		showMsg 'failure' "You must provide a file or package name before processing can begin." 'screen'
@@ -2781,7 +2793,7 @@ fi
 
 # UPDATED 2025/11/20
 #	if [ ! -d "$TEMP" ] && ( echo "$TEMP" | grep -q '/' ); then				# if a DIRECTORY was actually passed (via the presence of '/' characters), but doesn't exist then...
-	if [ ! -d "$TEMP" ] && ( echo "$TEMP" | grep -q '/' ) && [ ! "$LIST" ] && [ ! "$OPEN" ]; then				# if a DIRECTORY was actually passed (via the presence of '/' characters) -AND- we're not listing installed packages, but doesn't exist then...
+	if [ ! -d "$TEMP" ] && ( echo "$TEMP" | grep -q '/' ) && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ ! "$TREE" ]; then				# if a DIRECTORY was actually passed (via the presence of '/' characters) -AND- we're not listing installed packages, but doesn't exist then...
 #echo oops
 # UPDATED 2025/10/26
 #		[ "$SILENT" ] || echo "ERROR: the passed file or directory does not exist (${TEMP})." | tee -a "$LOG_ERRS"	#   NOTE: this is shown to the screen and logged on purpose!
@@ -2851,6 +2863,8 @@ fi
 [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$EXTRACT" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! "$RESTORE" ] && [ ! "$TREE" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { showMsg 'failure' "You must provide an ACTION when executing this script." 'screen'; exit 1; }
 [ "$QUIET" = 'all' ] && [ "$PROMPT" ] && { echo "The -P option can't be used with the '-Q all' option."; exit 1; }		# NOTE: this has to be an 'echo' statement because showMsg() won't show it otherwise!
 [ "$QUIET" = 'errors' ] && [ "$PROMPT" ] && { showMsg 'failure' "The -P option can't be used with the '-Q errors' option." 'screen'; exit 1; }
+[ "$OUTPUT" = 'fifo' ] && [ "$PROMPT" ] && [ ! -e "$FIFO_SERVER" ] && { showMsg 'failure' "The -P option can't be used with '-O fifo' without a FIFO_SERVER." 'screen'; exit 1; }
+[ "$OUTPUT" != 'fifo' ] && [ "$OUTPUT" != 'text' ] && [ "$PROMPT" ] && [ ! -e "$FIFO_SERVER" ] && { showMsg 'failure' "The -P option can only be used with '-O fifo' or '-O text'." 'screen'; exit 1; }
 ( ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) || { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
 
 [ "$EXTRACT" ] && [ "$PROMPT" ] && { showMsg 'failure' "The -e action can't be used with the -P option." 'screen'; exit 1; }
@@ -2881,10 +2895,12 @@ fi
 # MOVED 2025/11/12 - this has to be moved below were the directory values are set
 #[ "$PROXY" ] && [ "$DIRECTORY" != "$REPO_OPTION" ] && { showMsg 'failure' "The DIRECTORY value is not used with this action." 'screen'; exit 1; }
 [ "$PROXY" ] && [ "$DRYRUN" ] && { showMsg 'failure' "The -X option can't be used with the -Y option." 'screen'; exit 1; }
-[ "$OUTPUT" = 'fifo' ] && [ "$PROMPT" ] && [ ! -e "$FIFO_SERVER" ] && { showMsg 'failure' "The -P option can't be used with '-O fifo' without a FIFO_SERVER." 'screen'; exit 1; }
-[ "$OUTPUT" != 'fifo' ] && [ "$OUTPUT" != 'text' ] && [ "$PROMPT" ] && [ ! -e "$FIFO_SERVER" ] && { showMsg 'failure' "The -P option can only be used with '-O fifo' or '-O text'." 'screen'; exit 1; }
 # MOVED 2025/11/12 - this has to be moved below were the directory values are set
 #[ "$RESTORE" ] && [ ! -e "${REPO_RESTOR}/${RESTORE}" ] && { showMsg 'failure' "The provided path does not contain any valid restore points." 'screen'; exit 1; }
+[ "$TREE" ] && [ "$QUIET" = 'all' ] && { echo "The -t action can't be used with the '-Q all' option."; exit 1; }		# NOTE: this has to be an 'echo' statement because showMsg() won't show it otherwise!
+[ "$TREE" ] && [ "$QUIET" = 'errors' ] && { showMsg 'failure' "The -t action can't be used with the '-Q errors' option." 'screen'; exit 1; }
+[ "$TREE" ] && [ "$PROMPT" ] && { showMsg 'failure' "The -t action can't be used with the -P option." 'screen'; exit 1; }
+[ "$TREE" ] && [ "$DRYRUN" ] && { showMsg 'failure' "The -t action can't be used with the -Y option." 'screen'; exit 1; }
 
 
 # check the directories		NOTE: we can't write to a log yet since those checks are occurring
@@ -2999,7 +3015,10 @@ elif [ "$INSTALL" ]; then									# if we are installing package(s), then...
 		REPO_SOURCE="$REPO_SYSTEM"							#     set REPO_SOURCE to the 'FIRMWARE' packages location
 	else											#   otherwise the system is live and can use parameters, so...
 		[ "$PREFIX" ] && DIRECTORY="${PREFIX}"						#     if the -D option was passed, add it to the directory structure
-		[ ! "$PREFIX" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && DIRECTORY="$DIR_LIVE"	#     if the -D option was NOT passed, and the DIRECTORY was NOT passed, then set to the default installation location
+		[ ! "$PREFIX" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && {			#     if the -D option was NOT passed, and the DIRECTORY was NOT passed, then set to the default installation location
+			( echo "$DIR_LIVE" | grep -qE '(/|\.)'$ ) || DIR_LIVE="${DIR_LIVE}/"	#        make sure the directory ends with a '/' or '.'
+			DIRECTORY="$DIR_LIVE"
+		}
 	fi
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
 elif [ "$LIST" ]; then										# if we are listing installed packages, then...
@@ -3032,10 +3051,16 @@ elif [ "$PROXY" ]; then										# if we are proxying an action, then...
 #	[ ! -e "${REPO_RESTOR}/${RESTORE}" ] && { showMsg 'failure' "The provided path does not contain any valid restore points." 'screen'; exit 1; }
 #		[ "$RESTORE" ] && cd "${REPO_RESTOR}/${RESTORE}"				# change into the restore points directory to get all the requested software and any of its dependencies
 elif [ "$TREE" ]; then										# if we are showing the dependency tree, then...
-	# this is handled in the script parameter processing section above
+# this is handled in the script parameter processing section above
+	[ "$DIRECTORY" != "$REPO_OPTION" ] && REPO_SOURCE="$DIRECTORY"				#   if a directory was appended to the list, then use that for the REPO_SOURCE
+	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$DIR_LIST"				#   if the -S option was NOT passed, then use the DIR_LIST for the REPO_SOURCE
+	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the DIRECTORY where the packages are located
 elif [ "$UNLOAD" ]; then									# if we are unloading/uninstalling package(s), then...
 	[ "$PREFIX" ] && DIRECTORY="${PREFIX}"							#   if the -D option was passed, add it to the directory structure
-	[ ! "$PREFIX" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && DIRECTORY="$DIR_LIVE"		#   if the -D option was NOT passed, and the DIRECTORY was NOT passed, then set to the default installation location
+	[ ! "$PREFIX" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && {				#   if the -D option was NOT passed, and the DIRECTORY was NOT passed, then set to the default installation location
+		( echo "$DIR_LIVE" | grep -qE '(/|\.)'$ ) || DIR_LIVE="${DIR_LIVE}/"		#     make sure the directory ends with a '/' or '.'
+		DIRECTORY="$DIR_LIVE"
+	}
 	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only unload local packages
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
 elif [ "$VALIDATE" ]; then									# if we are validating package(s) information, then...
@@ -3067,7 +3092,7 @@ fi
 [ "$OPEN" ] && showMsg 'action' "Starting pax in client mode..." 'both' 1 1
 [ "$PROXY" ] && showMsg 'action' "Generating package list..." 'both' 1 4
 [ "$RESTORE" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
-#[ "$TREE" ]
+[ "$TREE" ] && showMsg 'action' "Dependency trees for package(s)..." 'screen' 1 1
 # MOVED 2025/11/13 - moved below in the passed packages section
 #if [ "$UNLOAD" ]; then										# if we are unloading/uninstalling package(s), then...
 ## REMOVED 2025/11/04 - this serves no functional purpose
@@ -3107,11 +3132,13 @@ for RAWFILE in $@; do
 	if [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! "$PROXY" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ]; then
 # UPDATED 2025/10/30
 #		showMsg 'msg|failure' "The '${FILENAME}' file does not exist."
-		showMsg 'failure' "The '${FILENAME}' package does not exist."
+		showMsg 'failure' "The '${FILENAME}' package does not exist." 'both'
 #echo 02b
 # UPDATED 2025/11/13
 #		exitGracefully 1
-		exitGracefully 4 'both' 5 'action'
+# UPDATED 2025/11/13 - several actions don't need the '[failure]' message shown
+#		exitGracefully 4 'both' 5 'action'
+		exitGracefully 1 'both' 5 'action'
 	fi
 #echo 03
 # showMsg TAG MESSAGE [TARGET] [CR] [TAGS] [TRIM]
@@ -3346,15 +3373,15 @@ continue
 	elif [ "$TREE" ]; then										# if we are showing the dependency tree, then...
 # this is handled in the script parameter processing section above
 #				for PARAMETER in $@; do							#   cycle through each name passed
-					[ -d "$PARAMETER" ] && {
-						showMsg 'failure' "The DIRECTORY value can not be used with the -t action." 'screen'
-						exit 1
-					}
+#					[ -d "$PARAMETER" ] && {
+#						showMsg 'failure' "The DIRECTORY value can not be used with the -t action." 'screen'
+#						exit 1
+#					}
 #					splitName "$PARAMETER"
 					showMsg 'package' "${PACKAGE} (${FILETYPE})" 'screen' 1 4
-					for FILE in $(grep -lE ^"(${PACKAGE}|${FILENAME})" *.${EXT_DEPS}); do
+					for FILE in $(grep -lE ^"(${BASENAME}|${FILENAME})" *.${EXT_DEPS}); do
 						splitName "$FILE" "$EXT_DEPS"
-						showMsg 'dependency' "   (${FILETYPE}) ${PACKAGE}" 'screen' 1 4
+						showMsg 'file' "   (${FILETYPE}) ${PACKAGE}" 'screen' 1 4
 					done
 #				done
 		continue
@@ -3828,6 +3855,19 @@ elif [ "$PROXY" ]; then
 	showMsg 'success' "" 'both' 1 6
 # REMOVED 2025/11/20
 #	exitGracefully 0
+elif [ "$TREE" ]; then
+	if [ ! "$1" ]; then					# if we need to process ALL installed packages, then...		NOTE: the first 'while' loop for this action is used to process specific PASSED packages
+			# this is handled in the script parameter processing section above
+				for PACKAGE in $(ls -1 *.${EXT_SOFT}); do				# cycle each package to see what other packages depend on it
+					splitName "$PACKAGE"
+					showMsg 'package' "${PACKAGE} (${FILETYPE})" 'screen' 1 4
+
+					for FILE in $(grep -lE ^"(${BASENAME}|${FILENAME})" *.${EXT_DEPS}); do
+						splitName "$FILE" "$EXT_DEPS"
+						showMsg 'file' "   (${FILETYPE}) ${PACKAGE}" 'screen' 1 4
+					done
+				done
+	fi
 elif [ "$UNLOAD" ]; then
 	[ ! "$FORCE" ] && showMsg 'action' "Removing packages that can't be unloaded..." 'both' 1 4
 

@@ -173,4 +173,13 @@
 - Added more checks when pax starts
 - Updated the -o action to use -S or DIRECTORY
 - Started moving the -t action into the body of the script
+- Updated the --help output
+
+2025/11/21
+- Completed the -t action move into the body of the script
+- Updated the -t action to use -S or DIRECTORY
+- Added more checks when pax starts
+- Correctly a FILETYPE bug in splitName()
+- Enabled the DIR_LIVE to use hidden directories
+- Updated the --help output
 
