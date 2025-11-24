@@ -183,3 +183,9 @@
 - Enabled the DIR_LIVE to use hidden directories
 - Updated the --help output
 
+2025/11/24
+- Added remaining checks when pax starts
+- Updated the -e action to use the -J option
+- Updated the -R option as an opt-out
+- Updated the --help output
+
