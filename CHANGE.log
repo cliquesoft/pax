@@ -189,3 +189,14 @@
 - Updated the -R option as an opt-out
 - Updated the --help output
 
+2025/11/25
+- Tweaked several startup checks
+- Updated the check for a text file as PACKAGE(S)
+- Updated BOOT to LIST_BOOT
+- Updated FLAG to LIST_FLAG
+- Updated the parameter checking so DIRECTORY and a
+  text file can be passed
+- Expanded -c to use DIRECTORY as the package listing
+- Added COPY_FLAG
+- Updated the --help output
+

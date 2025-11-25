@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/11/24 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/11/25 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -66,9 +66,11 @@ unset ALL BOOTING COPY DOWNLOAD EXTRA FORCE IGNORE INSTALL NOLIST MAKE MODE ONLY
 
 DEBUG=0												# NOTE: making this a '2' will enable prompts
 
-BOOT='$( TEMP=$(getBootcode list2); ( [ "$TEMP" ] && [ -e "${REPO_PREFIX}/${TEMP}" ] ) && echo $TEMP || echo optional.list )'		# obtains and tests for the existence of the bootloader 'lst' bootcode value -OR- uses a default otherwise
-FLAG='${BOOT%.*}.flag'										# the flag file that blacklists included packages
-MODE='$( [ "$(getBootcode mode)" = "conservative" ] && echo link || echo copy )'		# the install mode: (sym)link, copy	NOTE: symlink if we are in a 'conservative' operation mode, copy otherwise
+LIST_BOOT='$( TEMP=$(getBootcode list2); ( [ "$TEMP" ] && [ -e "${REPO_PREFIX}/${TEMP}" ] ) && echo $TEMP || echo optional.list )'		# obtains and tests for the existence of the bootloader 'lst' bootcode value -OR- uses a default otherwise
+LIST_FLAG='${LIST_BOOT%.*}.flag'										# the flag file that blacklists included packages
+COPY_FLAG='copy_all.flag'									# the flag file indicating ALL packages need to be copied instead of symlinked
+# MOVED 2025/11/25 - this is auto configured in the body
+#MODE='$( [ "$(getBootcode mode)" = "conservative" ] && echo link || echo copy )'		# the install mode: (sym)link, copy	NOTE: symlink if we are in a 'conservative' operation mode, copy otherwise
 
 DIR_CONF='/etc/pax'										# directory containing any alternate/personalized configuration
 
@@ -116,7 +118,7 @@ EXEID="$(mktemp -u XXXXXX)"									# stores a temp execution ID (for use with (
 TEMP=''												# used to store information temporarily
 # LEFT OFF - replace CPU with ARCH_SCHEMA so that the variable can be used with naming conventions for both XiniX and TC
 CPU="$(uname -m 2>>"$LOG_ERRS" | sed -r 's/i386|i686/i32/;s/x86_64/i64/;s/armv7l/r32/')"	# this can be used so the .deps files can be universal (like KERNEL below) - bash.CPU.bin.soft
-# LEFT OFF - replace KERNEL with KRNL_SCHEMA so it can be changed by distro
+# LEFT OFF - replace KERNEL with KRNL_SCHEMA so it can be changed by distro; the 'uname -r |...' is used below and show be substituted for KRNL_SCHEMA
 KERNEL="$(uname -r 2>>"$LOG_ERRS" | sed 's/-/_/g')"						# store the currently used kernel version (substituting '-' for '_')
 #LATEST=							< LEFT OFF - this can be used so the latest version of a branch can be downloaded (e.g. pax -i apache -V 2.2.LATEST)
 
@@ -139,6 +141,7 @@ RAWFILE=''			# rename to PARAMETER
 OPTFILE=''
 
 # [options]
+MODE=''
 TYPE='bin'											# the package type: bin dev doc drv gir lib loc	  NOTE: we're specifying the default value here
 DRYRUN=''
 PROMPT=''
@@ -695,8 +698,8 @@ processDependencies() {
 	# perform a few basic checks...
 # UNTESTED
 # UPDATED 2025/11/04 - we are now using DIRECTORY
-#	if [ ! "$REPO_TARGET" ] && ( grep -qw "$RAWFILE" "${REPO_PREFIX}/${FLAG}" 2>/dev/null ); then				# if we're using an 'internal repo' (optional or system) -AND- the package IS listed as being flagged to not load, then...
-	if [ "$BOOTING" ] && ( grep -qwE ^"${PACKAGE}|${FILENAME}"$ "${REPO_PREFIX}/${FLAG}" 2>/dev/null ); then		# if the package (by its PACKAGE name -or- complete FILENAME) IS listed as being flagged to not load, then...
+#	if [ ! "$REPO_TARGET" ] && ( grep -qw "$RAWFILE" "${REPO_PREFIX}/${LIST_FLAG}" 2>/dev/null ); then				# if we're using an 'internal repo' (optional or system) -AND- the package IS listed as being flagged to not load, then...
+	if [ "$BOOTING" ] && ( grep -qwE ^"${PACKAGE}|${FILENAME}"$ "${REPO_PREFIX}/${LIST_FLAG}" 2>/dev/null ); then		# if the package (by its PACKAGE name -or- complete FILENAME) IS listed as being flagged to not load, then...
 # UPDATED 2025/11/07
 #		[ $DEBUG -gt 0 ] && echo -e "\tPackage flagged from loading..." >>"$LOG_DBUG"
 # UPDATED 2025/10/31 - replace APP* variables and using showMsg()
@@ -1436,12 +1439,12 @@ installPackage() {
 		sudo /bin/mount -t squashfs -o loop,ro,bs=4096 "${REPO_SOURCE}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1
 	fi
 	# check if the package has any libs we need to load later						  NOTE: we check this way because simply checking for the directory can produce false positives
-	( ls -1p "${DIR_LOOP}/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE				# NOTE: the "grep -qv '/'$" removes directories from the listing so only files remain (otherwise /lib/modules/ would provide a false positive)
-	( ls -1p "${DIR_LOOP}/lib64" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
-	( ls -1p "${DIR_LOOP}/usr/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
-	( ls -1p "${DIR_LOOP}/usr/local/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
+	( ls -1p "${DIR_LOOP}/${BASENAME}/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE				# NOTE: the "grep -qv '/'$" removes directories from the listing so only files remain (otherwise /lib/modules/ would provide a false positive)
+	( ls -1p "${DIR_LOOP}/${BASENAME}/lib64" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
+	( ls -1p "${DIR_LOOP}/${BASENAME}/usr/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
+	( ls -1p "${DIR_LOOP}/${BASENAME}/usr/local/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
 	# check if the package has a [/usr[/local]]'/lib/modules' directory to indicate we need to load modules later
-	[ -d "${DIR_LOOP}/lib/modules" ] || [ -d "${DIR_LOOP}/usr/lib/modules" ] || [ -d "${DIR_LOOP}/usr/local/lib/modules" ] && MODULES=TRUE	# NOTE: we CAN simply check for directories here since files would be packaged under them
+	[ -d "${DIR_LOOP}/${BASENAME}/lib/modules" ] || [ -d "${DIR_LOOP}/${BASENAME}/usr/lib/modules" ] || [ -d "${DIR_LOOP}/${BASENAME}/usr/local/lib/modules" ] && MODULES=TRUE	# NOTE: we CAN simply check for directories here since files would be packaged under them
 # UPDATED 2018/07/14 - since TC packages do NOT adhere to this, we need a more robust solution
 #	[ "$APPTYPE" = 'lib' ] && LIBRARIES=TRUE										# if the package has dynamic libraries, then indicate we need to add those to the cache file later
 
@@ -1565,7 +1568,7 @@ installPackage() {
 
 	# update the "install" list
 	# if we are NOT validating -AND- installing a requested package [INDEX==1] (not a dependency for it [INDEX>1]) -AND- it needs to be added to the optional.list -AND- the package isn't already in the LIST, then add the package to the LIST file
-	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ ! "$NOLIST" ] && ( ! grep -q $RAWFILE "${REPO_PREFIX}/${BOOT}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${BOOT}" 2>>"$LOG_ERRS"
+	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ ! "$NOLIST" ] && ( ! grep -q $RAWFILE "${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS"
 
 	# defer the execution of any related marker/service scripts from the package(s) until everything is installed - if we are not validating package data!
 	[ ! "$VALIDATE" ] && [ -x "${DIR_INST}/${BASENAME}" ] && ( ! grep -q "${DIR_INST}/${BASENAME}" ${DIR_TEMP}/installs.${EXEID} 2>/dev/null ) && echo "${BASENAME}" >>${DIR_TEMP}/installs.${EXEID} 2>>"$LOG_ERRS"
@@ -1990,8 +1993,8 @@ unloadPackage() {
 # 		the directory containing the file to uninstall should already be entered BEFORE calling this function!
 uninstallPackage() {
 	if [ ! "$DRYRUN" ] && [ "$INDEX" -eq 1 ] && [ "$UNLOAD" != 'unload2' ]; then
-		[ $DEBUG -gt 0 ] && echo -e "\tCalling: sed -i \"/${FILENAME}/d\" \"${REPO_PREFIX}/${BOOT}\"" >>"$LOG_DBUG"
-		[ ! "$DRYRUN" ] && sed -i "/${FILENAME}/d" "${REPO_PREFIX}/${BOOT}" 2>>"$LOG_ERRS"		# if this is a requested package and not one of its dependencies (via INDEX==1) -AND- we're are actually uninstalling (deleting or purging), then remove the package from the LIST file
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling: sed -i \"/${FILENAME}/d\" \"${REPO_PREFIX}/${LIST_BOOT}\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && sed -i "/${FILENAME}/d" "${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS"		# if this is a requested package and not one of its dependencies (via INDEX==1) -AND- we're are actually uninstalling (deleting or purging), then remove the package from the LIST file
 	fi
 
 	[ $DEBUG -gt 0 ] && echo -e "uninstallPackage:" >>"$LOG_DBUG"
@@ -2102,8 +2105,8 @@ validatePackage() {
 # SET DEFAULT/UNINITIALIZED VARIABLE VALUES							  NOTE: we have to set these here since they rely on functions above
 
 # MOVED 2025/11/20 - these were moved back to the top and eval'ed if BOOTING
-#[ ! "$BOOT" ] && BOOT="$( ( checkBootcode list2 && [ -e "${REPO_PREFIX}/$(getBootcode list2)" ] ) && getBootcode list2 || echo 'optional.list')"				# stores a specified secondary boot list (if it exists) -OR- uses the default 'optional.list' otherwise
-#[ ! "$FLAG" ] && FLAG="${BOOT%.*}.flag"																		# store an accompanying blacklist flag file for packages that should NOT be installed from the secondary boot list (or their dependencies)
+#[ ! "$LIST_BOOT" ] && LIST_BOOT="$( ( checkBootcode list2 && [ -e "${REPO_PREFIX}/$(getBootcode list2)" ] ) && getBootcode list2 || echo 'optional.list')"				# stores a specified secondary boot list (if it exists) -OR- uses the default 'optional.list' otherwise
+#[ ! "$LIST_FLAG" ] && LIST_FLAG="${LIST_BOOT%.*}.flag"																		# store an accompanying blacklist flag file for packages that should NOT be installed from the secondary boot list (or their dependencies)
 #[ ! "$MODE" ] && MODE="$(TEMP="$(getBootcode mode)"; ( [ "$TEMP" = 'conservative' ] || readlink $REPO_PREFIX | grep -q DATA ) && echo 'link' || echo 'copy')"			# store the install mode: copy, (sym)link	NOTE: symlink by default if we are in a 'conservative' operation mode -OR- we are using DATA as the source of the repo
 
 
@@ -2274,7 +2277,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	     - a full path: /tmp/pax/"
 	echo "	     - or a relative path: ./pax"
 	echo "	     - or have a trailing slash: pax/"
-	echo "	The presence of a REPO_PREFIX/copy_all.flag file will indicate that"
+	echo "	The presence of a REPO_PREFIX/${COPY_FLAG} file will indicate that"
 	echo "	     all packages will be loaded into RAM."
 	echo "	The presence of a REPO_PREFIX/copy_sys.flag file will indicate that"
 	echo "	     all the packages in REPO_SYSTEM will be loaded into RAM.  This"
@@ -2283,7 +2286,9 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '  EXAMPLES:'
 	echo '	Copy packages from the local repo to specified directory:'
 	echo "	     ${0##*/} -c package1 package2 /target/path"
-	echo '	Copy packages from specific directory to specified directory:'
+	echo '	Copy specified packages from a directory to specified directory:'
+	echo "	     ${0##*/} -S /source/path -c package1 package2 /target/path"
+	echo '	Copy all packages from specific directory to specified directory:'
 	echo "	     ${0##*/} -S /source/path -c package1 package2 /target/path"
 	echo '	Download packages from the repo:'
 	echo "	     ${0##*/} -d package1 package2"
@@ -2306,13 +2311,16 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	Find files in packages within a directory:'
 	echo "	     ${0##*/} -f file1 file2 /path/to/local/files"
 	echo "	     ${0##*/} -S /path/to/local/files -f file1 file2"
-	echo '	Install a package:'
-# LEFT OFF - we need to use -S as the source path; the DIRECTORY can act as a PREFIX
-	echo "	     ${0##*/} -i package [/path/to/local/file]"
+	echo '	Install packages (local or remote):'
+	echo "	     ${0##*/} -i package1 package2"
 	echo '	Install packages from a file listing:'
 	echo "	     ${0##*/} -i /path/to/package.list"
 	echo '	Install a specific version:'
-	echo "	     ${0##*/} -V 1.2.3 -i package [/path/to/local/file]"
+	echo "	     ${0##*/} -V 1.2.3 -i package"
+	echo '	Install packages from a specific diretory:'
+	echo "	     ${0##*/} -S /path/to/files -i package1 package2"
+	echo '	Install packages from a specific online repo:'
+	echo "	     ${0##*/} -S 'https://...' -i package1 package2"
 	echo '	Make a package for distribution:'
 	echo "	     ${0##*/} -m package /path/containing/{package|source}"
 	echo "	     ${0##*/} -S /path/containing/{package|source} -m package"
@@ -2381,8 +2389,8 @@ else
 
 	while getopts BcC:dD:eE:fFiI:JK:lLmM:N:oO:PQ:r:RS:tT:u:v:VW:X:Yz OPTION; do			# NOTE: the 'V:' indicates that the '-V' parameter requires a value!
 		case ${OPTION} in
-			B) eval BOOT="$BOOT"								# eval the variables to store processed values
-			   eval FLAG="$FLAG"
+			B) eval LIST_BOOT="$LIST_BOOT"								# eval the variables to store processed values
+			   eval LIST_FLAG="$LIST_FLAG"
 			   BOOTING=TRUE ;;
 			c) COPY=TRUE ;;
 # UPDATED 2025/11/03
@@ -2415,8 +2423,9 @@ else
 			   EXTRA="$OPTARG" ;;
 			f) FIND=TRUE ;;
 			F) FORCE=TRUE ;;
-			i) eval BOOT="$BOOT"								# eval the variables to store processed values
-			   eval MODE="$MODE"
+			i) eval LIST_BOOT="$LIST_BOOT"								# eval the variables to store processed values
+# REMOVED 2025/11/25 - this is handled automatically now
+#			   eval MODE="$MODE"
 			   INSTALL=TRUE ;;
 			I) ( echo ${OPTARG:0:1} | grep -q ^[0-9a-zA-Z] ) || {
 # UPDATED 2025/10/26
@@ -2789,18 +2798,19 @@ fi
 	# WARNING: this MUST come before the directory processing!!!
 # UPDATED 2025/11/20
 #	if [ "$TEMP" = "$0" ]; then								# if a blank or null value was given for the package name (since the 'shift' command will go back to $0), then...
-	if [ "$TEMP" = "$0" ] && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ ! "$TREE" ]; then						# if a blank or null value was given for the package name (since the 'shift' command will go back to $0) -AND- we're not listing installed packages, then...
-# UPDATED 2025/10/26
-#		echo "ERROR: you must provide a file or package name before processing can begin." | tee -a "$LOG_ERRS";
-		showMsg 'failure' "You must provide a file or package name before processing can begin." 'screen'
-		exit 1
-	elif [ -f "$1" ] && [ ! "$(echo $1 | grep -e ${EXT_SOFT}$)" ]; then			# check if the PACKAGE(S) value was actually passed as a text file -AND- is NOT a package name (ending with the EXT_SOFT extension)	NOTE: can't check for mime type since busybox doesn't have a 'file' applet
-		[ "$1" = "$TEMP" ] && TEMP=''							#   if the PACKAGE(S) value is the last passed value (and not a DIRECTORY), then erase the TEMP value to avoid directory processing below
-		TEMPLIST="$(cat "$1" | tr '\n' ' ')"						#   store all the packages to load within the text file list
-		[ "$TEMPLIST" = '' ] && exit 0							#   if there are NOT any packages listed in the text file, there's nothing to process so exit
-		set -- $TEMPLIST								#   otherwise reset the $1, $2, $3, etc values (and $@ that is used in the main 'for' loop below) to be the package names in the text file (as if they were passed via the command line)
-		unset TEMPLIST									#   erase this variable since it's no longer used
-	fi
+# UPDATED 2025/11/25 - so that DIRECTORY can be used as a target destination (copy, download, extract, make, validate) or a prefix (install, unload); LIST, OPEN, TREE do not accept packages
+#	if [ "$TEMP" = "$0" ] && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ ! "$TREE" ]; then						# if a blank or null value was given for the package name (since the 'shift' command will go back to $0) -AND- we're not listing installed packages, then...
+## UPDATED 2025/10/26
+##		echo "ERROR: you must provide a file or package name before processing can begin." | tee -a "$LOG_ERRS";
+#		showMsg 'failure' "You must provide a file or package name before processing can begin." 'screen'
+#		exit 1
+#	elif [ -f "$1" ] && [ ! "$(echo $1 | grep -e ${EXT_SOFT}$)" ]; then			# check if the PACKAGE(S) value was actually passed as a text file -AND- is NOT a package name (ending with the EXT_SOFT extension)	NOTE: can't check for mime type since busybox doesn't have a 'file' applet
+#		[ "$1" = "$TEMP" ] && TEMP=''							#   if the PACKAGE(S) value is the last passed value (and not a DIRECTORY), then erase the TEMP value to avoid directory processing below
+#		TEMPLIST="$(cat "$1" | tr '\n' ' ')"						#   store all the packages to load within the text file list
+#		[ "$TEMPLIST" = '' ] && exit 0							#   if there are NOT any packages listed in the text file, there's nothing to process so exit
+#		set -- $TEMPLIST								#   otherwise reset the $1, $2, $3, etc values (and $@ that is used in the main 'for' loop below) to be the package names in the text file (as if they were passed via the command line)
+#		unset TEMPLIST									#   erase this variable since it's no longer used
+#	fi
 
 # REMOVED 2025/11/03 - this is handled below now
 #	if [ "$MAKE" ] && ( ( echo "$1" | grep -q ^'/' ) || ( echo "$1" | grep -q ^'./' ) ); then
@@ -2818,30 +2828,34 @@ fi
 #		[ "$SILENT" ] || echo "ERROR: the passed file or directory does not exist (${TEMP})." | tee -a "$LOG_ERRS"	#   NOTE: this is shown to the screen and logged on purpose!
 		showMsg 'failure' "The passed directory does not exist (${TEMP})." 'screen'
 		exit 1
-	elif [ -d "$TEMP" ] && ( echo "$TEMP" | grep -q '/' ); then				# otherwise it does exist, so...
-#echo "@ |$@|"
+	elif [ -d "$TEMP" ] && ( echo "$TEMP" | grep -q '/' ); then				# otherwise it does exist, so...	# NOTE: the second test is incase there is a directory and file with the same name (e.g. foo/ and foo.bin.i64.soft; without the '/' in the parameter value, we'd be referring to the package)
+echo "@ |$@|"
 #echo "1 TEMP |$1|$TEMP|"
-		if [ "$1" = "$TEMP" ] && [ ! "$OPEN" ]; then							# if the DIRECTORY is the PACKAGE(S) value, then a directory needs to be processed as the 'list'...
-#echo top
+# LEFT OFF - this should be processed if NO directory was passed, and take all the packages from REPO_SOURCE
+		if [ "$1" = "$TEMP" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ]; then							# if the DIRECTORY is the PACKAGE(S) value, then a directory needs to be processed as the 'list'...
+echo top
 			TEMPLIST="$(ls -1 "${1}/"*.${EXT_SOFT} 2>/dev/null | tr '\n' ' ')"	#   store all the .soft packages to load within the directory
-			[ "$TEMPLIST" = '' ] && exit 0						#   if there are NOT any packages in the directory, there's nothing to process so exit
-			set -- "$TEMPLIST"							#   otherwise reset the $1, $2, $3, etc values (and $@ that is used in the main 'for' loop below) to be the package names in the directory (as if they were passed via the command line)
+	# MOVED 2025/11/25 - below everything as a last command to reset the $1, $2, $3, ...
+	#		[ "$TEMPLIST" = '' ] && exit 0						#   if there are NOT any packages in the directory, there's nothing to process so exit
+	#		set -- "$TEMPLIST"							#   otherwise reset the $1, $2, $3, etc values (and $@ that is used in the main 'for' loop below) to be the package names in the directory (as if they were passed via the command line)
 # REMOVED 2025/11/03 - no need to perform these checks and fixed a value storage bug
 #			if [ "$TEMP" != "$REPO_OPTION" ] && [ "$TEMP" != "$REPO_SYSTEM" ]; then	#   if neither of the two defaults repo locations were passed (e.g. not booting) as the location, then...
-				REPO_SOURCE="$TEMP"						#   automatically update this value since it is the source location where the desired files are stored
+	# REMOVED 2025/11/25 - this variable should ONLY be set via -S
+	#			REPO_SOURCE="$TEMP"						#   automatically update this value since it is the source location where the desired files are stored
 #				[ "$(echo $REPO_SOURCE|tail -c 2)" = '/' ] && TEMP="$(echo $REPO_SOURCE|head -c -2)"		# if the user included a trailing '/' on the passed directory, then remove it to prevent parsing below
 #			fi
-			( echo "$REPO_SOURCE"|grep -q '/'$ ) && REPO_SOURCE="$(echo "$REPO_SOURCE"|head -c -2)"		# if the user included a trailing '/' on the passed directory, then remove it to prevent parsing below
+	#		( echo "$REPO_SOURCE" | grep -q '/'$ ) && REPO_SOURCE="$(echo "$REPO_SOURCE"|head -c -2)"		# if the user included a trailing '/' on the passed directory, then remove it to prevent parsing below
 # REMOVED 2025/10/23 - unsure what this is being used for; it causes problems with -m
 # RESTORED 2025/11/03 - we are now using DIRECTORY
 		else										# otherwise a passed value for DIRECTORY was given (along with PACKAGE(S)), so...
-#echo btm
+echo btm
 			TEMPLIST=''
-			for PARAM in ${@}; do							#   process each remaining parameter
-				[ "$PARAM" = "$TEMP" ] && break					#   if we have reached the last parameter, break out of the 'for' loop
-				TEMPLIST="$TEMPLIST $PARAM"					#   append each parameter to the list
+			for PARAMETER in ${@}; do							#   process each remaining parameter
+				[ "$PARAMETER" = "$TEMP" ] && break					#   if we have reached the last parameter, break out of the 'for' loop to NOT include DIRECTORY
+				TEMPLIST="$TEMPLIST $PARAMETER"					#   append each parameter to the list
 			done
-			unset PARAM
+# REMOVED 2025/11/25 - we use this throughout the script instead of RAWFILE
+#			unset PARAMETER
 			set -- "$TEMPLIST"							#   now reset the $@ array to exclude the last directory
 
 # UPDATED 2025/11/03 - we are now using DIRECTORY
@@ -2850,18 +2864,28 @@ fi
 			DIRECTORY="$TEMP"						#   automatically update this value since it is the source location where the desired files are stored
 			[ "$(echo $DIRECTORY|tail -c 2)" = '/' ] && DIRECTORY="$(echo $DIRECTORY|head -c -2)"		# if the user included a trailing '/' on the passed directory, then remove it to prevent parsing below
 		fi
-		unset TEMPLIST
+# MOVED 2025/11/25 - moved at the end
+#		unset TEMPLIST
 
 # REMOVED 2025/10/23 - this appears to NOT be used (probably was for previous -m implementation since it stores the last part of the passed directory)		 do we need to store the value in TEMP, since it gets immediately erased afterwards?
 #		TEMP="${TEMP##*/}"								# remove everything but the last directory to rename
 	fi
 #fi
-
+echo 01
+	if [ -f "$1" ] && ( ! echo "$1" | grep -q "${EXT_SOFT}"$ ) && ( ! grep -q '\0' "$1" ); then					# check if the PACKAGE(S) value was actually passed as a text file -AND- is NOT a package name (ending with the EXT_SOFT extension) or binary file (last check)		NOTE: can't check for mime type since busybox doesn't have a 'file' applet	https://stackoverflow.com/questions/567757/how-do-i-distinguish-between-binary-and-text-files
+echo filelist
+		TEMPLIST="$(cat "$1" | tr '\n' ' ')"						#   store all the packages to load within the text file list
+	fi
+echo 02
+			[ "$TEMPLIST" = '' ] && exit 0						#   if there are NOT any packages in the directory, there's nothing to process so exit
+	[ "$TEMPLIST" != '' ] && set -- "$TEMPLIST"							#   otherwise reset the $1, $2, $3, etc values (and $@ that is used in the main 'for' loop below) to be the package names in the directory (as if they were passed via the command line)
+	unset TEMPLIST
+echo 03
 	TEMP=''												# make sure this value is not contaminating anything
 fi
 
-
-
+echo "dbug4 |$@|$DIRECTORY|"
+exit
 
 # MANDATORY CHECKS BEFORE **ANY** PROCESSING
 
@@ -2869,14 +2893,27 @@ fi
 ( ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) || { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
 
 # action checking
+echo top
+TEMP=0
+[ "$COPY" ] && TEMP=$(( TEMP + 1 ))
+[ "$DOWNLOAD" ] && TEMP=$(( TEMP + 1 ))
+[ "$EXTRACT" ] && TEMP=$(( TEMP + 1 ))
+[ "$FIND" ] && TEMP=$(( TEMP + 1 ))
+[ "$INSTALL" ] && TEMP=$(( TEMP + 1 ))
+[ "$LIST" ] && TEMP=$(( TEMP + 1 ))
+[ "$MAKE" ] && TEMP=$(( TEMP + 1 ))
+[ "$OPEN" ] && TEMP=$(( TEMP + 1 ))
+[ "$RESTORE" ] && TEMP=$(( TEMP + 1 ))
+[ "$TREE" ] && TEMP=$(( TEMP + 1 ))
+[ "$UNLOAD" ] && TEMP=$(( TEMP + 1 ))
+[ "$VALIDATE" ] && TEMP=$(( TEMP + 1 ))
+[ $TEMP -gt 1 ] && { showMsg 'failure' "Include only one ACTION when executing this script." 'screen'; exit 1; }
 # UPDATED 2025/11/20
 #[ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$EXTRACT" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$MAKE" ] && [ ! "$RESTORE" ] && [ ! "$TREE" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { showMsg 'failure' "You must provide an ACTION when executing this script." 'screen'; exit 1; }
 [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$EXTRACT" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! "$RESTORE" ] && [ ! "$TREE" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { showMsg 'failure' "You must provide an ACTION when executing this script." 'screen'; exit 1; }
-( [ "$COPY" ] || [ "$DOWNLOAD" ] || [ "$EXTRACT" ] || [ "$FIND" ] || [ "$INSTALL" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] || [ "$RESTORE" ] || [ "$TREE" ] || [ "$UNLOAD" ] || [ "$VALIDATE" ] ) && { showMsg 'failure' "You must provide an ACTION when executing this script." 'screen'; exit 1; }
-[ "$MAKE" ] && ( echo "$1" | grep -q '/' ) && { showMsg 'failure' "You must provide a package name before processing can begin." 'screen'; exit 1; }
-# left off - how to check if more than one action was submitted
-echo dbug
-exit
+[ "$MAKE" ] && [ ! "$DIRECTORY" ] && { showMsg 'failure' "You must provide a directory to package before processing can begin." 'screen'; exit 1; }
+[ "$MAKE" ] && ( [ ! "$1" ] || ( echo "$1" | grep -q '/' ) ) && { showMsg 'failure' "You must provide a package name before processing can begin." 'screen'; exit 1; }
+
 # option checking
 [ "$BOOTING" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -B option." 'screen'; exit 1; }
 [ "$CPU" ] && ( [ "$LIST" ] || [ "$OPEN" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -C option." 'screen'; exit 1; }
@@ -2884,9 +2921,9 @@ exit
 [ "$EXTRA" ] && [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$UNLOAD" ] && { showMsg 'failure' "This action can't be used with the -E option." 'screen'; exit 1; }
 [ "$FORCE" ] && ( [ "$FIND" ] && [ ! "$LIST" ] && [ ! "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -F option." 'screen'; exit 1; }
 [ "$IGNORE" ] && ( [ "$FIND" ] && [ ! "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] && [ ! "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -I option." 'screen'; exit 1; }
-[ "$KERNEL" != "$(uname -r)" ] && ( [ "$FIND" ] && [ ! "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] && [ ! "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -K option." 'screen'; exit 1; }
+[ "$KERNEL" != "$(uname -r | sed 's/-/_/g')" ] && ( [ "$FIND" ] && [ ! "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] && [ ! "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -K option." 'screen'; exit 1; }
 [ "$NOLIST" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -L option." 'screen'; exit 1; }
-[ "$MODE" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -M option." 'screen'; exit 1; }
+[ "$MODE" = 'link' ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -M option." 'screen'; exit 1; }
 [ "$FILELIST" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -N option." 'screen'; exit 1; }
 [ "$OUTPUT" = 'xml' ] && [ "$OPEN" ] && { showMsg 'failure' "This action can't be used with the '-O xml' option." 'screen'; exit 1; }		# NOTE: we can't use this since it requires a final success/failure before any output is shown
 [ "$PROMPT" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -P option." 'screen'; exit 1; }
@@ -2897,7 +2934,7 @@ exit
 [ "$TYPE" != 'bin' ] && ( [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] ) && { showMsg 'failure' "This action can't be used with the -T option." 'screen'; exit 1; }
 [ "$VERSION" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -V option." 'screen'; exit 1; }
 [ "$ALL" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -W option." 'screen'; exit 1; }
-[ "$PROXY" ] && [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$INSTALL" ] ) && { showMsg 'failure' "This action can't be used with the -X option." 'screen'; exit 1; }
+[ "$PROXY" ] && [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -X option." 'screen'; exit 1; }
 [ "$DRYRUN" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -Y option." 'screen'; exit 1; }
 
 # option combination checking
@@ -2906,8 +2943,10 @@ exit
 [ "$PROMPT" ] && [ "$QUIET" = 'errors' ] && { showMsg 'failure' "The -P option can't be used with the '-Q errors' option." 'screen'; exit 1; }
 [ "$PROMPT" ] && [ "$OUTPUT" = 'fifo' ] && [ ! -e "$FIFO_SERVER" ] && { showMsg 'failure' "The -P option can't be used with '-O fifo' without a FIFO_SERVER." 'screen'; exit 1; }
 [ "$PROMPT" ] && [ "$OUTPUT" != 'fifo' ] && [ "$OUTPUT" != 'text' ] && [ ! -e "$FIFO_SERVER" ] && { showMsg 'failure' "The -P option can only be used with '-O fifo' or '-O text'." 'screen'; exit 1; }
-[ "$PROXY" ] && [ "$REPO_SOURCE" ] && { showMsg 'failure' "The -X option can't be used with the -S option." 'screen'; exit 1; }
+# REMOVED 2025/11/25
+#[ "$PROXY" ] && [ "$REPO_SOURCE" ] && { showMsg 'failure' "The -X option can't be used with the -S option." 'screen'; exit 1; }
 [ "$PROXY" ] && [ "$DRYRUN" ] && { showMsg 'failure' "The -X option can't be used with the -Y option." 'screen'; exit 1; }
+[ "$PROXY" ] && [ "$DIRECTORY" != '' ] && { showMsg 'failure' "The DIRECTORY value can not be used with the -X option." 'screen'; exit 1; }
 
 # UPDATED 2025/10/22 - the -f action does NOT supply a package name
 #[ ! "$1" ] && { [ "$SILENT" ] || echo "ERROR: you must provide a PACKAGE name." | tee -a "$LOG_ERRS"; exit 1; }
@@ -3047,6 +3086,7 @@ elif [ "$INSTALL" ]; then									# if we are installing package(s), then...
 		DIRECTORY='/'									#     set DIRECTORY to the filesystem root
 		REPO_SOURCE="$REPO_SYSTEM"							#     set REPO_SOURCE to the 'FIRMWARE' packages location
 	else											#   otherwise the system is live and can use parameters, so...
+# VER2 - remove the -D option in favor of DIRECTORY (or DIR_LIVE in its absence); make sure that -u works with this new configuration too
 		[ "$PREFIX" ] && DIRECTORY="${PREFIX}"						#     if the -D option was passed, add it to the directory structure
 		[ ! "$PREFIX" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && {			#     if the -D option was NOT passed, and the DIRECTORY was NOT passed, then set to the default installation location
 			( echo "$DIR_LIVE" | grep -qE '(/|\.)'$ ) || DIR_LIVE="${DIR_LIVE}/"	#        make sure the directory ends with a '/' or '.'
@@ -3061,21 +3101,23 @@ elif [ "$INSTALL" ]; then									# if we are installing package(s), then...
 elif [ "$MAKE" ]; then										# if we are creating a package for distribution, then...
 	[ "$DIRECTORY" != "$REPO_OPTION" ] && REPO_SOURCE="$DIRECTORY"				#   if a directory was passed, then set the REPO_SOURCE as that value (so it can be used with '-S' interchangably)
 	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only search local packages
-	[ "$DIRECTORY" = "$REPO_OPTION" ] && {
-		showMsg 'failure' "You must provide a directory to package before processing can begin." 'screen'
-		exitGracefully 1 'screen'
-	}
+# REMOVED 2025/11/25
+#	[ "$DIRECTORY" = "$REPO_OPTION" ] && {
+#		showMsg 'failure' "You must provide a directory to package before processing can begin." 'screen'
+#		exitGracefully 1 'screen'
+#	}
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the source code or compiled software is
 elif [ "$OPEN" ]; then
 	[ "$DIRECTORY" = "$REPO_OPTION" ] && DIRECTORY="$DIR_TEMP"				#   if a directory was appended to the list, then use that for the directory to work from
 	[ "$REPO_SOURCE" != "$REPO_SCHEMA" ] && DIRECTORY="$REPO_SOURCE"			#   if the -S option was passed, then use that for the directory to work from
 	cd "$DIRECTORY" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'				#   now cd into the DIRECTORY where the fifo needs to be created
-elif [ "$PROXY" ]; then										# if we are proxying an action, then...
-	# this action can not use DIRECTORY or REPO_SOURCE
-	[ "$DIRECTORY" != "$REPO_OPTION" ] && {
-		showMsg 'failure' "The DIRECTORY value can not be used with this action." 'screen'
-		exitGracefully 1 'screen'
-	}
+#elif [ "$PROXY" ]; then										# if we are proxying an action, then...
+	# this action can not use DIRECTORY, however REPO_SOURCE gets passed to the script
+# REMOVED 2025/11/25
+#	[ "$DIRECTORY" != "$REPO_OPTION" ] && {
+#		showMsg 'failure' "The DIRECTORY value can not be used with this action." 'screen'
+#		exitGracefully 1 'screen'
+#	}
 #elif [ "$RESTORE" ]; then									# if we are restoring a package from a restore point, then...
 #	adjust the below once the directory values get set
 #	[ ! -e "${REPO_RESTOR}/${RESTORE}" ] && { showMsg 'failure' "The provided path does not contain any valid restore points." 'screen'; exit 1; }
@@ -3521,8 +3563,11 @@ continue
 		showMsg 'action' "Installing the specified package(s)..." 'both' 1 4
 
 		# NOTE: this MUST be here and not in the parameter processing section above, because the -M option may not get passed!
+# UPDATED 2025/11/25 -
 		# if '-M copy' was passed to this script -OR- the copy-everything-to-RAM file exists -OR- { the copy the system directory (REPO_SYSTEM) contents to RAM file exists -and- we're using that directory (e.g. booting) -and- REPO_SYSTEM and REPO_OPTION are NOT the same (to prevent TC from erroneously loading everything to RAM since those two would be the same) }, then...
-		if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/copy_all.flag" ] || ( [ -e "${REPO_PREFIX}/copy_sys.flag" ] && [ "$REPO_SOURCE" = "$REPO_SYSTEM" ] && [ "$REPO_SYSTEM" != "$REPO_OPTION" ] ); then
+#		if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/copy_all.flag" ] || ( [ -e "${REPO_PREFIX}/copy_sys.flag" ] && [ "$REPO_SOURCE" = "$REPO_SYSTEM" ] && [ "$REPO_SYSTEM" != "$REPO_OPTION" ] ); then
+		if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/${COPY_FLAG}" ] || ( [ -e "${REPO_PREFIX}/copy_sys.flag" ] && [ "$BOOTING" ] ) || [ "$(getBootcode mode)" != "conservative" ]; then
+
 #echo top
 			[ $DEBUG -gt 0 ] && echo -e "\tInstall by copying..." >>"$LOG_DBUG"
 #			showMsg 'step' " [copy]" 'both' 0 0
