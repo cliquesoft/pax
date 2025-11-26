@@ -194,9 +194,21 @@
 - Updated the check for a text file as PACKAGE(S)
 - Updated BOOT to LIST_BOOT
 - Updated FLAG to LIST_FLAG
-- Updated the parameter checking so DIRECTORY and a
-  text file can be passed
+- Started updating the parameter checking so PACKAGE(S) or
+  FILELIST, and an optional DIRECTORY can be passed
 - Expanded -c to use DIRECTORY as the package listing
 - Added COPY_FLAG
+- Updated the --help output
+
+2025/11/26
+- Fixed several bugs with parameter checking
+- Completed parameter checking
+- Added ARCH_SCHEMA
+- Added KRNL_SCHEMA
+- Renamed CPU to ARCH
+- Removed existing -D option
+- Merged the -J option into '-D none'
+- Merged the -W option into '-D all'
+- Expanded -e to use DIRECTORY as the package listing
 - Updated the --help output
 
