@@ -212,3 +212,23 @@
 - Expanded -e to use DIRECTORY as the package listing
 - Updated the --help output
 
+2025/12/01
+- Fixed several bugs with parameter checking
+- Updated the -L option to take a parameter
+- Updated the LIST_BOOT to the primary list
+- Added LIST_LIST for the secondary list
+- Removed the -r action
+- Updated the -R option to work with other actions
+- Updated parameter checking after adjustments
+- Fixed a bug with -c and -I
+- Updated the --help output
+
+2025/12/02
+- Renamed LIST_FLAG to FLAG_BOOT
+- Added FLAG_LIVE
+- Created test scripts for -c, -d, and -e
+- Fixed a bug with -e and -I
+- Updated several variable value assignments
+- Added another check so only one package can be listed with -V
+- Corrected bugs until -c, -d, and -e fully worked
+
