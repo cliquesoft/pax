@@ -232,3 +232,13 @@
 - Added another check so only one package can be listed with -V
 - Corrected bugs until -c, -d, and -e fully worked
 
+2025/12/03
+- Created test scripts for -f, -l, -m, and -o
+- Updated parameter checking with -f, -l, -t and -Q
+- Added a check to prevent -l with DIRECTORY
+- Corrected the xml* output with -l
+- Added a check to prevent -m with -S and DIRECTORY
+- Added a check to prevent -o with -S and DIRECTORY
+- Corrected bugs until -f, -l, -m, and -o fully worked
+- Updated the --help output
+
