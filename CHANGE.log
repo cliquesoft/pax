@@ -233,12 +233,25 @@
 - Corrected bugs until -c, -d, and -e fully worked
 
 2025/12/03
-- Created test scripts for -f, -l, -m, and -o
+- Created test scripts for -f, -l, and -m
+- Started a test script for -o
 - Updated parameter checking with -f, -l, -t and -Q
 - Added a check to prevent -l with DIRECTORY
 - Corrected the xml* output with -l
 - Added a check to prevent -m with -S and DIRECTORY
 - Added a check to prevent -o with -S and DIRECTORY
-- Corrected bugs until -f, -l, -m, and -o fully worked
+- Corrected bugs until -f, -l, and -m fully worked
+- Updated the --help output
+
+2025/12/04
+- Completed the test script for -o
+- Corrected bugs until -o fully worked
+- Updated -o to work out of REPO_SOURCE instead of DIRECTORY
+- Created test scripts for -t
+- Corrected bugs until -t fully worked
+- Changed the error handling for flagged packages during bootup
+- Expanded -t to show trees for reliant and relied upon packages
+- Added a check to make sure OPTIONS preceed the ACTION
+- Corrected a bug with KERNEL substitution
 - Updated the --help output
 
