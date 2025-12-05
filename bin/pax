@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/12/03 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/12/05 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -70,12 +70,12 @@ LIST_BOOT='$( TEMP=$(getBootcode list); ( [ "$TEMP" ] && [ -e "${REPO_PREFIX}/${
 LIST_LIVE='$( TEMP=$(getBootcode list2); ( [ "$TEMP" ] && [ -e "${REPO_PREFIX}/${TEMP}" ] ) && echo $TEMP || echo optional.list )'		# obtains and tests for the existence of the 'list2' boot code value -OR- uses a default otherwise
 FLAG_BOOT='${LIST_BOOT%.*}.flag'										# the flag file that blacklists included packages
 FLAG_LIVE='${LIST_LIVE%.*}.flag'										# the flag file that blacklists included packages
-COPY_FLAG='copy_all.flag'									# the flag file indicating ALL packages need to be copied instead of symlinked
+FLAG_COPY='copy_all.flag'									# the flag file indicating ALL packages need to be copied instead of symlinked
+FLAG_FIRM='copy_sys.flag'									# the flag file indicating ALL firmware packages (REPO_SYSTEM|LIST_BOOT) need to be copied instead of symlinked
 # MOVED 2025/11/25 - this is auto configured in the body
 #MODE='$( [ "$(getBootcode mode)" = "conservative" ] && echo link || echo copy )'		# the install mode: (sym)link, copy	NOTE: symlink if we are in a 'conservative' operation mode, copy otherwise
 
 DIR_CONF='/etc/pax'										# directory containing any alternate/personalized configuration
-
 DIR_LIST='/var/cache/Software/catalog'								# directory containing the total list of installed applications
 DIR_INIT='/var/cache/Software/services'								# directory containing daemon/service scripts
 DIR_INST='/var/cache/Software/scripts'								# directory containing other software scripts (taken from /etc/envars)
@@ -104,6 +104,8 @@ FILE_SCHEMA='${PACKAGE}.${TYPE}.${ARCH}'							# the format for the package file
 KRNL_SCHEMA="$(uname -r | sed 's/-/_/g')"							# store the currently used kernel version (substituting '-' for '_')
 LOOP_SCHEMA='${PACKAGE}.${TYPE}'								# the format for the package mount point	NOTE: same as above
 REPO_SCHEMA='http://repo.cliquesoft.org/vanilla/1.0/${PACKAGE/_${KERNEL}}'			# the format for remote packages		NOTE: save as above
+VERS_SCHEMA='${VERSION}.${TYPE}.${ARCH}'							# the format of the versioned package name in the source remote repo (when -V is used)
+VERT_SCHEMA='${PACKAGE}_${VERSION}.${TYPE}.${ARCH}'						# the format of the versioned package name in the target local repo (when -V is used)
 
 REPO_PREFIX='/etc/software/SYSTEM/repo'
 REPO_OPTION="${REPO_PREFIX}/optional"								# WARNING: this needs to reference 'optional' and REPO_SYSTEM needs to reference 'system'!!!
@@ -115,32 +117,31 @@ REPO_RESTOR="/var/cache/Software/restore"
 # -------------------- DO **NOT** EDIT BELOW THIS LINE --------------------
 
 # [system]
+EXEID="$(mktemp -u XXXXXX)"									# stores a temp execution ID (for use with (un)installing)
 INDEX=0												# since no arrays can be used in this shell, this keeps track of the index within the dependency stack	NOTE: 0=no deps
 TOTAL=0												# keeps track of the $DEP 'array' size
-EXEID="$(mktemp -u XXXXXX)"									# stores a temp execution ID (for use with (un)installing)
 TEMP=''												# used to store information temporarily
-ARCH=''												# stores the value of the ARCH_SCHEMA
-KERNEL=''											# stores the currently used kernel string
-
 LIBRARIES=''											# boolean indicating libraries are contained in the package and need to be loaded after installation
 MODULES=''											# boolean indicating kernel modules are contained in the package and need to be loaded after installation
-
 XML=''												# used to store XML until there's a final success/failure
 XML_TAGS=''											# stores the tags that are currently opened (e.g. containing children)
 
+KERNEL=''											# stores the currently used kernel string
+RAWFILE=''			# rename to PARAMETER
+PREFIX=''											# where the software should be installed: root=/ (firmware), everyone=/Users/Public, user-specific=$HOME, custom=specified
+DIRECTORY=''			# rename to TARGET						# defaults to REPO_OPTION if not passed as DIRECTORY parameter
+REPO_SOURCE=''			# rename to SOURCE						# if the user passed a new source via -S; defaults to REPO_OPTION if not passed		NOTE: we can NOT define a default value here since it may be different in a config file
 DEPENDENCY=''											# the current iterated dependency to work with
 PACKAGE=''											# the isolated name of the package (e.g. nano.bin.i32.soft > nano); value set automatically below
 BASENAME=''											# the filename without the extension (e.g. nano.bin.i32); value set automatically below
 FILENAME=''											# the full filename of the package (e.g. nano.bin.i32.soft); value set automatically below
 FILETYPE=''											# the file type that is being processed (this is used by processDependencies())
-DIRECTORY=''			# rename to TARGET						# defaults to REPO_OPTION if not passed as DIRECTORY parameter
-REPO_SOURCE=''			# rename to SOURCE						# if the user passed a new source via -S; defaults to REPO_OPTION if not passed		NOTE: we can NOT define a default value here since it may be different in a config file
-VERBASE=''
-VERFILE=''
-RAWFILE=''			# rename to PARAMETER
 OPTFILE=''
+VERBASE=''
+VERFILE=''		# MAYBE DELETE THIS
 
 # [options]
+ARCH=''												# stores the value of the ARCH_SCHEMA
 MODE=''
 TYPE='bin'											# the package type: bin dev doc drv gir lib loc	  NOTE: we're specifying the default value here
 DEPS='default'
@@ -148,7 +149,6 @@ DRYRUN=''
 PROMPT=''
 OUTPUT='text'											# the output format to display: fifo, text, xml, xmLive
 QUIET='default'											# the verbosity of the output: none, errors, default, verbose, all
-PREFIX=''											# where the software should be installed: root=/ (firmware), everyone=/Users/Public, user-specific=$HOME, custom=specified
 VERSION=''
 				# the below can all be erased
 # UPDATED 2025/10/22 - merged -P with -U
@@ -537,7 +537,9 @@ splitName() {
 ## UPDATED 2025/11/05
 ##	[ "$VERSION" ] && VERFILE="${VERSION}${TEMP}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
 #	[ "$VERSION" ] && VERFILE="${VERBASE}.${EXT}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
-	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -gt 1 ] ) ) && VERBASE="${VERSION}$(echo $BASENAME | sed "s/^${PACKAGE}//")" || VERBASE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
+# UPDATED 2025/12/05
+#	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -gt 1 ] ) ) && VERBASE="${VERSION}$(echo $BASENAME | sed "s/^${PACKAGE}//")" || VERBASE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
+	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -gt 1 ] ) ) && eval VERBASE="${VERS_SCHEMA}" || VERBASE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
 # UPDATED 2025/11/05
 #	[ "$VERSION" ] && VERFILE="${VERSION}${TEMP}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
 	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -gt 1 ] ) ) && VERFILE="${VERBASE}.${EXT}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
@@ -922,6 +924,12 @@ processDependencies() {
 		showMsg 'failure' "The package is missing from REPO_SOURCE." 'log'
 		return 1
 	}
+# LEFT OFF - can we merge some of these common checks?
+	[ "$VALIDATE" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
+		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
+		showMsg 'dependency' "[ignore] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+		return 0
+	}
 
 	# check that the dependency is not already in the list to be processed
 # UPDATED 2025/11/05 - to reduce duplicates once they've been proceeded
@@ -1042,8 +1050,12 @@ fi
 	if [ "$TREE" ]; then
 # UPDATED 2025/11/05 - replaced the APP* variables
 #		echo "${INDENT}${APPNAME}.${APPTYPE}"
-		[ ! "$OPTFILE" ] && echo "${INDENT}${PACKAGE} (${FILETYPE})"
-		[ "$OPTFILE" ] && echo "${INDENT}${PACKAGE} (${FILETYPE}) [optional]"
+# UPDATED 2025/12/05
+#		[ ! "$OPTFILE" ] && echo "${INDENT}${PACKAGE} (${FILETYPE})"
+#		[ "$OPTFILE" ] && echo "${INDENT}${PACKAGE} (${FILETYPE}) [optional]"
+		[ ! "$INDENT" ] && [ ! "$OPTFILE" ] && showMsg 'package' "${INDENT}${PACKAGE} (${FILETYPE})" 'screen' 1 4	# if this is the package being processed, then...
+		[ "$INDENT" ] && [ ! "$OPTFILE" ] && showMsg 'file' "${INDENT}${PACKAGE} (${FILETYPE})" 'screen' 1 1		# if this is a depends/dependency package, then...
+		[ "$OPTFILE" ] && showMsg 'file' "${INDENT}${PACKAGE} (${FILETYPE}) [optional]" 'screen' 1 1			# if this is an optional depends/dependency package, then...
 	elif [ "$VALIDATE" ]; then
 # REMOVED 2025/11/07 - this would be caught in the checks above
 #		[ "$SOURCE" = 'remote' ] && showMsg 'step' "[ missing ] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -1096,7 +1108,8 @@ fi
 #		[ -e "./${APPHEAD}.deps" ] && cp -f "./${APPHEAD}.deps" "${TARGET}" >>"$LOG_ERRS" 2>&1
 #	fi
 
-	[ "$VERSION" ] && [ $INDEX -eq 1 ] && BASENAME="$VERBASE"
+# REMOVED 2025/12/05 - we are now calling downPackage() to handle this aspect
+#	[ "$VERSION" ] && [ $INDEX -eq 1 ] && BASENAME="$VERBASE"
 
 # UPDATED 2025/11/07 - copy is strictly offline
 #	if ( [ "$COPY" ] || [ "$DOWNLOAD" ] || [ "$INSTALL" ] ) && [ "$SOURCE" = 'remote' ]; then # if copying, downloading, or installing from an external source, then...	NOTE: we are already in the target storage directory
@@ -1109,9 +1122,12 @@ fi
 # UPDATED 2025/12/02
 #		if [ ! "$COPY" ] && [ "$SOURCE" = 'remote' ]; then
 		if ( [ "$DOWNLOAD" ] || [ "$INSTALL" ] ) && [ "$SOURCE" = 'remote' ]; then
-			eval SOURCE="${REPO_SOURCE}/${BASENAME}.${EXT_DEPS}"				#   re-purpose SOURCE (since we're done using it for its original intention) incase REPO_SOURCE has any variables in it
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    wget -cq \"${SOURCE}\"" >>"$LOG_DBUG"
-			wget -cq "${SOURCE}" >/dev/null 2>&1 || return 0				#   get any .deps file for the dependency itself	NOTE: we can't exit with an error since some packages do not have one of these files
+# UPDATED 2025/12/05 - we are letting downloadPackage() handle this
+#			eval SOURCE="${REPO_SOURCE}/${BASENAME}.${EXT_DEPS}"				#   re-purpose SOURCE (since we're done using it for its original intention) incase REPO_SOURCE has any variables in it
+#			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    wget -cq \"${SOURCE}\"" >>"$LOG_DBUG"
+#			wget -cq "${SOURCE}" >/dev/null 2>&1 || return 0				#   get any .deps file for the dependency itself	NOTE: we can't exit with an error since some packages do not have one of these files
+			downloadPackage DEPS || return 0				#   get any .deps file for the dependency itself	NOTE: we can't exit with an error since some packages do not have one of these files
+			[ $DEBUG -gt 0 ] && echo "processDependencies (returned):" >>"$LOG_DBUG"
 # UPDATED 2025/12/02 - swapped locations so we don't have to copy .deps files
 #		elif ( [ "$COPY" ] || [ "$EXTRACT" ] ) && [ -e "${REPO_SOURCE}/${BASENAME}.${EXT_DEPS}" ]; then		# if we're copying and the dependency has a .deps file, then copy it over too!
 		elif [ "$COPY" ] && [ -e "${REPO_SOURCE}/${BASENAME}.${EXT_DEPS}" ]; then		# if we're copying and the dependency has a .deps file, then copy it over too!
@@ -1121,6 +1137,8 @@ fi
 				return 1
 			}
 		fi
+#echo "checking |${BASENAME}.${EXT_DEPS}|"
+#pwd
 
 		# process all the dependencies of the passed software
 		[ $DEBUG -gt 0 ] && echo -en "\tChecking for package dependency file:" >>"$LOG_DBUG"
@@ -1314,100 +1332,128 @@ copyPackage() {
 }
 
 
-# Usage syntax: downloadPackage
+# Usage syntax: downloadPackage DEPS
 # Overview:	downloads the .soft and .hash files from the repo and compares the package checksum to validate the download
 # Notes:	the directory to store the obtained file(s) should already be entered BEFORE calling this function!
 #		no need to copy the .deps file since that was handled via processDependencies().
+# Parameters:
+# DEPS		[boolean] if we just need to get the .deps file for the package (via a processDependencies() call)
 downloadPackage() {
-	local BASE="${BASENAME}"
-	local FILE="${BASENAME}.${EXT_SOFT}"
-	[ "$VERBASE" ] && BASE="$VERBASE"
-	[ "$VERFILE" ] && FILE="$VERFILE"
+# UPDATED 2025/12/05
+#	local BASE="${BASENAME}"
+#	local FILE="${BASENAME}.${EXT_SOFT}"
+#	[ "$VERBASE" ] && BASE="$VERBASE"
+#	[ "$VERFILE" ] && FILE="$VERFILE"
+	local BASE_SOURCE="${BASENAME}"
+	local FILE_SOURCE="${BASENAME}.${EXT_SOFT}"
+	[ "$VERBASE" ] && eval BASE_SOURCE="${VERBASE}"
+	[ "$VERFILE" ] && eval FILE_SOURCE="${VERFILE}"
+	local BASE_TARGET="${BASENAME}"
+	local FILE_TARGET="${BASENAME}.${EXT_SOFT}"
+	[ "$VERBASE" ] && eval BASE_TARGET="${VERT_SCHEMA}"
+	[ "$VERFILE" ] && eval FILE_TARGET="${BASE_TARGET}.${EXT_SOFT}"
 	eval REPO_SOURCE="${REPO_SCHEMA}"							# eval REPO_SOURCE incase it has any variables in it
+#echo "BASE_SOURCE |$BASE_SOURCE|"
+#echo "FILE_SOURCE |$FILE_SOURCE|"
+#echo "BASE_TARGET |$BASE_TARGET|"
+#echo "FILE_TARGET |$FILE_TARGET|"
 
-	[ $DEBUG -gt 0 ] && { echo -en "downloadPackage:\n\tRAWFILE     |${RAWFILE}|\n\tFILENAME    |${FILE}|\n\tBASENAME    |${BASE}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${ARCH}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tVERBASE     |${VERBASE}|\n\tOPTFILE     |${OPTFILE}|\n\tREPO_SOURCE |${REPO_SOURCE}|\n\tDIRECTORY   |${DIRECTORY}|\n\tpwd         " >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
+	[ $DEBUG -gt 0 ] && { echo -en "downloadPackage:\n\tRAWFILE     |${RAWFILE}|\n\tFILENAME    |${FILE}|\n\tBASENAME    |${BASE_SOURCE}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${ARCH}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tVERBASE     |${VERBASE}|\n\tOPTFILE     |${OPTFILE}|\n\tREPO_SOURCE |${REPO_SOURCE}|\n\tDIRECTORY   |${DIRECTORY}|\n\tpwd         " >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
 
 	( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) || {					# make sure the SOURCE is remote
 		showMsg 'failure' "A non-Internet value is set for REPO_SOURCE." 'log'
 		return 1
 	}
 
+	if [ "$1" ]; then
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE_SOURCE}.${EXT_DEPS}\" -O \"./${BASE_TARGET}.${EXT_DEPS}\"" >>"$LOG_DBUG"
+		wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_DEPS}" -O "./${BASE_TARGET}.${EXT_DEPS}" >/dev/null 2>&1
+		[ ! -e "./${BASE_TARGET}.${EXT_DEPS}" ] && return 1				# if no .deps file exists, then exit so processDependencies() knows to exit
+
+		BASENAME="${BASE_TARGET}"							# adjust the name so processDependencies() can perform the last step before this variable value gets overwritten
+#echo "basename |$BASENAME|"
+		return 0
+	fi
+
 	showMsg 'file' " [pack]" 'both' 0 0
-	[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_SOFT}\"" >>"$LOG_DBUG"
+	[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE_SOURCE}.${EXT_SOFT}\" -O \"./${BASE_TARGET}.${EXT_SOFT}\"" >>"$LOG_DBUG"
 # UPDATED 2025/11/07 - updated to output to the log correctly
-#	wget -cq "${REPO_SOURCE}/${BASE}.${EXT_SOFT}" >>"$LOG_ERRS" 2>&1 || {			# download the package file from the repo
-#	( [ ! -e "${BASE}.${EXT_SOFT}" ] || [ ! -s "${BASE}.${EXT_SOFT}" ] ) && {		# if the file wasn't downloaded, or it's a zero byte file, then...	NOTE: this uses the 'pwd' as the download directory via 'wget'
-	[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE}.${EXT_SOFT}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the package file from the repo	NOTE: the string of commands outputs to the pax.log correctly while still returning a proper exit code from wget
-		showMsg 'failure' "The package file download failed (${BASE}.${EXT_SOFT})." 'log'
+#	wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_SOFT}" >>"$LOG_ERRS" 2>&1 || {			# download the package file from the repo
+#	( [ ! -e "${BASE_SOURCE}.${EXT_SOFT}" ] || [ ! -s "${BASE_SOURCE}.${EXT_SOFT}" ] ) && {		# if the file wasn't downloaded, or it's a zero byte file, then...	NOTE: this uses the 'pwd' as the download directory via 'wget'
+	[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_SOFT}" -O "./${BASE_TARGET}.${EXT_SOFT}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the package file from the repo	NOTE: the string of commands outputs to the pax.log correctly while still returning a proper exit code from wget
+		showMsg 'failure' "The package file download failed (${BASE_SOURCE}.${EXT_SOFT})." 'log'
 		return 1
 	}
 
 	showMsg 'file' " [hash]" 'both' 0 0
-	[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_HASH}\"" >>"$LOG_DBUG"
+	[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE_SOURCE}.${EXT_HASH}\" -O \"./${BASE_TARGET}.${EXT_HASH}\"" >>"$LOG_DBUG"
 # UPDATED 2025/11/07 - updated to output to the log correctly
-#	wget -cq "${REPO_SOURCE}/${BASE}.${EXT_HASH}" >>"$LOG_ERRS" 2>&1			# download the corresponding hash file
-#	( [ ! -e "${BASE}.${EXT_HASH}" ] || [ ! -s "${BASE}.${EXT_HASH}" ] ) && {
-	[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE}.${EXT_HASH}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the corresponding hash file
-		showMsg 'failure' "The package hash file download failed (${BASE}.${EXT_HASH})." 'log'
+#	wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_HASH}" >>"$LOG_ERRS" 2>&1			# download the corresponding hash file
+#	( [ ! -e "${BASE_SOURCE}.${EXT_HASH}" ] || [ ! -s "${BASE_SOURCE}.${EXT_HASH}" ] ) && {
+	[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_HASH}" -O "./${BASE_TARGET}.${EXT_HASH}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the corresponding hash file
+		showMsg 'failure' "The package hash file download failed (${BASE_SOURCE}.${EXT_HASH})." 'log'
 		return 1
 	}
 
 	# if we ARE installing a specific version of the software, then...
-	[ $DEBUG -gt 0 ] && [ "$VERSION" ] && echo -e "\tCalling: sed -i \"s/^${PACKAGE}/${VERSION}/\" \"${BASE}.${EXT_HASH}\"" >>"$LOG_DBUG"
-	[ "$VERSION" ] && sed -i "s/^${PACKAGE}/${VERSION}/" "${BASE}.${EXT_HASH}"		# changing the package name to match the version number in the hash file
+# UPDATED 2025/12/05
+#	[ $DEBUG -gt 0 ] && [ "$VERSION" ] && echo -e "\tCalling: sed -i \"s/^${PACKAGE}/${VERSION}/\" \"${BASE_SOURCE}.${EXT_HASH}\"" >>"$LOG_DBUG"
+#	[ "$VERSION" ] && sed -i "s/^${PACKAGE}/${VERSION}/" "${BASE_SOURCE}.${EXT_HASH}"		# changing the package name to match the version number in the hash file
+	[ $DEBUG -gt 0 ] && [ ! "$DRYRUN" ] && [ "$VERFILE" ] && echo -e "\tCalling: sed -i \"s/  ${PACKAGE}/  ${PACKAGE}_${VERSION}/\" \"./${BASE_TARGET}.${EXT_HASH}\"" >>"$LOG_DBUG"
+	[ ! "$DRYRUN" ] && [ "$VERFILE" ] && sed -i "s/  ${PACKAGE}/  ${PACKAGE}_${VERSION}/" "./${BASE_TARGET}.${EXT_HASH}"		# changing the package name to match the version number in the hash file
 
 	if [ "$EXTRA" ]; then
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'code' ]; then
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_CODE}\"" >>"$LOG_DBUG"
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE_SOURCE}.${EXT_CODE}\" -O \"./${BASE_TARGET}.${EXT_CODE}\"" >>"$LOG_DBUG"
 # UPDATED 2025/11/07 - updated to output to the log correctly
-#			wget -cq "${REPO_SOURCE}/${BASE}.${EXT_CODE}" >>"$LOG_ERRS" 2>&1	# download the corresponding source code file
-#			( [ ! -e "${BASE}.${EXT_INFO}" ] || [ ! -s "${BASE}.${EXT_CODE}" ] ) && {
-			[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE}.${EXT_CODE}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the corresponding source code file
-				showMsg 'warning' "The package source code file download failed (${BASE}.${EXT_CODE})." 'log'
+#			wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_CODE}" >>"$LOG_ERRS" 2>&1	# download the corresponding source code file
+#			( [ ! -e "${BASE_SOURCE}.${EXT_INFO}" ] || [ ! -s "${BASE_SOURCE}.${EXT_CODE}" ] ) && {
+			[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_CODE}" -O "./${BASE_TARGET}.${EXT_CODE}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the corresponding source code file
+				showMsg 'warning' "The package source code file download failed (${BASE_SOURCE}.${EXT_CODE})." 'log'
 				#return 1							  NOTE: since every package may not have one of these, don't error out here...
 			}
-			[ -e "./${BASE}.${EXT_CODE}" ] && showMsg 'file' " [code]" 'both' 0 0
+			[ -e "./${BASE_SOURCE}.${EXT_CODE}" ] && showMsg 'file' " [code]" 'both' 0 0
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'cpio' ]; then
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.cpio\"" >>"$LOG_DBUG"
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE_SOURCE}.cpio\" -O \"./${BASE_TARGET}.cpio\"" >>"$LOG_DBUG"
 # UPDATED 2025/11/07 - updated to output to the log correctly
-#			wget -cq "${REPO_SOURCE}/${BASE}.cpio" >>"$LOG_ERRS" 2>&1	# download the corresponding info file
-#			( [ ! -e "${BASE}.cpio" ] || [ ! -s "${BASE}.cpio" ] ) && {
-			[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE}.cpio" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {		# download the corresponding cpio file
-				showMsg 'warning' "The package cpio file download failed (${BASE}.cpio)." 'log'
+#			wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.cpio" >>"$LOG_ERRS" 2>&1	# download the corresponding info file
+#			( [ ! -e "${BASE_SOURCE}.cpio" ] || [ ! -s "${BASE_SOURCE}.cpio" ] ) && {
+			[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.cpio" -O "./${BASE_TARGET}.cpio" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {		# download the corresponding cpio file
+				showMsg 'warning' "The package cpio file download failed (${BASE_SOURCE}.cpio)." 'log'
 				#return 1							  NOTE: since every package may not have one of these, don't error out here...
 			}
-			[ -e "./${BASE}.cpio" ] && showMsg 'file' " [cpio]" 'both' 0 0
+			[ -e "./${BASE_SOURCE}.cpio" ] && showMsg 'file' " [cpio]" 'both' 0 0
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'info' ]; then
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_INFO}\"" >>"$LOG_DBUG"
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE_SOURCE}.${EXT_INFO}\" -O \"./${BASE_TARGET}.${EXT_INFO}\"" >>"$LOG_DBUG"
 # UPDATED 2025/11/07 - updated to output to the log correctly
-#			wget -cq "${REPO_SOURCE}/${BASE}.${EXT_INFO}" >>"$LOG_ERRS" 2>&1	# download the corresponding info file
-#			( [ ! -e "${BASE}.${EXT_INFO}" ] || [ ! -s "${BASE}.${EXT_INFO}" ] ) && {
-			[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE}.${EXT_INFO}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the corresponding info file
-				showMsg 'warning' "The package info file download failed (${BASE}.${EXT_INFO})." 'log'
+#			wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_INFO}" >>"$LOG_ERRS" 2>&1	# download the corresponding info file
+#			( [ ! -e "${BASE_SOURCE}.${EXT_INFO}" ] || [ ! -s "${BASE_SOURCE}.${EXT_INFO}" ] ) && {
+			[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_INFO}" -O "./${BASE_TARGET}.${EXT_INFO}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the corresponding info file
+				showMsg 'warning' "The package info file download failed (${BASE_SOURCE}.${EXT_INFO})." 'log'
 				#return 1							  NOTE: since every package may not have one of these, don't error out here...
 			}
-			[ -e "./${BASE}.${EXT_INFO}" ] && showMsg 'file' " [info]" 'both' 0 0
+			[ -e "./${BASE_SOURCE}.${EXT_INFO}" ] && showMsg 'file' " [info]" 'both' 0 0
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'list' ]; then
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_LIST}\"" >>"$LOG_DBUG"
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE_SOURCE}.${EXT_LIST}\" -O \"./${BASE_TARGET}.${EXT_LIST}\"" >>"$LOG_DBUG"
 # UPDATED 2025/11/07 - updated to output to the log correctly
-#			wget -cq "${REPO_SOURCE}/${BASE}.${EXT_LIST}" >>"$LOG_ERRS" 2>&1	# download the corresponding list file
-#			( [ ! -e "${BASE}.${EXT_LIST}" ] || [ ! -s "${BASE}.${EXT_LIST}" ] ) && {
-			[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE}.${EXT_LIST}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the corresponding manifest file
-				showMsg 'warning' "The package manifest file download failed (${BASE}.${EXT_LIST})." 'log'
+#			wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_LIST}" >>"$LOG_ERRS" 2>&1	# download the corresponding list file
+#			( [ ! -e "${BASE_SOURCE}.${EXT_LIST}" ] || [ ! -s "${BASE_SOURCE}.${EXT_LIST}" ] ) && {
+			[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_LIST}" -O "./${BASE_TARGET}.${EXT_LIST}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the corresponding manifest file
+				showMsg 'warning' "The package manifest file download failed (${BASE_SOURCE}.${EXT_LIST})." 'log'
 				#return 1							  NOTE: since every package may not have one of these, don't error out here...
 			}
-			[ -e "./${BASE}.${EXT_LIST}" ] && showMsg 'file' " [list]" 'both' 0 0
+			[ -e "./${BASE_SOURCE}.${EXT_LIST}" ] && showMsg 'file' " [list]" 'both' 0 0
 		fi
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'make' ]; then
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE}.${EXT_MAKE}\"" >>"$LOG_DBUG"
-			[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE}.${EXT_MAKE}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the corresponding manifest file
-				showMsg 'warning' "The package make file download failed (${BASE}.${EXT_MAKE})." 'log'
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling: wget -cq \"${REPO_SOURCE}/${BASE_SOURCE}.${EXT_MAKE}\" -O \"./${BASE_TARGET}.${EXT_MAKE}\"" >>"$LOG_DBUG"
+			[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_MAKE}" -O "./${BASE_TARGET}.${EXT_MAKE}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && {	# download the corresponding manifest file
+				showMsg 'warning' "The package make file download failed (${BASE_SOURCE}.${EXT_MAKE})." 'log'
 				#return 1							  NOTE: since every package may not have one of these, don't error out here...
 			}
-			[ -e "./${BASE}.${EXT_MAKE}" ] && showMsg 'file' " [make]" 'both' 0 0
+			[ -e "./${BASE_SOURCE}.${EXT_MAKE}" ] && showMsg 'file' " [make]" 'both' 0 0
 		fi
 	fi
 
@@ -2405,11 +2451,14 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	     - or a relative path: ./pax"
 	echo "	     - or have a trailing slash: pax/"
 	echo
-	echo "	The presence of a REPO_PREFIX/${COPY_FLAG} file will indicate that"
-	echo "	     all packages will be loaded into RAM."
-	echo "	The presence of a REPO_PREFIX/copy_sys.flag file will indicate that"
-	echo "	     all the packages in REPO_SYSTEM will be loaded into RAM.  This"
-	echo "	     only takes place if REPO_SYSTEM and REPO_OPTION are different."
+	echo "	The presence of a REPO_PREFIX/${FLAG_COPY} file will indicate that"
+	echo "	     all packages will be copied instead of symlinked."
+	echo "	The presence of a REPO_PREFIX/${FLAG_FIRM} file will indicate that"
+# UPDATED 2025/12/05
+#	echo "	     all the packages in REPO_SYSTEM will be loaded into RAM.  This"
+#	echo "	     only takes place if REPO_SYSTEM and REPO_OPTION are different."
+	echo "	     all the packages in REPO_SYSTEM or LIST_BOOT will be copied"
+	echo "	     instead of symlinked."
 	echo
 	echo '  EXAMPLES:'
 	echo '	Performing action with all packages [to current directory]:'
@@ -2844,13 +2893,18 @@ fi
 			R) RESTORE=TRUE ;;
 # UPDATED 2025/11/03
 #			S) if ( echo $OPTARG | grep -q ^'http' ) || ( echo $OPTARG | grep -q ^'ftp' ) || ( echo $OPTARG | grep -q ^'/' ) || ( echo $OPTARG | grep -q ^'./' ); then
-			S) ( echo "${OPTARG}" | grep -qE ^'(http|ftp|/|./)' ) || {
+# UPDATED 2025/12/05
+#			S) ( echo "${OPTARG}" | grep -qE ^'(http|ftp|/|./)' ) || {
+			S) ( echo "${OPTARG}" | grep -qE '(^(http|ftp|/|./)|(/)$)' ) || {
 # UPDATED 2025/10/26
 #				[ "$SILENT" ] || echo "ERROR: you must supply a directory or http/ftp URI to the -S option." | tee -a "$LOG_ERRS"
 				showMsg 'failure' "You must provide a directory or http/ftp URI to the -S option." 'screen'
 				exit 1
 #			   fi
 			   }
+			   ( echo "$OPTARG" | grep -q '/'$ ) && OPTARG="${OPTARG%/*}"	#   if the user included a trailing '/' on the passed directory, then remove it
+			   ( echo "$OPTARG" | grep -q ^'./' ) && OPTARG="$(pwd)${OPTARG#*.}"  # if a relative directory was passed, adjust the value to be the whole path
+			   ( echo "$OPTARG" | grep -q ^'/' ) || OPTARG="$(pwd)/${OPTARG}" 
 			   REPO_SOURCE="$OPTARG" ;;
 # UPDATED 2025/10/26
 #			t) echo "Dependency trees for package(s)..."
@@ -2900,7 +2954,8 @@ fi
 				showMsg 'failure' "You must provide a proper value to the -t action." 'screen'
 				exit 1
 			   }
-			   [ ! "$REPO_SOURCE" ] && REPO_SOURCE="$REPO_OPTION"				# NOTE: this MUST come here so that the "no packages were passed" is triggered below; this also preserves any passed -S value
+# REMOVED 2025/12/05 - this was causing -S and DIRECTORY conflicts
+#			   [ ! "$REPO_SOURCE" ] && REPO_SOURCE="$REPO_OPTION"				# NOTE: this MUST come here so that the "no packages were passed" is triggered below; this also preserves any passed -S value
 			   TREE="$OPTARG" ;;
 # UPDATED 2025/11/03
 #			T) if [ "$OPTARG" != 'bin' ] && [ "$OPTARG" != 'dev' ] && [ "$OPTARG" != 'doc' ] && [ "$OPTARG" != 'drv' ] && [ "$OPTARG" != 'gir' ] && [ "$OPTARG" != 'lib' ] && [ "$OPTARG" != 'loc' ]; then
@@ -3039,7 +3094,7 @@ fi
 	if [ "$TEMP" = "$0" ] && [ ! "$OPEN" ] && [ ! "$LIST" ] && [ ! "$TREE" ]; then								# if no PACKAGE(S), FILELIST, or DIRECTORY was passed, then...
 		showMsg 'failure' "The script must have a PACKAGE(S), FILELIST, and/or DIRECTORY value." 'screen'
 		exit 1
-	elif [ "$TEMP" != "$0" ] && ( echo "$TEMP" | grep -q '/' ); then			# if a DIRECTORY was passed, then...	  NOTE: the first check is specifically for OPEN and LIST (since they don't require a PACKAGE(S) or DIRECTORY value), and should NOT effect the other actions
+	elif [ "$TEMP" != "$0" ] && ( echo "$TEMP" | grep -q '/' ) && [ ! -f "$1" ]; then			# if a DIRECTORY was passed, then...	  NOTE: the first check is specifically for OPEN and LIST (since they don't require a PACKAGE(S) or DIRECTORY value), and should NOT effect the other actions
 #echo "@ |$@|"
 		if [ ! -d "$TEMP" ]; then							#   if it does NOT exist, then...
 			showMsg 'failure' "The passed directory does not exist (${TEMP})." 'screen'
@@ -3065,7 +3120,7 @@ fi
 # REMOVED 2025/11/26 - this should be processed if NO directory was passed, and take all the packages from REPO_SOURCE
 #		else										# otherwise a passed value for DIRECTORY was given (along with PACKAGE(S)), so...
 #echo btm
-echo 'directory was passed'
+#echo 'directory was passed'
 			DIRECTORY="$TEMP"							#   store the DIRECTORY value
 
 			TEMP=''
@@ -3078,6 +3133,8 @@ echo 'directory was passed'
 			set -- $TEMP								#   now reset the $@ array (e.g. $1, $2, $3, etc) with the adjusted parameters list
 
 			( echo "$DIRECTORY" | grep -q '/'$ ) && DIRECTORY="${DIRECTORY%/*}"	#   if the user included a trailing '/' on the passed directory, then remove it
+			( echo "$DIRECTORY" | grep -q ^'./' ) && DIRECTORY="$(pwd)${DIRECTORY#*.}"  # if a relative directory was passed, adjust the value to be the whole path
+			( echo "$DIRECTORY" | grep -q ^'/' ) || DIRECTORY="$(pwd)/${DIRECTORY}" 
 
 # UPDATED 2025/11/03 - we are now using DIRECTORY
 #			REPO_TARGET="$TEMP"							#   update the target value since that is where the user wants the packages stored
@@ -3096,15 +3153,20 @@ echo 'directory was passed'
 # WARNING: this MUST be two different 'if' statements so both can execute!!!
 #if [ ! "$OPEN" ]; then
 	if [ -f "$1" ] && ( ! grep -q '\0' "$1" ); then						# if the parameter is a file -AND- not a binary file, then it's a FILELIST, so...	NOTE: can't check for mime type since busybox doesn't have a 'file' applet	https://stackoverflow.com/questions/567757/how-do-i-distinguish-between-binary-and-text-files
-echo 'filelist was passed'
+#echo 'filelist was passed'
 		TEMP="$(cat "$1" | tr '\n' ' ')"						#   store all the packages to load within the FILELIST
 		[ ! "$TEMP" ] && exit 0								#   if there are NOT any packages in the directory, there's nothing to process so exit
 		set -- $TEMP									#   now reset the $@ array (e.g. $1, $2, $3, etc) with the files in the FILELIST
 # UPDATED 2025/12/03 - adjusted so LIST doesn't trigger the below statement
 #	elif [ ! "$1" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ); then		# otherwise only a DIRECTORY was passed, so we need to process all packages in REPO_SOURCE	NOTE: we can't do this for -d since the REPO_SOURCE will be remote
-	elif [ ! "$1" ] && [ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && [ ! "$OPEN" ]; then		# otherwise only a DIRECTORY was passed, so we need to process all packages in REPO_SOURCE	NOTE: we can't [ -d ] since the REPO_SOURCE will be remote
-echo "no packages were passed |$REPO_SOURCE|"
-		TEMP="$(cd "${REPO_SOURCE}" && ls -1 *.${EXT_SOFT} 2>/dev/null | tr '\n' ' ')"	#   store all the .soft packages to load within the directory
+# UPDATED 2025/12/05
+#	elif [ ! "$1" ] && [ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && [ ! "$OPEN" ]; then		# otherwise only a DIRECTORY was passed, so we need to process all packages in REPO_SOURCE	NOTE: we can't [ -d ] since the REPO_SOURCE will be remote
+#		TEMP="$(cd "${REPO_SOURCE}" && ls -1 *.${EXT_SOFT} 2>/dev/null | tr '\n' ' ')"	#   store all the .soft packages to load within the directory
+	elif [ ! "$1" ] && [ ! "$OPEN" ] && ( [ "$TREE" ] || ( [ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) ) ); then		# otherwise only a DIRECTORY was passed, so we need to process all packages in REPO_SOURCE	NOTE: we can't [ -d ] since the REPO_SOURCE will be remote
+#echo "no packages were passed |$REPO_SOURCE|"
+		[ "$TREE" ] && [ ! "$REPO_SOURCE" ] && cd "$REPO_OPTION"				# NOTE: this MUST be handled in this manner so that the -S and DIRECTORY checking doesn't get triggered
+		[ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && cd "${REPO_SOURCE}"
+		TEMP="$(ls -1 *.${EXT_SOFT} 2>/dev/null | tr '\n' ' ')"	#   store all the .soft packages to load within the directory
 		[ ! "$TEMP" ] && exit 0						#   if there are NOT any packages in the directory, there's nothing to process so exit
 		set -- $TEMP							#   otherwise reset the $1, $2, $3, etc values (and $@ that is used in the main 'for' loop below) to be the package names in the directory (as if they were passed via the command line)
 	fi
@@ -3162,7 +3224,7 @@ TEMP=0
 #[ "$PREFIX" ] && [ ! "$INSTALL" ] && [ ! "$UNLOAD" ] && { showMsg 'failure' "This action can't be used with the -D option." 'screen'; exit 1; }
 [ "$DEPS" != 'default' ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] ) && { showMsg 'failure' "This action can't be used with the -D option." 'screen'; exit 1; }
 [ "$DEPS" = 'none' ] && [ "$TREE" ] && { showMsg 'failure' "This action can't be used with the '-D none' option." 'screen'; exit 1; }
-[ "$EXTRA" ] && [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$UNLOAD" ] && { showMsg 'failure' "This action can't be used with the -E option." 'screen'; exit 1; }
+[ "$EXTRA" ] && [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$INSTALL" ] && [ ! "$UNLOAD" ] && { showMsg 'failure' "This action can't be used with the -E option." 'screen'; exit 1; }
 [ "$FORCE" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -F option." 'screen'; exit 1; }
 [ "$IGNORE" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -I option." 'screen'; exit 1; }
 # UPDATED 2025/12/01
@@ -3181,10 +3243,10 @@ TEMP=0
 [ "$QUIET" = 'errors' ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the '-Q errors' option." 'screen'; exit 1; }
 # UPDATED 2025/12/01
 #[ "$NORESTORE" ] && [ ! "$UNLOAD" ] && { showMsg 'failure' "This action can't be used with the -R option." 'screen'; exit 1; }
-[ "$RESTORE" ] && [ ! "$UNLOAD" ] && { showMsg 'failure' "This action can't be used with the -R option." 'screen'; exit 1; }
+[ "$RESTORE" ] && [ ! "$INSTALL" ] && [ ! "$LIST" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { showMsg 'failure' "This action can't be used with the -R option." 'screen'; exit 1; }
 [ "$REPO_SOURCE" ] && [ "$LIST" ] && { showMsg 'failure' "This action can't be used with the -S option." 'screen'; exit 1; }
 [ "$TYPE" != 'bin' ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] ) && { showMsg 'failure' "This action can't be used with the -T option." 'screen'; exit 1; }
-[ "$VERSION" ] && [ ! "$DOWNLOAD" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -V option." 'screen'; exit 1; }
+[ "$VERSION" ] && [ ! "$DOWNLOAD" ] && [ ! "$INSTALL" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { showMsg 'failure' "This action can't be used with the -V option." 'screen'; exit 1; }
 # MERGED 2025/11/26 - this is now -D all
 #[ "$ALL" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -W option." 'screen'; exit 1; }
 [ "$PROXY" ] && [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -X option." 'screen'; exit 1; }
@@ -3346,8 +3408,9 @@ elif [ "$EXTRACT" ]; then									# if we are extracting package(s) contents, th
 	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the current directory (this allows for directories to be processed as package list)
 	[ "$DIRECTORY" = "$REPO_OPTION" ] && DIRECTORY="$(pwd)"					#   if no directory was passed, then set the current directory as the target location to extract
 #	( echo "$DIRECTORY" | grep -qE ^'(./|[^/])' ) && 
-	( echo "$DIRECTORY" | grep -q ^'./' ) && DIRECTORY="$(pwd)${DIRECTORY#*.}"
-	( echo "$DIRECTORY" | grep -q ^'/' ) || DIRECTORY="$(pwd)/${DIRECTORY}" 
+# MOVED 2025/12/05 - this was moved above so it takes place with the initial directory assignment
+#	( echo "$DIRECTORY" | grep -q ^'./' ) && DIRECTORY="$(pwd)${DIRECTORY#*.}"
+#	( echo "$DIRECTORY" | grep -q ^'/' ) || DIRECTORY="$(pwd)/${DIRECTORY}" 
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'				#   now cd into the DIRECTORY where the packages are
 elif [ "$FIND" ]; then										# if we are finding file(s) in packages, then...
 	[ "$DIRECTORY" != "$REPO_OPTION" ] && REPO_SOURCE="$DIRECTORY"				#   if a directory was passed, then set the REPO_SOURCE as that value (so it can be used with '-S' interchangably)
@@ -3435,6 +3498,7 @@ elif [ "$VALIDATE" ]; then									# if we are validating package(s) information
 # REVERTED 2025/12/02
 	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only validate local packages
 	eval REPO_SOURCE="${REPO_SOURCE}"							#   eval REPO_SOURCE incase it has any variables in it
+	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into REPO_SOURCE where the packages are located
 fi
 
 
@@ -3484,7 +3548,8 @@ fi
 ##	OPTIND=$TEMP										#   restore the original value of OPTIND
 #fi
 [ "$UNLOAD" ] && showMsg 'action' "Building list for all packages to unload..." 'both' 1 4
-[ "$VALIDATE" = 'deps' ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
+[ "$VALIDATE" = 'data' ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
+[ "$VALIDATE" = 'deps' ] && showMsg 'action' "Checking dependencies for the packages..." 'both' 1 4
 
 
 # PROCESS PASSED PACKAGES
@@ -3754,6 +3819,8 @@ continue
 # REMOVED 2025/11/14 - changed the way this is processed
 #		touch ${DIR_LIST}/${FILE%.*}.${EXT_MARK}
 #		EXEID="$(grep -lH "$PACKAGE" "${DIR_TEMP}/installed."*)"			# store the cache file containing the software to be uninstalled
+	#elif [ "$VALIDATE" ]; then									# if we are validating package(s) information, then...
+		# this executes the processDependencies() call below
 	fi
 
 	# NOTE: everything below this point in this segment is simply to build the dependency list, the actual work is done in the following 'while' loop
@@ -3847,6 +3914,7 @@ done
 
 	# PROCESS THE ACTION (per passed package)						NOTE: this has to be done this way so that (un)installations can create and process proper file lists
 
+	[ "$VALIDATE" = 'deps' ] && exitGracefully 0 'both' 6 'success'				# there's no more work to perform if this was the action to process
 	[ $INDEX -eq 0 ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ "$TREE" != 'reliant' ] && {
 		[ "$TREE" != 'relies' ] && showMsg 'action' "There are no package(s) to be processed." 'both' 1 4
 		exitGracefully 0 'both' 6 'success'
@@ -3890,7 +3958,7 @@ done
 # UPDATED 2025/11/25 -
 		# if '-M copy' was passed to this script -OR- the copy-everything-to-RAM file exists -OR- { the copy the system directory (REPO_SYSTEM) contents to RAM file exists -and- we're using that directory (e.g. booting) -and- REPO_SYSTEM and REPO_OPTION are NOT the same (to prevent TC from erroneously loading everything to RAM since those two would be the same) }, then...
 #		if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/copy_all.flag" ] || ( [ -e "${REPO_PREFIX}/copy_sys.flag" ] && [ "$REPO_SOURCE" = "$REPO_SYSTEM" ] && [ "$REPO_SYSTEM" != "$REPO_OPTION" ] ); then
-		if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/${COPY_FLAG}" ] || ( [ -e "${REPO_PREFIX}/copy_sys.flag" ] && [ "$BOOTING" ] ) || [ "$(getBootcode mode)" != "conservative" ]; then
+		if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/${FLAG_COPY}" ] || ( [ -e "${REPO_PREFIX}/${FLAG_FIRM}" ] && [ "$BOOTING" ] ) || [ "$(getBootcode mode)" != "conservative" ]; then
 
 #echo top
 			[ $DEBUG -gt 0 ] && echo -e "\tInstall by copying..." >>"$LOG_DBUG"
@@ -4078,6 +4146,8 @@ done
 #			continue
 			eval TEMP="${DIR_LOOP}/${LOOP_SCHEMA}"
 			( /bin/mount | grep -q "${TEMP} type squashfs" ) && MODE='link' || MODE='copy'	# store the package installation mode: symlinked or copied
+# LEFT OFF - validating data checks the existence, ownership, and permissions of the package files (and their dependencies)
+#		add in a '-v fix' option that calls installPackage to resolve any found issues
 			installPackage || exitGracefully 4 'screen' 5 'step'
 		fi
 # UPDATED 2025/10/28

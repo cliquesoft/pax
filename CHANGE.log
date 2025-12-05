@@ -255,3 +255,15 @@
 - Corrected a bug with KERNEL substitution
 - Updated the --help output
 
+2025/12/05
+- Expanded the -S to take relative directories
+- Updated -S and DIRECTORY to convert their values to full paths
+- Corrected bugs until -t fully worked
+- Updated the -V to append the version number to the package name
+- Added VERS_SCHEMA and VERT_SCHEMA to allow for versatile package naming
+- Updated -d to use VERS_SCHEMA and VERT_SCHEMA
+- Renamed COPY_FLAG to FLAG_COPY for consistency
+- Created test scripts for -v
+- Started updating the -v code
+- Updated the --help output
+
