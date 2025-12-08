@@ -264,6 +264,15 @@
 - Updated -d to use VERS_SCHEMA and VERT_SCHEMA
 - Renamed COPY_FLAG to FLAG_COPY for consistency
 - Created test scripts for -v
-- Started updating the -v code
+- Started updating the -v action code
+- Implemented '-v deps'
+- Updated the --help output
+
+2025/12/08
+- Started implementing '-v data'
+- Added '-v deep'
+- Corrected a bug with -M and -i
+- Added OWN_GROUP for validation checking
+- Added PRM_ROOT for validation checking
 - Updated the --help output
 

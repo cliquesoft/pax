@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/12/05 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/12/08 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -95,6 +95,8 @@ EXT_SOFT='soft'											# [mksquashfs file] packaged compiled software
 
 LOG_DBUG="${DIR_LOGS}/pax.debug"								# the log file for debug output
 LOG_ERRS="${DIR_LOGS}/pax.log"									# the log file for error output
+
+OWN_GROUP='staff'										# the default 'everyone' group that all non-admin users belong (used for default group ownership on package files/dirs)
 						# LEFT OFF - document the below as being able to connect to a "pax server" for remote administration (e.g. FIFO_SERVER='/sshfs/directory/device_nic_mac')
 FIFO_SERVER="input"										# defines the default name that the -o action should attach for (remote) commands
 ARCH_VALUES='i32|i64|a32|a64'									# the valid values for the -C option
@@ -316,7 +318,7 @@ showMsg() {
 #echo 02
 # UPDATED 2025/11/20
 #	[ "$QUIET" = 'default' ] && [ "$TAG" != 'failure' ] && [ "$TAG" != 'success' ] && [ "$TAG" != 'action' ] && [ "$TAG" != 'step' ] && [ "$TAG" != 'package' ] && [ "$TAG" != 'file' ] && [ "$TAG" != 'note' ] && [ "$TAG" != 'prompt' ] && return 1			# if we need to show most output, but this is excess, then exit (writing to the log if desired)
-	[ "$QUIET" = 'default' ] && ( [ "$TAG" = 'dependency' ] || [ "$TAG" = 'duplicate' ] ) && return 1			# if we need to show most output (success,failure,action,step,package,file,note,prompt), otherwise exit (writing to the log if desired)
+	[ "$QUIET" = 'default' ] && ( [ "$TAG" = 'dependency' ] || [ "$TAG" = 'duplicate' ] ) && return 1			# if we need to show most output (success,failure,action,step,package,file,note,prompt,issue), otherwise exit (writing to the log if desired)
 #echo 03
 	[ "$QUIET" = 'verbose' ] && [ "$TAG" = 'duplicate' ] && return 1			# if we need to show everything but duplicates (warnings,dependency), then exit (writing to the log if desired)
 #echo 04
@@ -1556,7 +1558,9 @@ installPackage() {
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n " [restore] [creating]"
 #		uninstallPackage || return 1
 #	if
-	if [ -e "${DIR_LIST}/${FILENAME}" ]; then						# if we are updating the installed package, then...
+# UPDATED 2025/12/08
+#	if [ -e "${DIR_LIST}/${FILENAME}" ]; then						# if we are updating the installed package, then...
+	if [ ! "$VALIDATE" ] && [ -e "${DIR_LIST}/${FILENAME}" ]; then						# if we are updating the installed package, then...
 		showMsg 'step' " [unloading]" 'both' 0 0
 		unloadPackage || return 1							#   unload the package first no matter what
 # UPDATED 2025/11/24 - this is now an opt-out
@@ -1620,7 +1624,9 @@ installPackage() {
 #return 0
 
 	TEMP=''											# set a default value
-	( [ "$FORCE" ] || [ "$VALIDATE" ] ) && {						# if we've been instructed to force (overwrite) -OR- are validating (which always overwrites), then...
+# UPDATED 2025/12/08 - added another -v value
+#	( [ "$FORCE" ] || [ "$VALIDATE" ] ) && {						# if we've been instructed to force (overwrite) -OR- are validating (which always overwrites), then...
+	( [ "$FORCE" ] || [ "$VALIDATE" = 'fix' ] ) && {						# if we've been instructed to force (overwrite) -OR- are validating (which always overwrites), then...
 		showMsg 'step' " [overwrite]" 'both' 0 0					#   indicate this to the user
 		TEMP='f'									#   store the force flag for usage below
 		unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
@@ -1655,23 +1661,61 @@ installPackage() {
 			( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "${DIRECTORY}${TARGET}" ] && continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the file does exist then go to the next file
 
 			# NOE: the PREFIX will already be part of DIRECTORY (assigned at the beginning of the script processing)
-			if [ "$MODE" = 'copy' ]; then
+# UPDATED 2025/12/08
+#			if [ "$MODE" = 'copy' ]; then
+			if ( [ "$INSTALL" ] || [ "$VALIDATE" = 'fix' ] ) && [ "$MODE" = 'copy' ]; then
 				# NOTE: if the package installation is done with root, the USER:GROUP ownership is preserved (e.g. when installing to /), otherwise it will default to the user and their default group (e.g. when installing to /Users/Public or $HOME)
 				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -dp${TEMP} \"${SOURCE}\" \"${DIRECTORY}${TARGET}\"" >>"$LOG_DBUG"
 				[ ! "$DRYRUN" ] && ( cp -dp${TEMP} "${SOURCE}" "${DIRECTORY}${TARGET}" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
 					showMsg 'failure' "The package file copy failed (${SOURCE})." 'log'
 					return 1
 				}
-			else
+# UPDATED 2025/12/08
+#			else
+			elif ( [ "$INSTALL" ] || [ "$VALIDATE" = 'fix' ] ) && [ "$MODE" = 'link' ]; then
 				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    ln -s${TEMP} \"${SOURCE}\" \"${DIRECTORY}${TARGET}\"" >>"$LOG_DBUG"
 				[ ! "$DRYRUN" ] && ( ln -s${TEMP} "${SOURCE}" "${DIRECTORY}${TARGET}" 2>&1 | sed 's/^l/ \[failure\]\nl/' | tee -a "$LOG_ERRS" | grep -q ^'ln: ' ) && {	# symlink the file from the source directory
 					showMsg 'failure' "The package file symlink failed (${SOURCE})." 'log'
 					return 1
 				}
 #echo done >>$LOG_DBUG
+			elif [ ! "$INSTALL" ] && ( [ "$VALIDATE" = 'data' ] || [ "$VALIDATE" = 'deep' ] ); then
+				showMsg 'file' "$TARGET" 'both' 1 4
+
+				if [ ! -e "$TARGET" ]; then					# if the file doesn't exist, then...
+					showMsg 'issue' " [!missing!]" 'both' 0 0
+				else								# otherwise it does, so perform other checks...
+					if [ "$MODE" = 'copy' ]; then
+						[ "$VALIDATE" = 'data' ] && [ "$(stat -c %s "$SOURCE" 2>/dev/null)" != "$(stat -c %s "$TARGET" 2>/dev/null)" ] && showMsg 'issue' " [!size!]" 'both' 0 0		# if the size is incorrect, then something is wrong (malware?)...
+						[ "$VALIDATE" = 'deep' ] && [ "$(md5sum "$SOURCE" | sed 's/  .*//')" != "$(md5sum "$TARGET" | sed 's/  .*//')" ] && showMsg 'issue' " [!hash!]" 'both' 0 0		# if the file hashes do NOT match, then something is wront (malware?)...
+						[ "$DIRECTORY" = '/' ] && [ "$(stat -c %a "$TARGET" 2>/dev/null)" != "$PRM_ROOT" ] && showMsg 'issue' " [!permissions!]" 'both' 0 0
+# left off - finish validation code modifications after this block...
+#		finish implementing $PRM_* var checks here
+					elif [ "$MODE" = 'link' ]; then
+						[ "$(readlink "$TARGET")" != "$SOURCE" ] && showMsg 'issue' " [!source!]" 'both' 0 0				# if the symlink isn't pointing to the source file, then...
+						[ "$(stat -c %a "$TARGET" 2>/dev/null)" != '777' ] && showMsg 'issue' " [!permissions!]" 'both' 0 0		# if the symlink permissions aren't correct, then...
+					fi
+
+					# if the package was installed in the root of the filesystem, then make sure the ownership is root
+					if [ "$DIRECTORY" = '/' ] && [ "$(stat -c %G "$TARGET" 2>/dev/null)" != 'root' ]; then
+						showMsg 'issue' " [!ownership!]" 'both' 0 0
+# UPDATED 2025/12/08
+#					# if the package was installed anywhere else (/Users/Public or HOME), then it should match whats in the squashfs package (which should be 'software' so anyone with that group should be able to manipulate the package)
+#					elif [ "$DIRECTORY" != '/' ] && [ "$(stat -c %G $SOURCE 2>/dev/null)" != "$(stat -c %G $TARGET 2>/dev/null)" ]; then
+					# if the package was installed anywhere else (/Users/Public or HOME), then it should match the default group of the user account that installed the software (e.g. 'everyone')
+					elif [ "$DIRECTORY" != '/' ] && [ "$(stat -c %G $SOURCE 2>/dev/null)" != "$OWN_GROUP" ]; then
+						 showMsg 'issue' " [!ownership!]" 'both' 0 0
+					fi
+				fi
+
+				showMsg 'file' "$TARGET" 'both' 1 5
 			fi
 			continue
 		fi
+
+		# if we're validating, we can skip checks on directories
+		[ "$VALIDATE" ] && continue
+
 #echo "[D] |${DIRECTORY}${TARGET}|"
 		# if we've made it here, then we're dealing with a directory, so...
 		( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "${DIRECTORY}${TARGET}" ] && continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory does exist then cycle the 'for' loop
@@ -1722,7 +1766,8 @@ installPackage() {
 	[ ! "$VALIDATE" ] && [ -x "${DIR_INST}/${BASENAME}" ] && ( ! grep -q "${DIR_INST}/${BASENAME}" ${DIR_TEMP}/installs.${EXEID} 2>/dev/null ) && echo "${BASENAME}" >>${DIR_TEMP}/installs.${EXEID} 2>>"$LOG_ERRS"
 	[ ! "$VALIDATE" ] && [ -e "${DIR_INIT}/${BASENAME}" ] && ( ! grep -q "${DIR_INIT}/${BASENAME}" ${DIR_TEMP}/services.${EXEID} 2>/dev/null ) && echo "${BASENAME}" >>${DIR_TEMP}/services.${EXEID} 2>>"$LOG_ERRS"
 
-	# now add to the 'catalog' of installed packages	
+	# now add to the 'catalog' of installed packages
+# left off - check this if we are validating	
 	[ ! "$DRYRUN" ] && ln -sf "${REPO_SOURCE}/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "${REPO_SOURCE}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "${REPO_SOURCE}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
@@ -2313,7 +2358,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #		db queries will need to utilize another variable REPO_QUERY specifying the URI of the script to submit the search to
 	echo '	-t   show the dependency trees of package(s): relies, reliant'
 	echo '	-u   uninstall package(s): unload, delete, purge'
-	echo "	-v   validate package(s) info: data, deps"					# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
+	echo "	-v   validate package(s) info: data, deep, deps, fix"					# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
 #	echo '	-w   '
 #	echo '	-x   '
 #	echo '	-y   '
@@ -2418,6 +2463,11 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	       another installation could occur"
 	echo "	     - Purging does the same as deleting, but also deletes the config"
 	echo "	       files as well"
+	echo "	The '-v' ACTION can perform various package integrity checks:"
+	echo "	     - data: ownership, permissions, {symlink source|file size}"
+	echo "	     - deep: same as 'data' but md5sum hashes instead of file size"
+	echo "	     - deps: verifies the package dependencies are all installed"
+	echo "	     - fix : resolves any issues detected"
 	echo "	The '-I' OPTION value must be comma separated."
 # REMOVED 2025/11/24 - this is now handled with error checking
 #	echo "	The '-L', '-M', and '-V' OPTIONS can only be used with the '-i' ACTION."
@@ -3428,7 +3478,7 @@ elif [ "$INSTALL" ]; then									# if we are installing package(s), then...
 #		[ ! "$PREFIX" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && {			#     if the -D option was NOT passed, and the DIRECTORY was NOT passed, then set to the default installation location
 		[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"		#     if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since this is were we need to store packages by default
 		[ "$DIRECTORY" = "$REPO_OPTION" ] && {						#     if the DIRECTORY was NOT passed, then set to the default installation location
-			( echo "$DIR_LIVE" | grep -qE '(/|\.)'$ ) || DIR_LIVE="${DIR_LIVE}/"	#        make sure the directory ends with a '/' or '.'
+			( echo "$DIR_LIVE" | grep -qE '(/|\.)'$ ) || DIR_LIVE="${DIR_LIVE}/"	#        make sure the directory ends with a '/' or '.' (because the first '/' is stripped from the package files' path to allow for ~/.whatever)
 			DIRECTORY="$DIR_LIVE"
 		}
 	fi
@@ -3953,23 +4003,29 @@ done
 	#[ "$FIND" ]
 	[ "$INSTALL" ] && {
 		showMsg 'action' "Installing the specified package(s)..." 'both' 1 4
-
+#echo "mode |$MODE|"
 		# NOTE: this MUST be here and not in the parameter processing section above, because the -M option may not get passed!
-# UPDATED 2025/11/25 -
+# UPDATED 2025/11/25
 		# if '-M copy' was passed to this script -OR- the copy-everything-to-RAM file exists -OR- { the copy the system directory (REPO_SYSTEM) contents to RAM file exists -and- we're using that directory (e.g. booting) -and- REPO_SYSTEM and REPO_OPTION are NOT the same (to prevent TC from erroneously loading everything to RAM since those two would be the same) }, then...
 #		if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/copy_all.flag" ] || ( [ -e "${REPO_PREFIX}/copy_sys.flag" ] && [ "$REPO_SOURCE" = "$REPO_SYSTEM" ] && [ "$REPO_SYSTEM" != "$REPO_OPTION" ] ); then
-		if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/${FLAG_COPY}" ] || ( [ -e "${REPO_PREFIX}/${FLAG_FIRM}" ] && [ "$BOOTING" ] ) || [ "$(getBootcode mode)" != "conservative" ]; then
-
+# UPDATED 2025/12/08
+#		if [ "$MODE" = 'copy' ] || [ -e "${REPO_PREFIX}/${FLAG_COPY}" ] || ( [ -e "${REPO_PREFIX}/${FLAG_FIRM}" ] && [ "$BOOTING" ] ) || [ "$(getBootcode mode)" != "conservative" ]; then
+		# if no mode was passed (this way the commandline overrides) -AND- ( the copy-everything-to-RAM file exists -OR- { the copy the system directory (REPO_SYSTEM) contents to RAM file exists -and- we're booting } -OR- we're not using 'conservative' mode ), then...
+		if [ ! "$MODE" ] && ( [ -e "${REPO_PREFIX}/${FLAG_COPY}" ] || ( [ -e "${REPO_PREFIX}/${FLAG_FIRM}" ] && [ "$BOOTING" ] ) || [ "$(getBootcode mode)" != "conservative" ] ); then
 #echo top
 			[ $DEBUG -gt 0 ] && echo -e "\tInstall by copying..." >>"$LOG_DBUG"
 #			showMsg 'step' " [copy]" 'both' 0 0
 			MODE='copy'
-		else
+# UPDATED 2025/12/08
+#		else
+		elif [ "$MODE" != 'copy' ]; then
 #echo btm
 			[ $DEBUG -gt 0 ] && echo -e '\tInstall using symlinks...' >>"$LOG_DBUG"
 #			showMsg 'step' " [link]" 'both' 0 0
 			MODE='link'
 		fi
+
+#echo "dbug4 |$MODE|"
 	}
 	#[ "$LIST" ]
 	#[ "$MAKE" ]
@@ -3977,7 +4033,11 @@ done
 	#[ "$PROXY" ]
 	#[ "$TREE" ]
 	#[ "$UNLOAD" ]
-	[ "$VALIDATE" ] && showMsg 'action' "Validating the package contents..." 'both' 1 4
+	[ "$VALIDATE" ] && {
+		showMsg 'action' "Validating the package contents..." 'both' 1 4
+
+		( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && MODE='link' || MODE='copy'
+	}
 
 
 
@@ -4148,6 +4208,7 @@ done
 			( /bin/mount | grep -q "${TEMP} type squashfs" ) && MODE='link' || MODE='copy'	# store the package installation mode: symlinked or copied
 # LEFT OFF - validating data checks the existence, ownership, and permissions of the package files (and their dependencies)
 #		add in a '-v fix' option that calls installPackage to resolve any found issues
+#		just got done updating the '-v deps'
 			installPackage || exitGracefully 4 'screen' 5 'step'
 		fi
 # UPDATED 2025/10/28
