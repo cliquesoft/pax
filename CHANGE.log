@@ -276,3 +276,10 @@
 - Added PRM_ROOT for validation checking
 - Updated the --help output
 
+2025/12/09
+- Updated '-v deep' to '-s hash'
+- Completed '-v data'
+- Implemented '-v hash'
+- Corrected a bug with -u
+- Removed PRM_ROOT
+
