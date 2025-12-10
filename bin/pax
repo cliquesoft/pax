@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/12/09 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/12/10 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -1063,7 +1063,7 @@ fi
 #		[ "$SOURCE" = 'remote' ] && showMsg 'step' "[ missing ] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 # UPDATED 2025/11/05 - replaced the APP* variables
 #		[ -e "${DIR_LIST}/${APPFILE}" ] && showMsg 'step' "[installed] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' "[installed] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' "[installed] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1 || showMsg 'issue' "[ unloaded] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 # REMOVED 2025/11/14
 #	elif [ "$UNLOAD" ]; then
 #		showMsg 'step' "[marked] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -1595,7 +1595,7 @@ installPackage() {
 	( ls -1p "${DIR_LOOP}/${BASENAME}/usr/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
 	( ls -1p "${DIR_LOOP}/${BASENAME}/usr/local/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE
 	# check if the package has a [/usr[/local]]'/lib/modules' directory to indicate we need to load modules later
-	[ -d "${DIR_LOOP}/${BASENAME}/lib/modules" ] || [ -d "${DIR_LOOP}/${BASENAME}/usr/lib/modules" ] || [ -d "${DIR_LOOP}/${BASENAME}/usr/local/lib/modules" ] && MODULES=TRUE	# NOTE: we CAN simply check for directories here since files would be packaged under them
+	( [ -d "${DIR_LOOP}/${BASENAME}/lib/modules" ] || [ -d "${DIR_LOOP}/${BASENAME}/usr/lib/modules" ] || [ -d "${DIR_LOOP}/${BASENAME}/usr/local/lib/modules" ] ) && MODULES=TRUE	# NOTE: we CAN simply check for directories here since files would be packaged under them
 # UPDATED 2018/07/14 - since TC packages do NOT adhere to this, we need a more robust solution
 #	[ "$APPTYPE" = 'lib' ] && LIBRARIES=TRUE										# if the package has dynamic libraries, then indicate we need to add those to the cache file later
 
@@ -1623,7 +1623,6 @@ installPackage() {
 #		MODE='link'
 #	fi
 	showMsg 'step' " [${MODE}]" 'both' 0 0
-	[ "$VALIDATE" ] && showMsg 'step' " [${VALIDATE}] ..." 'both' 1 0
 #echo "DBUG Install"
 #return 0
 
@@ -1631,11 +1630,16 @@ installPackage() {
 # UPDATED 2025/12/08 - added another -v value
 #	( [ "$FORCE" ] || [ "$VALIDATE" ] ) && {						# if we've been instructed to force (overwrite) -OR- are validating (which always overwrites), then...
 	( [ "$FORCE" ] || [ "$VALIDATE" = 'fix' ] ) && {						# if we've been instructed to force (overwrite) -OR- are validating (which always overwrites), then...
-		showMsg 'step' " [overwrite]" 'both' 0 0					#   indicate this to the user
+		[ ! "$VALIDATE" ] && showMsg 'step' " [overwrite]" 'both' 0 0					#   indicate this to the user
 		TEMP='f'									#   store the force flag for usage below
 		unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
 		unalias ln >/dev/null 2>&1
 	}
+
+# ALTERED 2025/12/10
+#	[ "$VALIDATE" ] && [ "$VALIDATE" = 'fix' ] && showMsg 'step' " [${VALIDATE}]" 'both' 0 0
+#	[ "$VALIDATE" ] && [ "$VALIDATE" != 'fix' ] && showMsg 'step' " [${VALIDATE}] ..." 'both' 1 0
+	[ "$VALIDATE" ] && showMsg 'step' " [${VALIDATE}] ..." 'both' 1 0
 
 	# if we only need to copy specified files out of the package, then lets obtain that list
 	# NOTES:
@@ -1658,14 +1662,46 @@ installPackage() {
 #echo before
 	for SOURCE in $([ ! -e "${DIR_TEMP}/filelist.${EXEID}" ] && find "${DIR_LOOP}/${BASENAME}" | tail -n +2; [ -e "${DIR_TEMP}/filelist.${EXEID}" ] && cat "${DIR_TEMP}/filelist.${EXEID}"); do
 #echo "iterating |$SOURCE|"
-		TARGET_ROOT="$(echo "$SOURCE" | sed "s|^${DIR_LOOP}/${BASENAME}||")"
-		TARGET_LIVE="${DIR_LIVE}${TARGET_ROOT}"
+		TARGET_ROOT="$(echo "$SOURCE" | sed "s|^${DIR_LOOP}/${BASENAME}||")"			# (re)set the value; remove the loopback mount point prefix to store only the target '/directory/filename' string
+		( echo "$DIR_LIVE" | grep -q '\.'$ ) && TARGET_LIVE="${DIR_LIVE}$(echo "${TARGET_ROOT}" | tail -c +2)" || TARGET_LIVE="${DIR_LIVE}${TARGET_ROOT}"
 		TARGET_HOME="${HOME}${TARGET_ROOT}"
-		TARGET="${DIRECTORY}${TARGET_ROOT}"			# (re)set the value; remove the loopback mount point prefix to store only the target '/directory/filename' string
+		TARGET="${DIRECTORY}${TARGET_ROOT}"							# set an initial value
+		[ "$DIRECTORY" = '/' ] && TARGET="${TARGET_ROOT}"					# adjust if we need to search ROOT (so TARGET != '//...')
+		( echo "$DIR_LIVE" | grep -q '\.'$ ) && ( echo "$DIRECTORY" | grep -q ^"${DIR_LIVE}" ) && TARGET="${DIR_LIVE}$(echo "${TARGET_ROOT}" | tail -c +2)"	# adjust if DIR_LIVE ends with a '.' -AND- that's the DIRECTORY value, to remove the preceeding '/' (for XSB)
+
+		if [ "$VALIDATE" ] && [ ! -d "$SOURCE" ]; then					# NOTE: we had to add the directory checking since it would prevent non-root directory structures from getting created (e.g. /usr/local)
+			showMsg 'file' "  $TARGET:" 'both' 0 3 1
+
+					# determine where the file is located (in case the package was installed one place [e.g. HOME] and a dependency in another [e.g. ROOT])
+					# NOTE: this search pattern comes in order of presidence: passed DIRECTORY, HOME, DIR_LIVE, ROOT
+					#	the 'misc' comes first since the package could also be in any of the following directories too, storing an incorrect TARGET path if they were triggered first
+					# if the file exists -AND- ( we're dealing with a passed package [that should be in the passed DIRECTORY] -OR- it's a dependency [that could be somewhere else] -and- DIRECTORY is not HOME, DIR_LIVE, or ROOT [that need to be triggered below] ), then...
+					if [ -e "$TARGET" ] && ( [ $INDEX -eq 1 ] || ( [ $INDEX -gt 1 ] && ( ! echo "$DIRECTORY" | grep -q ^"$HOME" ) && [ "$DIRECTORY" != "$DIR_LIVE" ] && [ "$DIRECTORY" != '/' ] ) ); then				# if it's in the passed DIRECTORY (DIV_LIVE would be default value), then...
+						echo -n ''
+					elif [ $INDEX -gt 1 ] && [ -e "$TARGET_HOME" ]; then			# if it's in HOME, then...
+						TARGET="$TARGET_HOME"
+					elif [ $INDEX -gt 1 ] && [ -e "$TARGET_LIVE" ]; then			# if it's in DIR_LIVE (default), then...
+						TARGET="$TARGET_LIVE"
+					elif [ $INDEX -gt 1 ] && [ -e "$TARGET_ROOT" ]; then			# if it's in the root of the OS, then...
+						TARGET="$TARGET_ROOT"
+					else									# if none of the above were triggered, the file isn't installed
+						[ "$VALIDATE" != 'fix' ] && showMsg 'issue' " !missing!" 'both' 0 0
+						[ "$VALIDATE" = 'fix' ] && showMsg 'issue' " [restoring]" 'both' 0 0
+					fi
+
+					if [ "$TARGET" = "$TARGET_HOME" ]; then showMsg 'step' " [home]" 'both' 0 0
+					elif [ "$TARGET" = "$TARGET_LIVE" ]; then showMsg 'step' " [live]" 'both' 0 0
+					elif [ "$TARGET" = "$TARGET_ROOT" ]; then showMsg 'step' " [root]" 'both' 0 0
+					else showMsg 'step' " [misc]" 'both' 0 0
+					fi
+		fi
+
 #echo "target |$TARGET|"
 		if [ ! -d "$SOURCE" ]; then							# for each file...
 #echo "[F] |$SOURCE|"
-			( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "${DIRECTORY}${TARGET}" ] && continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the file does exist then go to the next file
+# UPDATED 2025/12/10
+#			( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "${DIRECTORY}${TARGET}" ] && continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the file does exist then go to the next file
+			( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "${TARGET}" ] && continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the file does exist then go to the next file
 
 			# NOE: the PREFIX will already be part of DIRECTORY (assigned at the beginning of the script processing)
 # UPDATED 2025/12/08
@@ -1675,6 +1711,7 @@ installPackage() {
 # UPDATED 2025/12/09 - this is now done once above
 #				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -dp${TEMP} \"${SOURCE}\" \"${DIRECTORY}${TARGET}\"" >>"$LOG_DBUG"
 #				[ ! "$DRYRUN" ] && ( cp -dp${TEMP} "${SOURCE}" "${DIRECTORY}${TARGET}" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
+#echo "cp -dp${TEMP} \"${SOURCE}\" \"${TARGET}\""
 				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -dp${TEMP} \"${SOURCE}\" \"${TARGET}\"" >>"$LOG_DBUG"
 				[ ! "$DRYRUN" ] && ( cp -dp${TEMP} "${SOURCE}" "${TARGET}" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
 					showMsg 'failure' "The package file copy failed (${SOURCE})." 'log'
@@ -1693,24 +1730,26 @@ installPackage() {
 				}
 #echo done >>$LOG_DBUG
 			elif [ ! "$INSTALL" ] && ( [ "$VALIDATE" = 'data' ] || [ "$VALIDATE" = 'hash' ] ); then
-				showMsg 'file' "  $TARGET:" 'both' 0 3 1
-
-				if [ ! -e "$TARGET" ] && [ ! -e "$TARGET_ROOT" ] && [ ! -e "$TARGET_LIVE" ] && [ ! -e "$TARGET_HOME" ]; then					# if the file doesn't exist, then...
-					showMsg 'issue' " !missing!" 'both' 0 0
-				else								# otherwise it does, so perform other checks...
-					# determine where the file is located (in case the package was installed one place [e.g. HOME] and a dependency in another [e.g. ROOT])
-					if [ -e "$TARGET" ]; then				# if it's in the passed DIRECTORY, then...
-						showMsg 'step' " [misc]" 'both' 0 0
-					elif [ -e "$TARGET_ROOT" ]; then			# if it's in the root of the OS, then...
-						TARGET="$TARGET_ROOT"
-						showMsg 'step' " [root]" 'both' 0 0
-					elif [ -e "$TARGET_LIVE" ]; then			# if it's in DIR_LIVE, then...
-						TARGET="$TARGET_LIVE"
-						showMsg 'step' " [live]" 'both' 0 0
-					elif [ -e "$TARGET_HOME" ]; then			# if it's in HOME, then...
-						TARGET="$TARGET_HOME"
-						showMsg 'step' " [home]" 'both' 0 0
-					fi
+# UPDATED 2025/12/10 - moved above
+#				if [ ! -e "$TARGET" ] && [ ! -e "$TARGET_ROOT" ] && [ ! -e "$TARGET_LIVE" ] && [ ! -e "$TARGET_HOME" ]; then					# if the file doesn't exist, then...
+#					showMsg 'issue' " !missing!" 'both' 0 0
+#				else								# otherwise it does, so perform other checks...
+				if [ -e "$TARGET" ]; then					# NOTE: the TARGET value will be altered in the 'if' block above
+# MOVED 2025/12/10 - this was moved above
+#					# determine where the file is located (in case the package was installed one place [e.g. HOME] and a dependency in another [e.g. ROOT])
+#					if [ -e "$TARGET" ] && [ "$DIRECTORY" != "$DIR_LIVE" ]; then				# if it's in the passed DIRECTORY, then...
+#						showMsg 'step' " [misc]" 'both' 0 0
+#						echo -n ''
+#					elif [ -e "$TARGET_ROOT" ]; then			# if it's in the root of the OS, then...
+#						TARGET="$TARGET_ROOT"
+#						showMsg 'step' " [root]" 'both' 0 0
+#					elif [ -e "$TARGET_LIVE" ]; then			# if it's in DIR_LIVE (default), then...
+#						TARGET="$TARGET_LIVE"
+#						showMsg 'step' " [live]" 'both' 0 0
+#					elif [ -e "$TARGET_HOME" ]; then			# if it's in HOME, then...
+#						TARGET="$TARGET_HOME"
+#						showMsg 'step' " [home]" 'both' 0 0
+#					fi
 
 					if [ "$MODE" = 'copy' ]; then
 						if [ ! -L "$SOURCE" ] && [ -L "$TARGET" ]; then
@@ -1743,13 +1782,16 @@ installPackage() {
 #					fi
 				fi
 
-				showMsg 'file' ' [done]' 'both' 1 5
 			fi
+			[ "$VALIDATE" ] && showMsg 'file' ' [done]' 'both' 1 5
 			continue
 		fi
 
 		# if we're validating, we can skip checks on directories
-		[ "$VALIDATE" ] && continue
+		[ "$VALIDATE" ] && [ "$VALIDATE" != 'fix' ] && {
+#echo oops
+continue
+}
 
 #echo "[D] |${DIRECTORY}${TARGET}|"
 		# if we've made it here, then we're dealing with a directory, so...
@@ -1761,7 +1803,10 @@ installPackage() {
 #			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    mkdir -p \"${DIRECTORY}${TARGET}\"" >>"$LOG_DBUG"
 #			[ ! "$DRYRUN" ] && ( mkdir -p "${DIRECTORY}${TARGET}" 2>&1 | sed 's/^m/ \[failure\]\nm/' | tee -a "$LOG_ERRS" | grep -q ^'mkdir: ' ) && {
 #				showMsg 'failure' "The package directory creation failed (${DIRECTORY}${TARGET})." 'log'
-		( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "${TARGET}" ] && continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory does exist then cycle the 'for' loop
+		( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "${TARGET}" ] && {
+#echo oops2
+continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory does exist then cycle the 'for' loop
+}
 
 		if [ ! -e "${TARGET}" ]; then						# create the directory
 #echo creating
@@ -2158,7 +2203,7 @@ unloadPackage() {
 	}
 # UPDATED 2025/10/22 - merged -P with -U
 #	[ $PURGE -eq 1 ] && PARAMS='! -path "*/etc/*"'						# if we have been instructed to NOT delete any 'etc' files, then add these parameters to the 'find' calls below   http://www.cyberciti.biz/faq/find-command-exclude-ignore-files/
-# UPDATED 2025/10/2 - merged with -u
+# UPDATED 2025/10/22 - merged with -u
 #	[ "$PURGE" = 'app' ] && PARAMS='! -path "*/etc/*"'					# if we have been instructed to NOT delete any 'etc' files, then add these parameters to the 'find' calls below   http://www.cyberciti.biz/faq/find-command-exclude-ignore-files/
 	[ "$PURGE" = 'delete' ] && PARAMS='! -path "*/etc/*"'					# if we have been instructed to NOT purge any 'etc' files, then add these parameters to the 'find' calls below   http://www.cyberciti.biz/faq/find-command-exclude-ignore-files/
 
@@ -3226,7 +3271,7 @@ fi
 #			unset PARAMETER
 			set -- $TEMP								#   now reset the $@ array (e.g. $1, $2, $3, etc) with the adjusted parameters list
 
-			( echo "$DIRECTORY" | grep -q '/'$ ) && DIRECTORY="${DIRECTORY%/*}"	#   if the user included a trailing '/' on the passed directory, then remove it
+			( echo "$DIRECTORY" | grep -q '/'$ ) && [ "$DIRECTORY" != '/' ] && DIRECTORY="${DIRECTORY%/*}"	#   if the user included a trailing '/' on the passed directory -AND- it wasn't root, then remove it
 			( echo "$DIRECTORY" | grep -q ^'./' ) && DIRECTORY="$(pwd)${DIRECTORY#*.}"  # if a relative directory was passed, adjust the value to be the whole path
 			( echo "$DIRECTORY" | grep -q ^'/' ) || DIRECTORY="$(pwd)/${DIRECTORY}" 
 
@@ -3512,7 +3557,7 @@ elif [ "$FIND" ]; then										# if we are finding file(s) in packages, then...
 # REVERTED 2025/12/02
 	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only search local packages
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
-elif [ "$INSTALL" ]; then									# if we are installing package(s), then...
+elif [ "$INSTALL" ] || [ "$VALIDATE" ]; then									# if we are installing -OR- validating package(s), then...
 	if [ "$BOOTING" ]; then									#   if we're booting the device, then...
 		DIRECTORY='/'									#     set DIRECTORY to the filesystem root
 		REPO_SOURCE="$REPO_SYSTEM"							#     set REPO_SOURCE to the 'FIRMWARE' packages location
@@ -3587,12 +3632,14 @@ elif [ "$UNLOAD" ]; then									# if we are unloading/uninstalling package(s), 
 # REVERTED 2025/12/02
 	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only unload local packages
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
-elif [ "$VALIDATE" ]; then									# if we are validating package(s) information, then...
+#elif [ "$VALIDATE" ]; then									# if we are validating package(s) information, then...
+	# see the [ "$INSTALL" ] block above (to prevent code duplication)
 # REMOVED 2025/11/26 - this is now the default value
 # REVERTED 2025/12/02
-	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only validate local packages
-	eval REPO_SOURCE="${REPO_SOURCE}"							#   eval REPO_SOURCE incase it has any variables in it
-	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into REPO_SOURCE where the packages are located
+# MOVED 2025/12/10 - this is now part of the 'install' block above
+#	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only validate local packages
+#	eval REPO_SOURCE="${REPO_SOURCE}"							#   eval REPO_SOURCE incase it has any variables in it
+#	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into REPO_SOURCE where the packages are located
 fi
 
 
@@ -4006,13 +4053,16 @@ continue
 #exit 0
 done
 
-	# PROCESS THE ACTION (per passed package)						NOTE: this has to be done this way so that (un)installations can create and process proper file lists
+#	# PROCESS THE ACTION (per passed package)						NOTE: this has to be done this way so that (un)installations can create and process proper file lists
+	# EXIT CHECK
 
 	[ "$VALIDATE" = 'deps' ] && exitGracefully 0 'both' 6 'success'				# there's no more work to perform if this was the action to process
 	[ $INDEX -eq 0 ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ "$TREE" != 'reliant' ] && [ ! "$UNLOAD" ] && {
 		[ "$TREE" != 'relies' ] && showMsg 'action' "There are no package(s) to be processed." 'both' 1 4
 		exitGracefully 0 'both' 6 'success'
 	}
+
+	# PROCESS THE ACTION
 
 	if ( [ $DEBUG -gt 1 ] || [ "$PROMPT" ] ); then
 		if [ "$PROMPT" ] && [ ! "$PROXY" ] && [ ! "$VALIDATE" ]; then
@@ -4130,7 +4180,10 @@ done
 #			showMsg 'step' "${FILENAME}: [local]" 'screen' 1
 # UPDATED 2025/11/19 - adjusted for the -Q value
 #			showMsg 'step' "${DEPENDENCY}: [local]" 'both' 0 3
-			showMsg 'file' "${DEPENDENCY}: [local]" 'both' 0 3
+# UPDATED 2025/12/10
+#			showMsg 'file' "${DEPENDENCY}: [local]" 'both' 0 3
+			[ "$VALIDATE" ] && showMsg 'package' "${DEPENDENCY}: [local]" 'both' 0 3
+			[ ! "$VALIDATE" ] && showMsg 'file' "${DEPENDENCY}: [local]" 'both' 0 3
 # UPDATED 2025/11/06
 #		elif [ "$DOWNLOAD" ] && [ ! "$VALIDATE" ]; then
 		elif [ "$DOWNLOAD" ]; then

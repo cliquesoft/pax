@@ -283,3 +283,9 @@
 - Corrected a bug with -u
 - Removed PRM_ROOT
 
+2025/12/10
+- Corrected a bug with passing '/' as DIRECTORY
+- Implemented '-v fix'
+- Updated test scripts for -v
+- Corrected bugs until -v fully worked
+
