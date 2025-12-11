@@ -289,3 +289,12 @@
 - Updated test scripts for -v
 - Corrected bugs until -v fully worked
 
+2025/12/11
+- Implemented the -Z option
+- Added a -Z and -O parameter check
+- Implemented '-l -R'
+- Added additional parameter checks for '-l -R'
+
+
+- Created test scripts for -i and -u
+
