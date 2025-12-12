@@ -295,6 +295,12 @@
 - Implemented '-l -R'
 - Added additional parameter checks for '-l -R'
 
-
-- Created test scripts for -i and -u
+2025/12/12
+- Corrected a bug with '-R' value checking
+- Added additional parameter checks for '-l -R'
+- Implemented '-i -R'
+- Added additional parameter checks for '-i -R'
+- Implemented '-u -R'
+- Added additional parameter checks for '-u -R'
+- Updated the --help output
 
