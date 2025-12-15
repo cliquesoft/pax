@@ -304,3 +304,8 @@
 - Added additional parameter checks for '-u -R'
 - Updated the --help output
 
+2025/12/15
+- Added a '-u update' option
+- Relocated the -Y notification
+- Updated the output verbiage
+
