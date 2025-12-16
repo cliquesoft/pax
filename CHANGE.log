@@ -305,7 +305,15 @@
 - Updated the --help output
 
 2025/12/15
-- Added a '-u update' option
+- Started adding a '-u update' option
 - Relocated the -Y notification
 - Updated the output verbiage
+
+2025/12/16
+- Completed the '-u update' option
+- Consolidated the processDependency() output
+- Updated code to prevent color codes from leaking into logs
+- Fixed a bug deleting directories during package unloading
+- Updated uninstallPackage() to use the -L value
+- Updated -N to take a quoted, space separated files list
 
