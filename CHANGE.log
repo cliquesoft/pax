@@ -317,3 +317,14 @@
 - Updated uninstallPackage() to use the -L value
 - Updated -N to take a quoted, space separated files list
 
+2025/12/17
+- Updated the init and service scripts to be launched from the
+  proper directory structure depending on installation path
+- Merged several common checks in processDependencies()
+- Added OWN_SYSTEM
+- Added PRM_SYSTEM
+- Added a check for the REPO_SYSTEM to have assigned ownership
+  and permission values for safety of the device
+- Started updating the -X code
+- Updated the --help output
+

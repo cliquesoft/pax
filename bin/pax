@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/12/16 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/12/17 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -59,10 +59,13 @@
 #
 ## WARNING: this MUST come after the sourced files above so shared variable values don't leak!!!
 ## NOTE: the RESTORE variable can contain two different values based if it is used as an ACTION or OPTION
-unset ALL BOOTING COPY DOWNLOAD EXTRA FORCE IGNORE INSTALL NOLIST MAKE MODE ONLY PREFIX PROXY PURGE QUIET RESTORE SILENT TREE UNLOAD VALIDATE VERSION
+# UPDATED 2025/12/17
+#unset ALL BOOTING COPY DOWNLOAD EXTRA FORCE IGNORE INSTALL NOLIST MAKE MODE ONLY PREFIX PROXY PURGE QUIET RESTORE SILENT TREE UNLOAD VALIDATE VERSION
+unset COPY DOWNLOAD EXTRACT FIND INSTALL LIST MAKE OPEN TREE UNLOAD VALIDATE BOOTING ARCH DEPS EXTRA FORCE IGNORE KERNEL PACKLIST MODE FILELIST OUTPUT PROMPT QUIET RESTORE REPO_SOURCE TYPE VERSION PROXY DRYRUN
 
 
-# MODULE VARIABLE DEFINITIONS
+
+# DEFAULT VARIABLE DEFINITIONS
 
 DEBUG=0												# NOTE: making this a '2' will enable prompts
 
@@ -76,12 +79,12 @@ FLAG_FIRM='copy_sys.flag'									# the flag file indicating ALL firmware packag
 #MODE='$( [ "$(getBootcode mode)" = "conservative" ] && echo link || echo copy )'		# the install mode: (sym)link, copy	NOTE: symlink if we are in a 'conservative' operation mode, copy otherwise
 
 DIR_CONF='/etc/pax'										# directory containing any alternate/personalized configuration
-DIR_LIST='/var/cache/Software/catalog'								# directory containing the total list of installed applications
-DIR_INIT='/var/cache/Software/services'								# directory containing daemon/service scripts
-DIR_INST='/var/cache/Software/scripts'								# directory containing other software scripts (taken from /etc/envars)
+DIR_LIST='/var/cache/software/catalog'								# directory containing the total list of installed applications
+DIR_INIT='/var/cache/software/services'								# directory containing daemon/service scripts
+DIR_INST='/var/cache/software/scripts'								# directory containing other software scripts (taken from /etc/envars)
 DIR_LIVE='/Users/Public/.'									# directory to install by default after bootup	NOTE: this needs to end with a '/' or '.' (so that the packages files can be (un)installed from home directories)
 DIR_LOGS='/var/log'
-DIR_LOOP='/tmp/pax/loop'									# directory that symlinked software needs to use as mountpoint
+DIR_LOOP='/Mounts/.software'									# directory that symlinked software needs to use as mountpoint
 DIR_TEMP='/tmp/pax'
 
 EXT_CODE='code'											# [tgz file] package source code
@@ -90,13 +93,15 @@ EXT_HASH='hash'											# [text file] package validation hash
 EXT_INFO='info'											# [text file] package information
 EXT_LIST='list'											# [text file] package manifest list
 EXT_MAKE='make'											# [text file] package make commands
-EXT_MARK='mark'											# [text file] package marker files
+#EXT_MARK='mark'											# [text file] package marker files
 EXT_SOFT='soft'											# [mksquashfs file] packaged compiled software
 
 LOG_DBUG="${DIR_LOGS}/pax.debug"								# the log file for debug output
 LOG_ERRS="${DIR_LOGS}/pax.log"									# the log file for error output
 
 OWN_GROUP='staff'										# the default 'everyone' group that all non-admin users belong (used for default group ownership on package files/dirs)
+OWN_SYSTEM='root:root'										# the ownership of the REPO_SYSTEM directory
+PRM_SYSTEM='770'										# the permissions of the REPO_SYSTEM directory
 						# LEFT OFF - document the below as being able to connect to a "pax server" for remote administration (e.g. FIFO_SERVER='/sshfs/directory/device_nic_mac')
 FIFO_SERVER="input"										# defines the default name that the -o action should attach for (remote) commands
 ARCH_VALUES='i32|i64|a32|a64'									# the valid values for the -C option
@@ -104,7 +109,7 @@ ARCH_VALUES='i32|i64|a32|a64'									# the valid values for the -C option
 ARCH_SCHEMA="$(uname -m | sed -r 's/i386|i686/i32/;s/x86_64/i64/;s/armv7l/r32/')"		# this can be used so the .deps files can be universal - bash.ARCH.bin.soft
 FILE_SCHEMA='${PACKAGE}.${TYPE}.${ARCH}'							# the format for the package filenames		NOTE: encase in single quotes so variables are NOT expanded yet
 KRNL_SCHEMA="$(uname -r | sed 's/-/_/g')"							# store the currently used kernel version (substituting '-' for '_')
-LOOP_SCHEMA='${PACKAGE}.${TYPE}'		# REMOVE - this is no longer in use						# the format for the package mount point	NOTE: same as above
+#LOOP_SCHEMA='${PACKAGE}.${TYPE}'								# the format for the package mount point	NOTE: same as above
 REPO_SCHEMA='http://repo.cliquesoft.org/vanilla/1.0/${PACKAGE/_${KERNEL}}'			# the format for remote packages		NOTE: save as above
 VERS_SCHEMA='${VERSION}.${TYPE}.${ARCH}'							# the format of the versioned package name in the source remote repo (when -V is used)
 VERT_SCHEMA='${PACKAGE}_${VERSION}.${TYPE}.${ARCH}'						# the format of the versioned package name in the target local repo (when -V is used)
@@ -116,10 +121,11 @@ REPO_RESTOR="/var/cache/Software/restore"
 # REMOVE 2025/11/05 - replaced with REPO_SCHEMA
 #REPO_REMOTE='http://repo.cliquesoft.org/vanilla/1.0/${PACKAGE/_${KERNEL}}'			# the source to obtain remote packages from when installing/downloading -AND- the target directory when copying
 
+
 # -------------------- DO **NOT** EDIT BELOW THIS LINE --------------------
 
+
 # [system]
-COLOR=''											# used with the -Z and processDependencies()
 EXEID="$(mktemp -u XXXXXX)"									# stores a temp execution ID (for use with (un)installing)
 INDEX=0												# since no arrays can be used in this shell, this keeps track of the index within the dependency stack	NOTE: 0=no deps
 TOTAL=0												# keeps track of the $DEP 'array' size
@@ -129,19 +135,17 @@ MODULES=''											# boolean indicating kernel modules are contained in the pa
 XML=''												# used to store XML until there's a final success/failure
 XML_TAGS=''											# stores the tags that are currently opened (e.g. containing children)
 
-KERNEL=''											# stores the currently used kernel string
 RAWFILE=''			# rename to PARAMETER
-PREFIX=''											# where the software should be installed: root=/ (firmware), everyone=/Users/Public, user-specific=$HOME, custom=specified
-DIRECTORY=''			# rename to TARGET						# defaults to REPO_OPTION if not passed as DIRECTORY parameter
-REPO_SOURCE=''			# rename to SOURCE						# if the user passed a new source via -S; defaults to REPO_OPTION if not passed		NOTE: we can NOT define a default value here since it may be different in a config file
+#PREFIX=''											# where the software should be installed: root=/ (firmware), everyone=/Users/Public, user-specific=$HOME, custom=specified
+DIRECTORY=''											# defaults to REPO_OPTION if not passed as DIRECTORY parameter
 DEPENDENCY=''											# the current iterated dependency to work with
 PACKAGE=''											# the isolated name of the package (e.g. nano.bin.i32.soft > nano); value set automatically below
 BASENAME=''											# the filename without the extension (e.g. nano.bin.i32); value set automatically below
 FILENAME=''											# the full filename of the package (e.g. nano.bin.i32.soft); value set automatically below
 FILETYPE=''											# the file type that is being processed (this is used by processDependencies())
-OPTFILE=''
+OPTFILE=''			# rename to OPTIONAL
 VERBASE=''
-VERFILE=''		# MAYBE DELETE THIS
+VERFILE=''			# MAYBE DELETE THIS; maybe just replace this and VERBASE with VERSION
 
 # [colors]
 NORMAL=''
@@ -167,16 +171,39 @@ PURPLE=''
 CYAN=''
 WHITE=''
 
+# [actions]
+COPY=''
+DOWNLOAD=''
+EXTRACT=''
+FIND=''
+INSTALL=''
+LIST=''
+MAKE=''
+OPEN=''
+TREE=''
+UNLOAD=''
+VALIDATE=''
+
 # [options]
+BOOTING=''
 ARCH=''												# stores the value of the ARCH_SCHEMA
-MODE=''
-TYPE='bin'											# the package type: bin dev doc drv gir lib loc	  NOTE: we're specifying the default value here
 DEPS='default'
-DRYRUN=''
-PROMPT=''
+EXTRA=''
+FORCE=''
+IGNORE=''
+KERNEL=''											# stores the currently used kernel string
+PACKLIST=''
+MODE=''
+FILELIST=''
 OUTPUT='text'											# the output format to display: fifo, text, xml, xmLive
+PROMPT=''
 QUIET='default'											# the verbosity of the output: none, errors, default, verbose, all
+RESTORE=''
+REPO_SOURCE=''											# if the user passed a new source via -S; defaults to REPO_OPTION if not passed		NOTE: we can NOT define a default value here since it may be different in a config file
+TYPE='bin'											# the package type: bin dev doc drv gir lib loc	  NOTE: we're specifying the default value here
 VERSION=''
+PROXY=''
+DRYRUN=''
 				# the below can all be erased
 # UPDATED 2025/10/22 - merged -P with -U
 #PURGE=0											# indicate no purging is happening by default
@@ -213,9 +240,9 @@ APPEXTN=''
 # Parameters:
 # EXIT		[number] [optional] the exit status of this script afterwards
 #			0 = success (default)
-#	3		1 = failure without printing anything
-#	2		2 = failure printing a generic message
-#	1		3 = failure with printing ' [failure]'
+#			1 = failure without printing anything
+#			2 = failure printing a generic message
+#			3 = failure with printing ' [failure]'
 #			4 = failure printing ' [failure]' and generic message
 #			    NOTES:
 #			    - the TAG should be passed to close XML
@@ -227,7 +254,8 @@ exitGracefully() {
 # UPDATED 2025/11/13 - prevents deleted named pipes/fifo's
 #	find "$DIR_TEMP" -size 0 -print0 | xargs -0 rm 2>/dev/null				# remove any blank cache file	https://stackoverflow.com/questions/3157343/how-to-delete-many-0-byte-files-in-linux
 	find "$DIR_TEMP" ! -type p -size 0 -print0 | xargs -0 rm 2>/dev/null				# remove any blank cache file	https://stackoverflow.com/questions/3157343/how-to-delete-many-0-byte-files-in-linux
-	rm -f "${DIR_LIST}/"*.${EXT_MARK} 2>/dev/null						# remove any .marker files
+# REMOVED 2025/12/17 - this is no longer used
+#	rm -f "${DIR_LIST}/"*.${EXT_MARK} 2>/dev/null						# remove any .marker files
 	[ $DEBUG -eq 0 ] && [ -e "${DIR_TEMP}/installs.${EXEID}" ] && rm -f "${DIR_TEMP}/installs.${EXEID}" 2>/dev/null					# remove any installation temp files
 	[ $DEBUG -eq 0 ] && [ -e "${DIR_TEMP}/services.${EXEID}" ] && rm -f "${DIR_TEMP}/services.${EXEID}" 2>/dev/null
 	[ $DEBUG -eq 0 ] && [ -e "${DIR_TEMP}/filelist.${EXEID}" ] && rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>/dev/null
@@ -295,13 +323,13 @@ getBootcode() {
 # TAGS		[number] [optional] defines XML tag encapsulation (default=1)
 #		[ NOTE ]
 #			 0 = none
-#	1		 1 = on (one set of tags)	line 1		to	<TAG>line 1
+#			 1 = on (one set of tags)	line 1		to	<TAG>line 1
 #							line 2			      line 2</TAG>
-#	3		 2 = on (tags for each line)	line 1		to	<TAG>line 1</TAG>
+#			 2 = on (tags for each line)	line 1		to	<TAG>line 1</TAG>
 #							line 2			<TAG>line 2</TAG>
-#	2		 3 = on (parent open) 		title		to	<TAG>title
-#	5		 4 = on (parent alt open)	title		to	<TAG tag='title'>
-#	4		 5 = on (parent close)		title		to	</TAG>		NOTE: this is ignored when OUTPUT='text'
+#			 3 = on (parent open) 		title		to	<TAG>title
+#			 4 = on (parent alt open)	title		to	<TAG tag='title'>
+#			 5 = on (parent close)		title		to	</TAG>		NOTE: this is ignored when OUTPUT='text'
 #			 6 = on (closes all open)
 # TRIM		[boolean][optional] if the output needs to be trimmed of spaces, tabs, newlines at the beginning and end (default=off)
 showMsg() {
@@ -511,7 +539,7 @@ splitName() {
 
 #echo "|$1|$PARAMETER|"
 	[ ! "$PARAMETER" ] && {
-		showMsg 'failure' "No package names could be found." 'screen' 1 1
+		showMsg 'failure' "No package name was passed to splitName()." 'screen' 1 1
 		return 1
 	}
 	[ "$2" ] && EXT="$2"
@@ -825,7 +853,14 @@ processDependencies() {
 		return 0												# NOTE: don't error with exit status for a conditional package
 	}
 
-	# perform checks for the action...
+	# perform checks for the actions...
+	( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && ( [ "$COPY" ] || [ "$DOWNLOAD" ] || [ "$EXTRACT" ] || [ "$UNLOAD" ] || [ "$VALIDATE" ] ) && {	# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
+		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
+		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+		return 0
+	}
+
+
 	[ "$COPY" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ] && {							# if we're copying or downloading -AND- not forcing -AND- the package exists in the target DIRECTORY, then...
 # UPDATED 2025/11/07
 #		[ $DEBUG -gt 0 ] && echo -e "\tPackage is missing..." >>"$LOG_DBUG"
@@ -833,11 +868,12 @@ processDependencies() {
 		showMsg 'failure' "The package is missing from REPO_SOURCE." 'log'
 		return 1
 	}
-	[ "$COPY" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
-		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
-		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-		return 0
-	}
+# CONSOLIDATED 2025/12/17 - see above
+#	[ "$COPY" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
+#		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
+#		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+#		return 0
+#	}
 # MERGED 2025/11/05 - plus this should work for any action
 ## UPDATED 2025/10/31 - replace APP* variables and using showMsg()
 ##	[ "$COPY" ] && [ ! "$FORCE" ] && [ -e "${TARGET}/${APPFILE}" ] && {
@@ -865,17 +901,19 @@ processDependencies() {
 		return 0												# NOTE: do NOT return error, we will just simply skip the file so the user isn't forced to pass '-F' a lot
 	}
 
-	[ "$DOWNLOAD" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
-		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
-		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-		return 0
-	}
+# CONSOLIDATED 2025/12/17 - see above
+#	[ "$DOWNLOAD" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
+#		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
+#		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+#		return 0
+#	}
+#
+#	[ "$EXTRACT" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
+#		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
+#		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+#		return 0
+#	}
 
-	[ "$EXTRACT" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
-		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
-		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-		return 0
-	}
 # UNTESTED
 # MERGED 2025/11/05 - plus this should work for any action
 ## UPDATED 2025/10/31 - replace APP* variables and using showMsg()
@@ -955,11 +993,12 @@ processDependencies() {
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[ignore] ${APPNAME}.${APPTYPE}"
 # UPDATED 2025/11/04 - broadened the search range to be either a PACKAGE name or full FILENAME
 #	[ "$UNLOAD" ] && ( echo ",${IGNORE}," | grep -q ",${BASENAME}," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
-	[ "$UNLOAD" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
-		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
-		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-		return 0
-	}
+# CONSOLIDATED 2025/12/17 - see above
+#	[ "$UNLOAD" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
+#		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
+#		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+#		return 0
+#	}
 # UPDATED 2025/10/31 - replace APP* variables and using showMsg()
 #	[ "$UNLOAD" ] && ( [ -L "${DIR_LIST}/${APPHEAD}.soft" ] || [ ! -s "${DIR_LIST}/${APPHEAD}.soft" ] ) && {	# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then go to the next one!
 #		[ $DEBUG -gt 0 ] && echo -e "\tPackage is being ignored (BOOT)..." >>"$LOG_DBUG"
@@ -988,12 +1027,12 @@ processDependencies() {
 		showMsg 'failure' "The package is missing from REPO_SOURCE." 'log'
 		return 1
 	}
-# LEFT OFF - can we merge some of these common checks?
-	[ "$VALIDATE" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
-		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
-		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-		return 0
-	}
+# CONSOLIDATED 2025/12/17 - see above
+#	[ "$VALIDATE" ] && ( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && {							# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
+#		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
+#		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+#		return 0
+#	}
 
 	# check that the dependency is not already in the list to be processed
 # UPDATED 2025/11/05 - to reduce duplicates once they've been proceeded
@@ -1097,7 +1136,7 @@ if [ 1 -eq 0 ]; then
 # REMOVED 2025/11/07
 #		[ "$RELEASE" = '0' ] && return 0						#   if the dependency has NOT been released to unload, then don't!
 	fi
-fi
+ fi
 
 	# determine if the SOURCE is remote or local, then...					# NOTE: for any actions that must perform locally, an error would have already been issued above
 	[ -e "${REPO_SOURCE}/${FILENAME}" ] && SOURCE='  local  '
@@ -2084,6 +2123,82 @@ continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory
 # Notes:	https://unix.stackexchange.com/questions/22623/extract-middle-section-of-lines-of-a-text-file
 #		https://unix.stackexchange.com/questions/2072/whats-the-best-way-to-take-a-segment-out-of-a-text-file
 proxyAction() {
+	# NOTE: we don't check for proxy.sh existence here to make sure nothing it's not stale
+
+# left off - dont write to DIR_TEMP, but to the -X directory value
+	echo '#!/bin/sh' >"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo '# Variable Declarations' >>"${DIR_TEMP}/proxy.sh"
+	echo -e "FLAG_LIVE='IncludedToPreventErrors'\nDIR_LIST='optional.proxy'\nDIR_TEMP='./TEMP'" >>"${DIR_TEMP}/proxy.sh"
+	echo -e "EXT_CODE=\"${EXT_CODE}\"\nEXT_DEPS=\"${EXT_DEPS}\"\nEXT_HASH=\"${EXT_HASH}\"\nEXT_INFO=\"${EXT_INFO}\"\nEXT_LIST=\"${EXT_LIST}\"\nEXT_MAKE=\"${EXT_MAKE}\"\nEXT_SOFT=\"${EXT_SOFT}\"" >>"${DIR_TEMP}/proxy.sh"
+	echo -e "LOG_DBUG='./proxy.debug'\nLOG_ERRS='./proxy.log'" >>"${DIR_TEMP}/proxy.sh"
+	echo -e "ARCH_SCHEMA='${ARCH_SCHEMA}'\nFILE_SCHEMA='${FILE_SCHEMA}'\nKRNL_SCHEMA='${KRNL_SCHEMA}'\nREPO_SCHEMA='${REPO_SCHEMA}'\nVERS_SCHEMA='${VERS_SCHEMA}'\nVERT_SCHEMA='${VERT_SCHEMA}'" >>"${DIR_TEMP}/proxy.sh"
+	echo '# [system'] >> "${DIR_TEMP}/proxy.sh"
+	echo -e "DEBUG=${DEBUG}\nINDEX=0\nTOTAL=0\nTEMP=''\nRAWFILE=''\nDIRECTORY=\"\$DIR_LIST\"\nDEPENDENCY=''\nPACKAGE=''\nBASENAME=''\nFILENAME=''\nFILETYPE=''\nOPTFILE=''\nVERBASE=''\nVERFILE=''" >>"${DIR_TEMP}/proxy.sh"
+	echo '# [actions'] >>"${DIR_TEMP}/proxy.sh"
+	echo -e "COPY=\"${COPY}\"\nDOWNLOAD=\"${DOWNLOAD}\"" >>"${DIR_TEMP}/proxy.sh"
+	echo '# [options'] >>"${DIR_TEMP}/proxy.sh"
+	echo -e "ARCH=\"${ARCH}\"\nDEPS=\"${DEPS}\"\nEXTRA=\"${EXTRA}\"\nFORCE=\"${FORCE}\"\nIGNORE=\"${IGNORE}\"\nKERNEL=\"${KERNEL}\"\nOUTPUT='text'\nQUIET=\"${QUIET}\"\nREPO_SOURCE=\"${REPO_SOURCE}\"\nTYPE=\"${TYPE}\"\nVERSION=\"${VERSION}\"" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo '# Function Declarations' >>"${DIR_TEMP}/proxy.sh"
+	sed -n '/^exitGracefully()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >>"${DIR_TEMP}/proxy.sh"				# https://stackoverflow.com/questions/6916856/can-bash-show-a-functions-definition
+	echo >>"${DIR_TEMP}/proxy.sh"
+	sed -n '/^showMsg()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	sed -n '/^splitName()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	sed -n '/^addDependency()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	sed -n '/^deleteDependency()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	sed -n '/^inDependencies()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	sed -n '/^processDependencies()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	sed -n '/^copyPackage()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	sed -n '/^downloadPackage()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo '# Directory Checks' >>"${DIR_TEMP}/proxy.sh"
+	echo "if [ ! -d \"\$TEMP\" ]; then" >>"${DIR_TEMP}/proxy.sh"
+	echo "	mkdir -p \"\${TEMP}\" >>\"\$LOG_ERRS\" 2>&1 || { echo \"ERROR: The temp directory (TEMP) does not exist and could not be created.\" | tee -a \"\$LOG_ERRS\"; exit 1; }" >>"${DIR_TEMP}/proxy.sh"
+	echo "fi" >>"${DIR_TEMP}/proxy.sh"
+	echo "if [ ! -d \"\${DIRECTORY}\" ]; then" >>"${DIR_TEMP}/proxy.sh"
+	echo "	mkdir -p \"\${DIRECTORY}\" >>\"\$LOG_ERRS\" 2>&1 || { echo \"ERROR: The storage directory (DIRECTORY) does not exist and could not be created.\" | tee -a \"\$LOG_ERRS\"; exit 1; }" >>"${DIR_TEMP}/proxy.sh"
+	echo "fi" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo '# Start Execution' >>"${DIR_TEMP}/proxy.sh"
+	echo "showMsg 'start' \"\n\n---------- [ Script Execution ] ----------\" 'log'" >>"${DIR_TEMP}/proxy.sh"
+	echo "showMsg 'start' \"           \$(date +'%Y-%m-%d  %H:%M:%S')\n" 'log'" >>"${DIR_TEMP}/proxy.sh"
+	echo "showMsg 'start' "\${0##*/} \$@" 'log'" >>"${DIR_TEMP}/proxy.sh"
+
+	echo "cd \"$DIRECTORY\" >>\"$LOG_ERRS\" 2>&1 || exitGracefully 2 'screen'" >>"${DIR_TEMP}/proxy.sh"
+	echo "for RAWFILE in \$(cat proxy.list); do" >>"${DIR_TEMP}/proxy.sh"
+	echo "	splitName \"\$RAWFILE\"" >>"${DIR_TEMP}/proxy.sh"
+	echo "	processDependencies \"\${RAWFILE}\"" >>"${DIR_TEMP}/proxy.sh"
+	echo "done" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo "while [ \"\$DEPENDENCY\" ] && [ \$INDEX -gt 0 ]; do" >>"${DIR_TEMP}/proxy.sh"
+	echo "	splitName \"\$DEPENDENCY\"" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo "	if [ \"\$DOWNLOAD\" ]; then" >>"${DIR_TEMP}/proxy.sh"
+	echo "		showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3" >>"${DIR_TEMP}/proxy.sh"
+	echo "		downloadPackage || exitGracefully 1" >>"${DIR_TEMP}/proxy.sh"
+	echo "	elif [ \"\$COPY\" ]; then" >>"${DIR_TEMP}/proxy.sh"
+	echo "		showMsg 'file' \"(\${FILETYPE}) \${PACKAGE}:\" 'both' 0 3" >>"${DIR_TEMP}/proxy.sh"
+	echo "		copyPackage || exitGracefully 1" >>"${DIR_TEMP}/proxy.sh"
+	echo "	fi" >>"${DIR_TEMP}/proxy.sh"
+	echo "done">>"${DIR_TEMP}/proxy.sh"
+# left off - delete itself when done
+
+
+#-c and -d generate this script
+#-i installs from the above actions (simply pointing REPO_SOURCE to the -X; make -S and -X and -i not able to be used together); in the installPackage() have the -X also copy the packages into REPO_OPTION
+#	can't pass DIRECTORY either
+# MAYBE - have it so all the user has to do it execute the proxy script twice - once on the remote machine (doesn't detect any directories), and once on the source machine (does detect directories and copies the packages over)
+
+return 0
+
 	( [ -e "${DIR_TEMP}/proxy.sh" ] || [ -e "${PROXY}/proxy.sh" ] ) && return 0		# if the script is already generated, we can skip re-creating it again
 
 	echo '#!/bin/sh' > "${DIR_TEMP}/proxy.sh"
@@ -2281,7 +2396,7 @@ echo 'package not installed, uninstalling...'
 #		showMsg 'step' " [uninstall]" 'both' 0 0
 		uninstallPackage || return 1											# if the package has been marked for uninstallation, then...
 	}
-# LEFT OFF - when installing, and a file exists (e.g. grep symlink to busybox), then rename to FILE.-PACK.TYPE (or 'SYS' if not part of package); when the PACK.TYPE is uninstalled and one of those files exists, restore it
+# VER2 - when installing, and a file exists (e.g. grep symlink to busybox), then rename to FILE.-PACK.TYPE (or 'SYS' if not part of package); when the PACK.TYPE is uninstalled and one of those files exists, restore it
 #		is this necessary if we are creating restore points?
 
 	return 0
@@ -2778,6 +2893,8 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #	echo "	     ${TEMP} -i [/path/to/]packages.txt"
 	echo '	Install a specific version:'
 	echo "	     ${TEMP} -V 1.2.3 -i package"
+	echo '	Install a package from a valid restore point:'
+	echo "	     ${TEMP} -R 'YYYY-MM-DD/Restore Point' -i package"
 # CONSOLIDATED 2025/11/26 - above
 #	echo '	Install packages from a specific diretory:'
 #	echo "	     ${TEMP} -S /path/to/files -i package1 package2"
@@ -2787,9 +2904,9 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	List all restore points:'
 	echo "	     ${TEMP} -R '*' -l"
 	echo '	List all restore points in a valid date:'
-	echo "	     ${TEMP} -R 'DATE' -l"
+	echo "	     ${TEMP} -R 'YYYY-MM-DD' -l"
 	echo '	List all packages in a valid restore point:'
-	echo "	     ${TEMP} -R 'DATE/Restore Point' -l"
+	echo "	     ${TEMP} -R 'YYYY-MM-DD/Restore Point' -l"
 	echo '	Make a package for distribution:'
 	echo "	     ${TEMP} -m package /path/containing/{package|source}"
 	echo "	     ${TEMP} -S /path/containing/{package|source} -m package"
@@ -3692,7 +3809,18 @@ fi
 touch "${REPO_OPTION}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The optional package storage directory (REPO_OPTION) is not writable." 'screen'; exit 1; }
 rm "${REPO_OPTION}/writable" >>"$LOG_ERRS" 2>&1
 
-# LEFT OFF - check the permissions on REPO_SYSTEM are root:root @ 770 (or root:advanced), but only if REPO_SYSTEM and REPO_OPTION are different locations (so that TC can work without root permissions)
+# if we're download -or- installing -AND- the passed directory was '/' -or- we need to use the default DIR_LIVE value and it's '/' -AND- the REPO_SYSTEM doesn't exist, then...
+if ( [ "$DOWNLOAD" ] || [ "$INSTALL" ] ) && ( [ "$DIRECTORY" = '/' ] || ( [ ! "$DIRECTORY" ] && [ "$DIR_LIVE" = '/' ] ) ) && [ ! -d "$REPO_SYSTEM" ]; then
+	mkdir -p "$REPO_SYSTEM" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) could not be created." 'screen'; exit 1; }
+fi
+if ( [ "$DOWNLOAD" ] || [ "$INSTALL" ] ) && ( [ "$DIRECTORY" = '/' ] || ( [ ! "$DIRECTORY" ] && [ "$DIR_LIVE" = '/' ] ) ); then
+	touch "${REPO_SYSTEM}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) is not writable." 'screen'; exit 1; }
+	rm "${REPO_SYSTEM}/writable" >>"$LOG_ERRS" 2>&1
+
+	[ "$(stat -c %a "$REPO_SYSTEM" 2>/dev/null)" != "$PRM_SYSTEM" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid permissions." 'screen'; exit 1; }
+	[ "$(stat -c %U "$REPO_SYSTEM" 2>/dev/null)" != "${OWN_SYSTEM%:*}" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid owner ownership." 'screen'; exit 1; }
+	[ "$(stat -c %G "$REPO_SYSTEM" 2>/dev/null)" != "${OWN_SYSTEM#*:}" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid group ownership." 'screen'; exit 1; }
+fi
 
 
 
@@ -4903,33 +5031,40 @@ fi
 # REMOVED 2025/12/01
 #if [ "$INSTALL" ] || [ "$RESTORE" ]; then
 if [ "$INSTALL" ]; then
+	[ "$DIRECTORY" = '/' ] && DIRECTORY=''				# if DIRECTORY is just the root, then clear its value to prevent leading double slashes in the path
+
 	if [ -s ${DIR_TEMP}/installs.list ]; then
 # UPDATED 2025/10/28
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "Running deferred install scripts..." | tee -a "$LOG_ERRS"
-		showMsg 'action' "Running deferred install scripts..."
+		showMsg 'action' "Running deferred install scripts..." 'both' 1 4
 # UPDATED 2025/10/22 - no longer using APP* variables
 #		for APPFILE in $(cat ${DIR_TEMP}/installs.list); do
 #			echo "$APPFILE" | tee -a "$LOG_ERRS"
 #			"$APPFILE" 2>&1 | tee -a "$LOG_ERRS"
 		for FILE in $(cat ${DIR_TEMP}/installs.list); do
-			echo "$FILE" | tee -a "$LOG_ERRS"
-			"$FILE" 2>&1 | tee -a "$LOG_ERRS"
+# UPDATED 2025/12/17 - to include the location of the script to execute
+#			echo "$FILE" | tee -a "$LOG_ERRS"
+#			"$FILE" 2>&1 | tee -a "$LOG_ERRS"
+			showMsg 'file' "  ${DIRECTORY}${DIR_INST}/${FILE}:" 'both' 0 1
+			"${DIRECTORY}${DIR_INST}/${FILE}" 2>&1 | tee -a "$LOG_ERRS"
 		done
 		rm -f ${DIR_TEMP}/installs.list 2>>"$LOG_ERRS"
 	fi
-# LEFT OFF - these scripts may be in non-root locations (e.g. $HOME/.etc/init.d/...)
 	# NOTE: these are two separate 'if' statements on purpose!
 	if [ -s ${DIR_TEMP}/services.list ]; then
 # UPDATED 2025/10/28
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "Running deferred service scripts..." | tee -a "$LOG_ERRS"
-		showMsg 'action' "Running deferred service scripts..."
+		showMsg 'action' "Running deferred service scripts..." 'both' 1 4
 # UPDATED 2025/10/22 - no longer using APP* variables
 #		for APPFILE in $(cat ${DIR_TEMP}/services.list); do
 #			echo "$APPFILE" | tee -a "$LOG_ERRS"
 #			"$APPFILE" start 2>&1 | tee -a "$LOG_ERRS"
 		for FILE in $(cat ${DIR_TEMP}/services.list); do
-			echo "$FILE" | tee -a "$LOG_ERRS"
-			"$FILE" start 2>&1 | tee -a "$LOG_ERRS"
+# UPDATED 2025/12/17 - to include the location of the script to execute
+#			echo "$FILE" | tee -a "$LOG_ERRS"
+#			"$FILE" start 2>&1 | tee -a "$LOG_ERRS"
+			showMsg 'file' "  ${DIRECTORY}${DIR_INIT}/${FILE}:" 'both' 0 1
+			"${DIRECTORY}${DIR_INIT}/${FILE}" start 2>&1 | tee -a "$LOG_ERRS"
 		done
 		rm -f ${DIR_TEMP}/services.list 2>>"$LOG_ERRS"
 	fi
