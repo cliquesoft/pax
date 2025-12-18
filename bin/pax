@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/12/17 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/12/18 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -39,7 +39,7 @@
 #	info	package information
 #	list	manifest list
 #	make	compile script
-#	mark	unload marker
+#	mark	unload marker												< REMOVED
 #	newr	update available
 #	repo	available in repo
 #	soft	software files
@@ -392,7 +392,8 @@ showMsg() {
 #		[ $TAGS -gt 4 ] && return 1
 		[ $TAGS -eq 6 ] && return 1
 
-		MSG=$(echo "$MSG" | sed "s/{COLOR}/\\${NORMAL}/")					# the package name color in the processDependencies() output; this is so that color codes don't get into the logs
+		[ "${NORMAL}" ] && TEMP="\\\\${NORMAL}" || TEMP=''
+		MSG="$(echo "$MSG" | sed "s/{COLOR}/${TEMP}/")"					# the package name color in the processDependencies() output; this is so that color codes don't get into the logs
 		[ "$TAG" = 'failure' ] && [ "$MSG" = ' [failure]' ] && PREFIX="${RED}"
 		[ "$TAG" = 'failure' ] && [ "$MSG" != ' [failure]' ] && PREFIX="${RED}ERROR: ${NORMAL}"	# NOTE: the MSG comparison is so that if exitGracefully() was called, then we don't need the prefix
 		[ "$TAG" = 'success' ] && PREFIX="${GREEN}"
@@ -2123,20 +2124,27 @@ continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory
 # Notes:	https://unix.stackexchange.com/questions/22623/extract-middle-section-of-lines-of-a-text-file
 #		https://unix.stackexchange.com/questions/2072/whats-the-best-way-to-take-a-segment-out-of-a-text-file
 proxyAction() {
-	# NOTE: we don't check for proxy.sh existence here to make sure nothing it's not stale
+	# NOTE: we don't check for proxy.sh existence any longer to make sure it's not stale
 
-# left off - dont write to DIR_TEMP, but to the -X directory value
 	echo '#!/bin/sh' >"${DIR_TEMP}/proxy.sh"
 	echo >>"${DIR_TEMP}/proxy.sh"
 	echo '# Variable Declarations' >>"${DIR_TEMP}/proxy.sh"
-	echo -e "FLAG_LIVE='IncludedToPreventErrors'\nDIR_LIST='optional.proxy'\nDIR_TEMP='./TEMP'" >>"${DIR_TEMP}/proxy.sh"
+	echo -e "FLAG_LIVE='IncludedToPreventErrors'" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo -e "DIR_LIST='./optional.proxy'\nDIR_TEMP='./TEMP'" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
 	echo -e "EXT_CODE=\"${EXT_CODE}\"\nEXT_DEPS=\"${EXT_DEPS}\"\nEXT_HASH=\"${EXT_HASH}\"\nEXT_INFO=\"${EXT_INFO}\"\nEXT_LIST=\"${EXT_LIST}\"\nEXT_MAKE=\"${EXT_MAKE}\"\nEXT_SOFT=\"${EXT_SOFT}\"" >>"${DIR_TEMP}/proxy.sh"
-	echo -e "LOG_DBUG='./proxy.debug'\nLOG_ERRS='./proxy.log'" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo -e "LOG_DBUG='../proxy.debug'\nLOG_ERRS='../proxy.log'" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
 	echo -e "ARCH_SCHEMA='${ARCH_SCHEMA}'\nFILE_SCHEMA='${FILE_SCHEMA}'\nKRNL_SCHEMA='${KRNL_SCHEMA}'\nREPO_SCHEMA='${REPO_SCHEMA}'\nVERS_SCHEMA='${VERS_SCHEMA}'\nVERT_SCHEMA='${VERT_SCHEMA}'" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
 	echo '# [system'] >> "${DIR_TEMP}/proxy.sh"
 	echo -e "DEBUG=${DEBUG}\nINDEX=0\nTOTAL=0\nTEMP=''\nRAWFILE=''\nDIRECTORY=\"\$DIR_LIST\"\nDEPENDENCY=''\nPACKAGE=''\nBASENAME=''\nFILENAME=''\nFILETYPE=''\nOPTFILE=''\nVERBASE=''\nVERFILE=''" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
 	echo '# [actions'] >>"${DIR_TEMP}/proxy.sh"
 	echo -e "COPY=\"${COPY}\"\nDOWNLOAD=\"${DOWNLOAD}\"" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
 	echo '# [options'] >>"${DIR_TEMP}/proxy.sh"
 	echo -e "ARCH=\"${ARCH}\"\nDEPS=\"${DEPS}\"\nEXTRA=\"${EXTRA}\"\nFORCE=\"${FORCE}\"\nIGNORE=\"${IGNORE}\"\nKERNEL=\"${KERNEL}\"\nOUTPUT='text'\nQUIET=\"${QUIET}\"\nREPO_SOURCE=\"${REPO_SOURCE}\"\nTYPE=\"${TYPE}\"\nVERSION=\"${VERSION}\"" >>"${DIR_TEMP}/proxy.sh"
 	echo >>"${DIR_TEMP}/proxy.sh"
@@ -2160,42 +2168,55 @@ proxyAction() {
 	sed -n '/^downloadPackage()/,/^}/p' "$0" | sed 's/[ \t]*# .*//' >>"${DIR_TEMP}/proxy.sh"
 	echo >>"${DIR_TEMP}/proxy.sh"
 	echo '# Directory Checks' >>"${DIR_TEMP}/proxy.sh"
-	echo "if [ ! -d \"\$TEMP\" ]; then" >>"${DIR_TEMP}/proxy.sh"
-	echo "	mkdir -p \"\${TEMP}\" >>\"\$LOG_ERRS\" 2>&1 || { echo \"ERROR: The temp directory (TEMP) does not exist and could not be created.\" | tee -a \"\$LOG_ERRS\"; exit 1; }" >>"${DIR_TEMP}/proxy.sh"
+	echo "if [ ! -d \"\$DIR_TEMP\" ]; then" >>"${DIR_TEMP}/proxy.sh"
+	echo "	mkdir -p \"\${DIR_TEMP}\" >>\"\${LOG_ERRS#*/}\" 2>&1 || { echo \"ERROR: The temp directory (DIR_TEMP) does not exist and could not be created.\" | tee -a \"\${LOG_ERRS#*/}\"; exit 1; }" >>"${DIR_TEMP}/proxy.sh"
 	echo "fi" >>"${DIR_TEMP}/proxy.sh"
 	echo "if [ ! -d \"\${DIRECTORY}\" ]; then" >>"${DIR_TEMP}/proxy.sh"
-	echo "	mkdir -p \"\${DIRECTORY}\" >>\"\$LOG_ERRS\" 2>&1 || { echo \"ERROR: The storage directory (DIRECTORY) does not exist and could not be created.\" | tee -a \"\$LOG_ERRS\"; exit 1; }" >>"${DIR_TEMP}/proxy.sh"
+	echo "	mkdir -p \"\${DIRECTORY}\" >>\"\${LOG_ERRS#*/}\" 2>&1 || { echo \"ERROR: The storage directory (DIRECTORY) does not exist and could not be created.\" | tee -a \"\${LOG_ERRS#*/}\"; exit 1; }" >>"${DIR_TEMP}/proxy.sh"
 	echo "fi" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo "if [ \"\$(ls -A \"\$DIRECTORY\" 2>/dev/null)\" ]; then" >>"${DIR_TEMP}/proxy.sh"
+	echo "	showMsg 'prompt' \"This looks like the second invocation of the script. Do you want to install\nthe packages from the removable media into this device? [Y/N] (N): \" 'screen' 0 1 1" >>"${DIR_TEMP}/proxy.sh"
+	echo "	read" >>"${DIR_TEMP}/proxy.sh"
+	echo "	[ \"\$REPLY\" != 'Y' ] && [ \"\$REPLY\" != 'y' ] && exitGracefully 0 'both' 6 'success'" >>"${DIR_TEMP}/proxy.sh"
+	echo "	TEMP=\"\$(pwd)\"" >>"${DIR_TEMP}/proxy.sh"
+echo "echo \"pax -D none -X \\\"\${TEMP%/*}\\\" -i\"" >>"${DIR_TEMP}/proxy.sh"
+#	echo "pax -D none -X \"\${TEMP%/*}\" -i /tmp/zebra4" >>"${DIR_TEMP}/proxy.sh"
+	echo "#	pax -D none -X \"\${TEMP%/*}\" -i" >>"${DIR_TEMP}/proxy.sh"
+	echo "#	rm proxy.sh && exitGracefully 0 'both' 6 'success'" >>"${DIR_TEMP}/proxy.sh"
+echo "exit" >>"${DIR_TEMP}/proxy.sh"
+	echo "fi" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo "cd \"\$DIRECTORY\" >>\"$LOG_ERRS\" 2>&1 || exitGracefully 2 'screen'" >>"${DIR_TEMP}/proxy.sh"		# NOTE: we need to cd immediately so the log file doesn't get split into various spots
 	echo >>"${DIR_TEMP}/proxy.sh"
 	echo '# Start Execution' >>"${DIR_TEMP}/proxy.sh"
 	echo "showMsg 'start' \"\n\n---------- [ Script Execution ] ----------\" 'log'" >>"${DIR_TEMP}/proxy.sh"
-	echo "showMsg 'start' \"           \$(date +'%Y-%m-%d  %H:%M:%S')\n" 'log'" >>"${DIR_TEMP}/proxy.sh"
+	echo "showMsg 'start' \"           \$(date +'%Y-%m-%d  %H:%M:%S')\n\" 'log'" >>"${DIR_TEMP}/proxy.sh"
 	echo "showMsg 'start' "\${0##*/} \$@" 'log'" >>"${DIR_TEMP}/proxy.sh"
-
-	echo "cd \"$DIRECTORY\" >>\"$LOG_ERRS\" 2>&1 || exitGracefully 2 'screen'" >>"${DIR_TEMP}/proxy.sh"
-	echo "for RAWFILE in \$(cat proxy.list); do" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo "[ \"\$DEPS\" != 'none' ] && showMsg 'action' \"Processing dependencies for the packages...\" 'both' 1 4" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo "for RAWFILE in \$(cat ../proxy.list); do" >>"${DIR_TEMP}/proxy.sh"
 	echo "	splitName \"\$RAWFILE\"" >>"${DIR_TEMP}/proxy.sh"
 	echo "	processDependencies \"\${RAWFILE}\"" >>"${DIR_TEMP}/proxy.sh"
 	echo "done" >>"${DIR_TEMP}/proxy.sh"
+	echo >>"${DIR_TEMP}/proxy.sh"
+	echo "[ \"\$COPY\" ] && showMsg 'action' \"Copying the specified package(s)...\" 'both' 1 4" >>"${DIR_TEMP}/proxy.sh"
+	echo "[ \"\$DOWNLOAD\" ] && showMsg 'action' \"Downloading the specified package(s)...\" 'both' 1 4" >>"${DIR_TEMP}/proxy.sh"
 	echo >>"${DIR_TEMP}/proxy.sh"
 	echo "while [ \"\$DEPENDENCY\" ] && [ \$INDEX -gt 0 ]; do" >>"${DIR_TEMP}/proxy.sh"
 	echo "	splitName \"\$DEPENDENCY\"" >>"${DIR_TEMP}/proxy.sh"
 	echo >>"${DIR_TEMP}/proxy.sh"
 	echo "	if [ \"\$DOWNLOAD\" ]; then" >>"${DIR_TEMP}/proxy.sh"
-	echo "		showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3" >>"${DIR_TEMP}/proxy.sh"
+	echo "		showMsg 'file' \"(\${FILETYPE}) ${PACKAGE}:\" 'both' 0 3" >>"${DIR_TEMP}/proxy.sh"
 	echo "		downloadPackage || exitGracefully 1" >>"${DIR_TEMP}/proxy.sh"
 	echo "	elif [ \"\$COPY\" ]; then" >>"${DIR_TEMP}/proxy.sh"
 	echo "		showMsg 'file' \"(\${FILETYPE}) \${PACKAGE}:\" 'both' 0 3" >>"${DIR_TEMP}/proxy.sh"
 	echo "		copyPackage || exitGracefully 1" >>"${DIR_TEMP}/proxy.sh"
 	echo "	fi" >>"${DIR_TEMP}/proxy.sh"
+	echo "	showMsg 'file' \" [done]\" 'both' 1 5" >> "${DIR_TEMP}/proxy.sh"
+	echo "	deleteDependency TRUE" >> "${DIR_TEMP}/proxy.sh"
 	echo "done">>"${DIR_TEMP}/proxy.sh"
-# left off - delete itself when done
-
-
-#-c and -d generate this script
-#-i installs from the above actions (simply pointing REPO_SOURCE to the -X; make -S and -X and -i not able to be used together); in the installPackage() have the -X also copy the packages into REPO_OPTION
-#	can't pass DIRECTORY either
-# MAYBE - have it so all the user has to do it execute the proxy script twice - once on the remote machine (doesn't detect any directories), and once on the source machine (does detect directories and copies the packages over)
 
 return 0
 
@@ -2680,6 +2701,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo
 	echo '	--help      shows this screen'
 	echo '	--install   installs pax as the default package manager'
+	echo '	--uninstall uninstalls pax as the default package manager'
 	echo '	--version   displays the software version'
 	echo
 	echo '  OPTIONS:'
@@ -2839,9 +2861,9 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	     ${TEMP} -{cdeilt} package1 package2 /target/path"
 	echo '	Performing action with a package list to/in a specified directory:'
 	echo "	     ${TEMP} -{cdeilt} packages.txt /target/path"
-	echo '	Performing action with specific packages from/in a specific directory:'
+	echo '	Performing action with specific packages from/in a specified directory:'
 	echo "	     ${TEMP} -S {URL|/source/path} -{cdeilt} package1 package2"
-	echo '	Performing action with a package list from/in a specific directory:'
+	echo '	Performing action with a package list from/in a specified directory:'
 	echo "	     ${TEMP} -S {URL|/source/path} -{cdeilt} packages.txt"
 	echo '	Performing action with all packages between specified directories:'
 	echo "	     ${TEMP} -S {URL|/source/path} -{cdei} /target/path"
@@ -2966,6 +2988,20 @@ elif [ "$1" = '--install' ] || [ "$3" = '--install' ]; then			# so a user can do
 		exit 1
 	}
 	"${DIR_CONF}/install" || exit 1
+	exit 0
+elif [ "$1" = '--uninstall' ] || [ "$3" = '--uninstall' ]; then			# so a user can do 'pax -O xml --uninstall'
+	if [ $# -gt 1 ]; then							# if we were passed more than just the '--version' option, it has to be '-O', so...
+		if ( echo "$2" | grep -qE ^'(fifo|text|xml|xmLive)'$ ); then
+			[ "$SILENT" ] || echo "ERROR: you must supply a proper value to the -O option." | tee -a "$LOG_ERRS"	# NOTE: we can't use showMsg() yet because we don't have it's value, so...
+			exit 1
+		fi
+		OUTPUT=$2													# set that value to use from now on
+	fi
+	[ ! -e "${DIR_CONF}/uninstall" ] && {
+		showMsg 'failure' "The uninstall script is missing to remove pax as the default package manager." 'screen'
+		exit 1
+	}
+	"${DIR_CONF}/uninstall" || exit 1
 	exit 0
 elif [ "$1" = '--version' ] || [ "$3" = '--version' ]; then			# so a user can do 'pax -O xml --version'
 # UPDATED 2025/10/25
@@ -3402,7 +3438,8 @@ fi
 				showMsg 'failure' "You must provide a device mount point to the -X option." 'screen'
 				exit 1
 			   }
-			   proxyAction
+# MOVED 2025/12/18 - this can't be executed here since not all the variables would be populated yet
+#			   proxyAction
 			   PROXY="$OPTARG" ;;
 			Y) DRYRUN=TRUE ;;
 # DEV NOTE: -z must be called for any non-consecutive package manager call to make sure the files represent an up-to-date system (e.g. if pax is used to install something, then tce-load is, the catalog list with become out-of-sync and pax could malfunction)
@@ -3579,18 +3616,20 @@ fi
 #		TEMP="$(cd "${REPO_SOURCE}" && ls -1 *.${EXT_SOFT} 2>/dev/null | tr '\n' ' ')"	#   store all the .soft packages to load within the directory
 # UPDATED 2025/12/12 - to work with -R
 #	elif [ ! "$1" ] && [ ! "$OPEN" ] && ( [ "$TREE" ] || ( [ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) ) ); then		# otherwise only a DIRECTORY was passed, so we need to process all packages in REPO_SOURCE	NOTE: we can't [ -d ] since the REPO_SOURCE will be remote
-	elif [ ! "$1" ] && [ ! "$OPEN" ] && ( [ "$TREE" ] || ( [ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) ) || ( [ "$RESTORE" ] && [ ! "$LIST" ] && [ ! "$UNLOAD" ] ) ); then		# if a -S (or -R) was passed with no PACKAGE(S) -AND- we're not opening a fifo -AND- (a -t was pass -or- a -S was passed and it's local -or a -R was passed but not -l), then we need to process all packages in REPO_SOURCE|REPO_RESTOR	NOTE: we can't [ -d ] since the REPO_SOURCE can be remote
-#echo "no packages were passed |$REPO_SOURCE|$RESTORE|"
+	elif [ ! "$1" ] && [ ! "$OPEN" ] && ( [ "$TREE" ] || ( [ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) ) || ( [ "$RESTORE" ] && [ ! "$LIST" ] && [ ! "$UNLOAD" ] ) || ( [ "$INSTALL" ] && [ "$PROXY" ] ) ); then		# if a -S (or -R) was passed with no PACKAGE(S) -AND- we're not opening a fifo -AND- (a -t was pass -or- a -S was passed and it's local -or a -R was passed but not -l), then we need to process all packages in REPO_SOURCE|REPO_RESTOR	NOTE: we can't [ -d ] since the REPO_SOURCE can be remote
+echo "no packages were passed |$REPO_SOURCE|$RESTORE|"
 		[ "$TREE" ] && [ ! "$REPO_SOURCE" ] && cd "$REPO_OPTION"				# NOTE: this MUST be handled in this manner so that the -S and DIRECTORY checking doesn't get triggered
 		[ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && cd "${REPO_SOURCE}"
 		[ "$RESTORE" ] && [ -e "${REPO_RESTOR}/${RESTORE}" ] && cd "${REPO_RESTOR}/${RESTORE}"				# NOTE: we include the '-e' check since none of the parameter checks below have taken place, to prevent an error from occurring here
-#pwd
+		[ "$PROXY" ] && [ -e "${PROXY}/pax/optional.proxy" ] && cd "${PROXY}/pax/optional.proxy"
+pwd
 		TEMP="$(ls -1 *.${EXT_SOFT} 2>/dev/null | tr '\n' ' ')"	#   store all the .soft packages to load within the directory
 # REMOVED 2025/12/12 - there would be no logging to indicate the failure; this will be caught below with an error message
 #		[ ! "$TEMP" ] && exit 0						#   if there are NOT any packages in the directory, there's nothing to process so exit
 #		set -- $TEMP							#   otherwise reset the $1, $2, $3, etc values (and $@ that is used in the main 'for' loop below) to be the package names in the directory (as if they were passed via the command line)
 #echo "TEMP |$TEMP|"
 		[ "$TEMP" ] && set -- $TEMP							#   otherwise reset the $1, $2, $3, etc values (and $@ that is used in the main 'for' loop below) to be the package names in the directory (as if they were passed via the command line)
+		cd - >/dev/null							# now return to the prior directory (so that the proper directory can be entered in code below)
 	fi
 #fi
 	TEMP=''											# make sure this value is not contaminating anything
@@ -3628,8 +3667,12 @@ TEMP=0
 # REMOVED 2025/12/01
 #[ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$EXTRACT" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! "$RESTORE" ] && [ ! "$TREE" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { showMsg 'failure' "You must provide an ACTION when executing this script." 'screen'; exit 1; }
 [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$EXTRACT" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! "$TREE" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { showMsg 'failure' "You must provide an ACTION when executing this script." 'screen'; exit 1; }
+# REMOVED 2025/12/18
+#[ "$COPY" ] && [ "$PROXY" ] && [ "$DIRECTORY" ] && { showMsg 'failure' "The DIRECTORY value can't be used with -X" 'screen'; exit 1; }
 [ "$DOWNLOAD" ] && [ ! "$1" ] && { showMsg 'failure' "You must provide at least one package before processing can begin." 'screen'; exit 1; }
 [ "$DOWNLOAD" ] && [ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && { showMsg 'failure' "You must provide a remote source with the -d action." 'screen'; exit 1; }
+# REMOVED 2025/12/18
+#[ "$DOWNLOAD" ] && [ "$PROXY" ] && [ "$DIRECTORY" ] && { showMsg 'failure' "The DIRECTORY value can't be used with -X" 'screen'; exit 1; }
 [ "$FIND" ] && [ "$REPO_SOURCE" ] && [ "$DIRECTORY" ] && { showMsg 'failure' "You must provide only the -S or DIRECTORY value with the -f action." 'screen'; exit 1; }
 [ "$INSTALL" ] && [ "$RESTORE" ] && ( ! echo "$RESTORE" | grep -q '/' ) && { showMsg 'failure' "You must provide a 'DATE/Restore Point' value with the -R option." 'screen'; exit 1; }
 [ "$INSTALL" ] && [ "$RESTORE" ] && ( ! echo "$RESTORE" | grep -qE ^'[0-9]{4}-[0-9]{2}-[0-9]{2}' ) && { showMsg 'failure' "The restore point value must be in a 'DATE/Restore Point' format." 'screen'; exit 1; }
@@ -3683,7 +3726,10 @@ TEMP=0
 [ "$VERSION" ] && [ ! "$DOWNLOAD" ] && [ ! "$INSTALL" ] && [ ! "$UNLOAD" ] && [ ! "$VALIDATE" ] && { showMsg 'failure' "This action can't be used with the -V option." 'screen'; exit 1; }
 # MERGED 2025/11/26 - this is now -D all
 #[ "$ALL" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -W option." 'screen'; exit 1; }
+# UPDATED 2025/12/18
+# REINSTATED 2025/12/18
 [ "$PROXY" ] && [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -X option." 'screen'; exit 1; }
+#[ "$PROXY" ] && [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && { showMsg 'failure' "This action can't be used with the -X option." 'screen'; exit 1; }
 [ "$DRYRUN" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -Y option." 'screen'; exit 1; }
 
 # option combination checking
@@ -3697,8 +3743,8 @@ TEMP=0
 [ "$PROMPT" ] && [ "$OUTPUT" != 'fifo' ] && [ "$OUTPUT" != 'text' ] && [ ! -e "$FIFO_SERVER" ] && { showMsg 'failure' "The -P option can only be used with '-O fifo' or '-O text'." 'screen'; exit 1; }
 # REMOVED 2025/11/25
 #[ "$PROXY" ] && [ "$REPO_SOURCE" ] && { showMsg 'failure' "The -X option can't be used with the -S option." 'screen'; exit 1; }
-[ "$PROXY" ] && [ "$DRYRUN" ] && { showMsg 'failure' "The -X option can't be used with the -Y option." 'screen'; exit 1; }
-[ "$PROXY" ] && [ "$DIRECTORY" != '' ] && { showMsg 'failure' "The DIRECTORY value can not be used with the -X option." 'screen'; exit 1; }
+[ "$PROXY" ] && [ "$DRYRUN" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "The -X option can't be used with the -Y option." 'screen'; exit 1; }
+[ "$PROXY" ] && [ "$DIRECTORY" != '' ] && [ ! "$INSTALL" ] && { showMsg 'failure' "The DIRECTORY value can not be used with the -X option." 'screen'; exit 1; }
 [ "$NORMAL" ] && [ "$OUTPUT" != 'text' ] && { showMsg 'failure' "The -Z option can only be used with the '-O text' option." 'screen'; exit 1; }
 # REMOVED 2025/12/12
 #[ "$REPO_SOURCE" ] && [ "$RESTORE" ] && [ "$RESTORE" != 'none' ] && [ ! "$UNLOAD" ] && { showMsg 'failure' "The -S option can't be used with the -R option." 'screen'; exit 1; }
@@ -3822,6 +3868,13 @@ if ( [ "$DOWNLOAD" ] || [ "$INSTALL" ] ) && ( [ "$DIRECTORY" = '/' ] || ( [ ! "$
 	[ "$(stat -c %G "$REPO_SYSTEM" 2>/dev/null)" != "${OWN_SYSTEM#*:}" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid group ownership." 'screen'; exit 1; }
 fi
 
+if [ "$PROXY" ]; then
+	[ ! -d "$PROXY" ] && { showMsg 'failure' "The proxy media mount point does not exist." 'screen'; exit 1; }
+
+	touch "${PROXY}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The proxy media mount point is not writable." 'screen'; exit 1; }
+	rm "${PROXY}/writable" >>"$LOG_ERRS" 2>&1
+fi
+
 
 
 
@@ -3885,6 +3938,13 @@ elif [ "$INSTALL" ] || [ "$VALIDATE" ]; then									# if we are installing -OR-
 			REPO_SOURCE="${REPO_RESTOR}/${RESTORE}"					# store the passed restore point directory
 			REPO_RESTOR="$TEMP"							# store the original REPO_SOURCE value in REPO_RESTOR (so we can copy those packages back into the system)
 		}
+# REMOVED 2025/12/18
+		[ "$PROXY" ] && {								# NOTE: the REPO_RESTOR and REPO_SOURCE values are switched so that the script operates as usual!!!
+			TEMP="$REPO_SOURCE"							# store the existing value first
+			REPO_SOURCE="${PROXY}/pax/optional.proxy"				# store the passed proxy directory and append the rest of the path
+			PROXY="$TEMP"								# store the original REPO_SOURCE value in PROXY (so we can copy those packages back into the system)
+		}
+   #		[ "$PROXY" ] && PROXY="${PROXY}/pax/optional.proxy"				# store the passed proxy directory and append the rest of the path
 		[ "$DIRECTORY" = "$REPO_OPTION" ] && {						#     if the DIRECTORY was NOT passed, then set to the default installation location
 			( echo "$DIR_LIVE" | grep -qE '(/|\.)'$ ) || DIR_LIVE="${DIR_LIVE}/"	#        make sure the directory ends with a '/' or '.' (because the first '/' is stripped from the package files' path to allow for ~/.whatever)
 			DIRECTORY="$DIR_LIVE"
@@ -3894,6 +3954,7 @@ elif [ "$INSTALL" ] || [ "$VALIDATE" ]; then									# if we are installing -OR-
 #	[ "$RESTORE" ] && ( cd "$RESTORE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen' )			#   now cd into the REPO_SOURCE where the packages are
 #	[ ! "$RESTORE" ] && ( cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen' )			#   now cd into the REPO_SOURCE where the packages are
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
+   #	[ "$PROXY" ] && cd "${PROXY}" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the PROXY where the packages are
 # REMOVED 2025/11/24 - this uses DIR_LIVE in all its i/o
 # RESTORED 2025/12/11 - using -R needs to change the source
 elif [ "$LIST" ]; then										# if we are listing installed packages, then...
@@ -3930,7 +3991,7 @@ elif [ "$OPEN" ]; then
 #	cd "$DIRECTORY" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'				#   now cd into the DIRECTORY where the fifo needs to be created
 	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$DIR_TEMP"				#   if the -S option was NOT passed, then use the default temp directory
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'				#   now cd into the REPO_SOURCE where the fifo needs to be created
-#elif [ "$PROXY" ]; then										# if we are proxying an action, then...
+#elif [ "$PROXY" ]; then										# if we are proxying an action, then...									DELETE THIS!!!!!!!
 	# this action can not use DIRECTORY, however REPO_SOURCE gets passed to the script
 # REMOVED 2025/11/25
 #	[ "$DIRECTORY" != "$REPO_OPTION" ] && {
@@ -3996,17 +4057,17 @@ fi
 	[ ! "$KERNEL" ] && eval KERNEL="$KRNL_SCHEMA"
 	[ ! "$PACKLIST" ] && PACKLIST=$LIST_LIVE
 
-[ "$COPY" ] && [ "$DEPS" != 'none' ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
-[ "$DOWNLOAD" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
+[ "$COPY" ] && [ "$DEPS" != 'none' ] && [ ! "$PROXY" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
+[ "$DOWNLOAD" ] && [ "$DEPS" != 'none' ] && [ ! "$PROXY" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
 # MERGED 2025/11/26 - this is now -D none
 #[ "$EXTRACT" ] && [ ! "$ONLY" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
 [ "$EXTRACT" ] && [ "$DEPS" != 'none' ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
 #[ "$FIND" ]
-[ "$INSTALL" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
+[ "$INSTALL" ] && [ "$DEPS" != 'none' ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
 #[ "$LIST" ]
 #[ "$MAKE" ]
 [ "$OPEN" ] && showMsg 'action' "Starting pax in client mode..." 'both' 1 1
-[ "$PROXY" ] && showMsg 'action' "Generating package list..." 'both' 1 4
+[ "$PROXY" ] && [ ! "$INSTALL" ] && showMsg 'action' "Generating package list..." 'both' 1 4
 # REMOVED 2025/12/01
 #[ "$RESTORE" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
 [ "$TREE" ] && showMsg 'action' "Dependency trees for package(s)..." 'screen' 1 1
@@ -4047,9 +4108,17 @@ for RAWFILE in $@; do
 #	[ $DEBUG -gt 0 ] && echo -e "body:\n\tAPPFILE :${APPFILE}:\n\tAPPHEAD :${APPHEAD}:\n\tAPPNAME :${APPNAME}:\n\tAPPARCH :${APPARCH}:\n\tAPPTYPE :${APPTYPE}:\n\tAPPEXTN :${APPEXTN}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:" >>"$LOG_DBUG"
 	[ $DEBUG -gt 0 ] && echo -en "body (dependencies):\n\tFILENAME    |${FILENAME}|\n\tBASENAME    |${BASENAME}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${ARCH}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tpwd         |" >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS";
 #echo 02
+
+	if [ "$PROXY" ] && [ ! "$INSTALL" ]; then									# if we are proxying an action, then...
+# UPDATED 2025/10/28
+#		echo "$RAWFILE" >> "${DIR_TEMP}/proxy.list"
+		echo "$FILENAME" >> "${DIR_TEMP}/proxy.list"					# create the proxy package list
+		continue
 # UPDATED 2025/11/06 - this only needs to reference REPO_SOURCE
 #	if [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$MAKE" ] && [ ! "$PROXY" ] && [ ! -e "${REPO_SYSTEM}/${FILENAME}" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ] && [ ! -e "./${FILENAME}" ]; then
-	if [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! "$PROXY" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ]; then
+# UPDATED 2025/12/18
+#	if [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! "$PROXY" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ]; then
+	elif [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ]; then
 # UPDATED 2025/10/30
 #		showMsg 'msg|failure' "The '${FILENAME}' file does not exist."
 		showMsg 'failure' "The '${FILENAME}' package does not exist." 'both'
@@ -4122,8 +4191,23 @@ for RAWFILE in $@; do
 # MOVED 2025/11/13 - moved into processDependencies() so that ALL the dependencies are added to the list
 #		# add the package to the list of dependencies						  NOTE: this lists EVERY dependency for every dependency in one list; not just the dependencies for the requested package!
 #		echo "$FILENAME" >>"${DIR_TEMP}/installed.${EXEID}"					# add the package to the cache file for future unloading/uninstalling information
+echo "fn |$FILENAME|"
+		if [ "$PROXY" ]; then
+			# NOTE: the PROXY and REPO_SOURCE values are switched so that the script operates as usual!!!
+			[ -e "${PROXY}/${FILENAME}" ] && [ ! "$FORCE" ] && {
+				showMsg 'dependency' "[  exist  ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+				showMsg 'failure' "The package currently exists in the repo (${PROXY})." 'log'
+				continue
+			}
+			unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
 
-		if [ "$RESTORE" ]; then
+# MOVED 2025/12/28 - into the second step below
+#			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${BASENAME}\".* \"${REPO_SOURCE}\"" >>"$LOG_DBUG"
+#			[ ! "$DRYRUN" ] && ( cp -f "${BASENAME}".* "${REPO_SOURCE}" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
+#				showMsg 'failure' "The package file restore failed (${SOURCE})." 'log'
+#				return 1
+#			}
+		elif [ "$RESTORE" ]; then
 			# NOTE: the REPO_RESTOR and REPO_SOURCE values are switched so that the script operates as usual!!!
 			[ -e "${REPO_RESTOR}/$FILENAME" ] && [ ! "$FORCE" ] && {
 				showMsg 'dependency' "[  exist  ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -4282,11 +4366,12 @@ continue
 			}
 		fi
 		continue
-	elif [ "$PROXY" ]; then									# if we are proxying an action, then...
-# UPDATED 2025/10/28
-#		echo "$RAWFILE" >> "${DIR_TEMP}/proxy.list"
-		echo "$PACKAGE" >> "${DIR_TEMP}/proxy.list"					# create the proxy package list
-		continue
+# MOVED 2025/12/18 - moved at the top
+#	elif [ "$PROXY" ]; then									# if we are proxying an action, then...
+## UPDATED 2025/10/28
+##		echo "$RAWFILE" >> "${DIR_TEMP}/proxy.list"
+#		echo "$PACKAGE" >> "${DIR_TEMP}/proxy.list"					# create the proxy package list
+#		continue
 	elif [ "$TREE" ]; then										# if we are showing the dependency tree, then...
 # this is handled in the script parameter processing section above
 #				for PARAMETER in $@; do							#   cycle through each name passed
@@ -4406,7 +4491,7 @@ done
 	# EXIT CHECK
 
 	[ "$VALIDATE" = 'deps' ] && exitGracefully 0 'both' 6 'success'				# there's no more work to perform if this was the action to process
-	[ $INDEX -eq 0 ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ "$TREE" != 'reliant' ] && [ ! "$UNLOAD" ] && {
+	[ $INDEX -eq 0 ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ ! "$PROXY" ] && [ "$TREE" != 'reliant' ] && [ ! "$UNLOAD" ] && {
 		[ "$TREE" != 'relies' ] && showMsg 'action' "There are no package(s) to be processed." 'both' 1 4
 		exitGracefully 0 'both' 6 'success'
 	}
@@ -4414,7 +4499,7 @@ done
 	# PROCESS THE ACTION
 
 	if ( [ $DEBUG -gt 1 ] || [ "$PROMPT" ] ); then
-		if [ "$PROMPT" ] && [ ! "$PROXY" ] && [ ! "$VALIDATE" ]; then
+		if [ "$PROMPT" ] && ( [ ! "$PROXY" ] || ( [ "$PROXY" ] && [ "$INSTALL" ] ) ) && [ ! "$VALIDATE" ]; then
 			[ "$COPY" ] && TEMP='copied'
 			[ "$DOWNLOAD" ] && TEMP='downloaded'
 			[ "$EXTRACT" ] && TEMP='extracted'
@@ -4440,8 +4525,8 @@ done
 	fi
 
 
-	[ "$COPY" ] && showMsg 'action' "Copying the specified package(s)..." 'both' 1 4
-	[ "$DOWNLOAD" ] && showMsg 'action' "Downloading the specified package(s)..." 'both' 1 4
+	[ "$COPY" ] && [ ! "$PROXY" ] && showMsg 'action' "Copying the specified package(s)..." 'both' 1 4
+	[ "$DOWNLOAD" ] && [ ! "$PROXY" ] && showMsg 'action' "Downloading the specified package(s)..." 'both' 1 4
 	[ "$EXTRACT" ] && showMsg 'action' "Extracting the specified package(s)..." 'both' 1 4
 	#[ "$FIND" ]
 	[ "$INSTALL" ] && {
@@ -4468,6 +4553,14 @@ done
 			MODE='link'
 		fi
 
+		if [ "$PROXY" ]; then
+			TEMP="$REPO_SOURCE"							# store the existing value first
+			REPO_SOURCE="${PROXY}"							# store the passed proxy directory and append the rest of the path
+			PROXY="$TEMP"								# store the original REPO_SOURCE value in PROXY (so we can copy those packages back into the system)
+echo "|$REPO_SOURCE|$PROXY|"
+			cd "$REPO_SOURCE"
+pwd
+		fi
 #echo "dbug4 |$MODE|"
 	}
 	#[ "$LIST" ]
@@ -4629,6 +4722,21 @@ done
 #			}
 			[ ! -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [install]" 'both' 0
 			[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [update]" 'both' 0
+
+# LEFT OFF - we have to copy files this way because they were mounting in the original location, so if MODE=link, it would be incorrect
+#	- stop the trailing PROXY code from running at the end of this script
+#	- do the same code for RESTORE that we are for PROXY
+#	- get DRYRUN to work with this code
+			if [ "$PROXY" ]; then
+pwd
+				unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
+echo -e "\tCalling:    cp -f \"${PROXY}/${BASENAME}\".* \"./\""
+				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${PROXY}/${BASENAME}\".* \"./\"" >>"$LOG_DBUG"
+				[ ! "$DRYRUN" ] && ( cp -f "${PROXY}/${BASENAME}".* "./" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
+					showMsg 'failure' "The package file restore failed (${SOURCE})." 'log'
+					return 1
+				}
+			fi
 # UPDATED 2025/11/12
 #			installPackage || exitGracefully 1
 			installPackage || exitGracefully 4 'screen' 5 'step'
@@ -4848,20 +4956,47 @@ elif [ "$PROXY" ]; then
 #	showMsg 'action' "Creating the proxy information:" 'screen' 1 0 0 1
 	showMsg 'action' "Implementing the proxy..." 'both' 1 4
 
-	showMsg 'step' "   [1/3] Checking the directory:" 'both' 0 3			# NOTE: we can't do an "rm -f BASENAME.* since it would erase the .make file too
-	if [ -d "${PROXY}/pax" ]; then
-		showMsg 'step' " [exists]" 'both' 1 5
-	else
+	showMsg 'step' "   [1/5] Creating proxy.sh script:" 'both' 0 3			# NOTE: we can't do an "rm -f BASENAME.* since it would erase the .make file too
+	proxyAction
+	showMsg 'step' " [done]" 'both' 1 5
+
+	showMsg 'step' "   [2/5] Adjusting script permissions:" 'both' 0 3			# NOTE: we can't do an "rm -f BASENAME.* since it would erase the .make file too
+	chmod 755 "${DIR_TEMP}/proxy.sh" "${DIR_TEMP}/proxy.sh" >>"$LOG_ERRS" 2>&1 || exitGracefully 4 'both' 5 'action'
+	showMsg 'step' " [done]" 'both' 1 5
+
+	showMsg 'step' "   [3/5] Preparing the media:" 'both' 0 3			# NOTE: we can't do an "rm -f BASENAME.* since it would erase the .make file too
+	if [ ! -d "${PROXY}/pax" ]; then
 		showMsg 'step' " [creating]" 'both' 0 0
 # UPDATED 2025/10/28
 #		mkdir -p "${PROXY}/pax" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The proxy directory does not exist and could not be created." >>"$LOG_ERRS"; exitGracefully 1; }
 # UPDATED 2025/10/31
 #		mkdir -p "${PROXY}/pax" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The proxy directory does not exist and could not be created." 'log'; exitGracefully 1 'action' 'screen' 2; }
 		mkdir -p "${PROXY}/pax" >>"$LOG_ERRS" 2>&1 || exitGracefully 4 'both' 5 'action'
-		showMsg 'step' " [done]" 'both' 1 5
-	fi
+	else
+		showMsg 'step' " [exists]" 'both' 0 5
+		( [ -e "${PROXY}/pax/TEMP" ] || [ -e "${PROXY}/pax/optional.proxy" ] || [ -e "${PROXY}/pax/proxy.sh" ] || [ -e "${PROXY}/pax/proxy.list" ] ) && showMsg 'step' " [cleaning]" 'both' 0 5
 
-	showMsg 'step' "   [2/3] Moving proxy.sh script:" 'both' 0 3			# NOTE: we can't do an "rm -f BASENAME.* since it would erase the .make file too
+		[ -e "${PROXY}/pax/proxy.sh" ] && ( rm -f "${PROXY}/pax/proxy.sh" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )
+		[ -e "${PROXY}/pax/proxy.list" ] && ( rm -f "${PROXY}/pax/proxy.list" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )
+		[ -e "${PROXY}/pax/TEMP" ] && ( rmdir "${PROXY}/pax/TEMP" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )
+		if [ -e "${PROXY}/pax/optional.proxy" ]; then				# if packages were found on here, then move them to a backup location
+			if [ ! -e "${PROXY}/pax/optional.proxy.bak" ]; then		# if a backup directory doesn't already exists, then create it
+				mkdir -p "${PROXY}/pax/optional.proxy.bak" >>"$LOG_ERRS" 2>&1 || exitGracefully 4 'both' 5 'action'
+			fi								# now move the packages into it before proceeding
+			if [ "$(ls -A "${PROXY}/pax/optional.proxy" 2>/dev/null)" ]; then
+				unalias mv >/dev/null 2>&1
+				mv "${PROXY}/pax/optional.proxy/"* "${PROXY}/pax/optional.proxy.bak/" || {
+					echo "The removable media has duplicate packages and needs to be cleaned manually." >>"$LOG_ERRS"
+					exitGracefully 3 'both' 6 'failure'
+				}
+			fi
+			rmdir "${PROXY}/pax/optional.proxy" 2>>"$LOG_ERRS"
+		fi
+	fi
+	
+	showMsg 'step' " [done]" 'both' 1 5
+
+	showMsg 'step' "   [4/5] Moving proxy.sh script:" 'both' 0 3			# NOTE: we can't do an "rm -f BASENAME.* since it would erase the .make file too
 # UPDATED 2025/10/23 - since the script contains the actions to take (e.g. download or copy), the script must be copied everytime; this is also helpful if its contents get updated in a future version to not have stale versions of it
 #	if [ -e "${DIR_TEMP}/proxy.sh" ]; then							# if the script isn't already on the storage device, then copy it!
 # UPDATED 2025/10/28
@@ -4871,7 +5006,8 @@ elif [ "$PROXY" ]; then
 		mv "${DIR_TEMP}/proxy.sh" "${PROXY}/pax" >>"$LOG_ERRS" 2>&1 || exitGracefully 4 'both' 5 'action'
 #	fi
 	showMsg 'step' " [done]" 'both' 1 5
-	showMsg 'step' "   [3/3] Moving the proxy list :" 'both' 0 3			# NOTE: we can't do an "rm -f BASENAME.* since it would erase the .make file too
+
+	showMsg 'step' "   [5/5] Moving the proxy list :" 'both' 0 3			# NOTE: we can't do an "rm -f BASENAME.* since it would erase the .make file too
 # UPDATED 2025/10/28 - to prevent prior proxy contamination, we need to move the list over every time
 #	if [ ! -e "${PROXY}/pax/proxy.list" ]; then						# if the list isn't, then move it!
 #		mv "${DIR_TEMP}/proxy.list" "${PROXY}/pax" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The device mount point is not writable or invalid." >>"$LOG_ERRS"; exitGracefully 1; }
@@ -4894,7 +5030,9 @@ elif [ "$PROXY" ]; then
 # UPDATED 2025/10/31
 #	showMsg 'action' " [done]" 'screen' 0 4
 #	showMsg 'note' "\nOn another device execute the 'pax/proxy.sh' script that was just created on the\nremovable media to obtain the desired package(s).  Return to this device and use\npax to install the files placed on the removable media into this OS.\n"
-	showMsg 'note' "\nOn another device execute the 'pax/proxy.sh' script that was just created on the\nremovable media to obtain the desired package(s).  Return to this device and use\npax to install the files placed on the removable media into this OS.\n" 'both' 1 2 1
+# UPDATED 2025/12/18
+#	showMsg 'note' "\nOn another device execute the 'pax/proxy.sh' script that was just created on the\nremovable media to obtain the desired package(s).  Return to this device and use\npax to install the files placed on the removable media into this OS.\n" 'both' 1 2 1
+	showMsg 'note' "\nNext steps...\n  1. Plug the removable media into another Linux device\n  2. Execute the \"proxy.sh\" script under the \"pax\" folder on the media\n  3. Wait for the script to finish and return the media back to this device\n  4. Execute the \"proxy.sh\" script again, or use pax directly for more\n     advanced installations\n" 'both' 1 2 1
 	showMsg 'success' "" 'both' 1 6
 # REMOVED 2025/11/20
 #	exitGracefully 0

@@ -328,3 +328,10 @@
 - Started updating the -X code
 - Updated the --help output
 
+2025/12/18
+- Continued updating the -X code
+- Updated the note verbiage with -X
+- Added --uninstall
+- Fixed a bug in the startup when no PACKAGE(S) or DIRECTORY is passed
+- Updated -i and -X to copy packages first, then install
+
