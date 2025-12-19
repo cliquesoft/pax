@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/12/18 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/12/19 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -751,7 +751,7 @@ processDependencies() {
 	local DEPNAME
 	local DEPTYPE
 	local INDENT="$2"
-
+#echo processdeps
 	splitName "$1"
 #echo "package |$PACKAGE|$FILENAME|"
 
@@ -855,7 +855,7 @@ processDependencies() {
 	}
 
 	# perform checks for the actions...
-	( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && ( [ "$COPY" ] || [ "$DOWNLOAD" ] || [ "$EXTRACT" ] || [ "$UNLOAD" ] || [ "$VALIDATE" ] ) && {	# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
+	( echo ",${IGNORE}," | grep -qE ",(${PACKAGE}|${FILENAME})," ) && ( [ "$COPY" ] || [ "$DOWNLOAD" ] || [ "$EXTRACT" ] || [ "$INSTALL" ] || [ "$UNLOAD" ] || [ "$VALIDATE" ] ) && {	# if the iterated dependency is ignored -AND- we are unloading/uninstalling it, then go to the next one!
 		[ $DEBUG -gt 0 ] && echo -e "\tThe package was passed in the ignore list..." >>"$LOG_DBUG"			# NOTE: we left this line like this since this is not a failure, but just a package to skip
 		showMsg 'dependency' "[ ignored ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0
@@ -1703,7 +1703,8 @@ installPackage() {
 		[ "$UNLOAD" != 'update2' ] && TEMP="${REPO_SOURCE}/${FILENAME}"					# we need to use the package in REPO_SOURCE
 
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    sudo /bin/mount -t squashfs -o loop,ro,bs=4096 \"${REPO_SOURCE}/${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
-		sudo /bin/mount -t squashfs -o loop,ro,bs=4096 "${REPO_SOURCE}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1
+		[ "$PROXY" ] && TEMP="${PROXY}" || TEMP="${REPO_SOURCE}"		# if we're issuing a '-Y -X -i', then mount an alternative location, otherwise we're doing any other combination without -X, so mount the normal spot
+		sudo /bin/mount -t squashfs -o loop,ro,bs=4096 "${TEMP}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1
 	fi
 	# check if the package has any libs we need to load later						  NOTE: we check this way because simply checking for the directory can produce false positives
 	( ls -1p "${DIR_LOOP}/${BASENAME}/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE				# NOTE: the "grep -qv '/'$" removes directories from the listing so only files remain (otherwise /lib/modules/ would provide a false positive)
@@ -2180,11 +2181,13 @@ proxyAction() {
 	echo "	read" >>"${DIR_TEMP}/proxy.sh"
 	echo "	[ \"\$REPLY\" != 'Y' ] && [ \"\$REPLY\" != 'y' ] && exitGracefully 0 'both' 6 'success'" >>"${DIR_TEMP}/proxy.sh"
 	echo "	TEMP=\"\$(pwd)\"" >>"${DIR_TEMP}/proxy.sh"
-echo "echo \"pax -D none -X \\\"\${TEMP%/*}\\\" -i\"" >>"${DIR_TEMP}/proxy.sh"
-#	echo "pax -D none -X \"\${TEMP%/*}\" -i /tmp/zebra4" >>"${DIR_TEMP}/proxy.sh"
+# LEFT OFF - implement the actual pax call instead of the debug one
+#echo "echo \"pax -D none -X \\\"\${TEMP%/*}\\\" -i\"" >>"${DIR_TEMP}/proxy.sh"
+echo "pax -Z -D none -Q none -S /tmp/zebra7 -X \"\${TEMP%/*}\" -i /tmp/zebra4" >>"${DIR_TEMP}/proxy.sh"
 	echo "#	pax -D none -X \"\${TEMP%/*}\" -i" >>"${DIR_TEMP}/proxy.sh"
-	echo "#	rm proxy.sh && exitGracefully 0 'both' 6 'success'" >>"${DIR_TEMP}/proxy.sh"
-echo "exit" >>"${DIR_TEMP}/proxy.sh"
+# UPDATED 2025/12/19
+#	echo "	rm proxy.sh && exitGracefully 0 'both' 6 'success'" >>"${DIR_TEMP}/proxy.sh"
+	echo "	exitGracefully 0 'both' 6 'success'" >>"${DIR_TEMP}/proxy.sh"
 	echo "fi" >>"${DIR_TEMP}/proxy.sh"
 	echo >>"${DIR_TEMP}/proxy.sh"
 	echo "cd \"\$DIRECTORY\" >>\"$LOG_ERRS\" 2>&1 || exitGracefully 2 'screen'" >>"${DIR_TEMP}/proxy.sh"		# NOTE: we need to cd immediately so the log file doesn't get split into various spots
@@ -2306,7 +2309,7 @@ unloadPackage() {
 # UPDATED 2025/12/15 - since this function can't be called by installPackage() anymore, there's no need to make this variable local
 #	local MODE='copy'
 	MODE='copy'
-
+#echo unload
 	splitName "$1"
 
 	[ $DEBUG -gt 0 ] && { echo -en "unloadPackage:\n\tRAWFILE     |${RAWFILE}|\n\tFILENAME    |${FILENAME}|\n\tBASENAME    |${BASENAME}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${ARCH}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tVERBASE     |${VERBASE}|\n\tOPTFILE     |${OPTFILE}|\n\tREPO_SOURCE |${REPO_SOURCE}|\n\tDIRECTORY   |${DIRECTORY}|\n\tpwd         |" >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
@@ -2504,7 +2507,7 @@ echo 'package not installed, uninstalling...'
 # Notes:	this should be called after the package has been unloaded first!!!
 # 		the directory containing the package files should already be entered BEFORE calling this function!
 uninstallPackage() {
-	if [ ! "$DRYRUN" ] && [ "$INDEX" -eq 1 ] && [ "$UNLOAD" != 'unload2' ]; then
+	if [ ! "$DRYRUN" ] && [ "$INDEX" -eq 1 ] && [ "$UNLOAD" != 'unload2' ] && [ "$UNLOAD" != 'update2' ]; then
 		[ "$PACKLIST" = 'boot' ] && TEMP="${LIST_BOOT}"
 		[ "$PACKLIST" = 'live' ] && TEMP="${LIST_LIVE}"
 
@@ -2557,6 +2560,7 @@ uninstallPackage() {
 		fi
 	fi
 
+# VER2 - consolidate specified packages and their dependencies into a single directory
 	# now create a unique name for the restore point: ACTION PACKAGE_NAMES/DIR_NAME (e.g. Updating sdl)
 	TEMP="$(date +%F)/"
 # UPDATED 2025/11/13
@@ -2579,7 +2583,9 @@ uninstallPackage() {
 #	[ "$UNLOAD" ] && [ "$PURGE" != '' ] && TEMP="${TEMP}Uninstalling ${APPNAME}.${APPTYPE}"
 # UPDATED 2025/12/15
 #	[ "$UNLOAD" != 'unload' ] && TEMP="${TEMP}Uninstalling ${BASENAME}"
-	( [ "$UNLOAD" = 'delete' ] || [ "$UNLOAD" = 'purge' ] ) && TEMP="${TEMP}Uninstalling ${BASENAME}"
+	( [ "$UNLOAD" = 'delete2' ] || [ "$UNLOAD" = 'purge2' ] ) && TEMP="${TEMP}Uninstalling ${BASENAME}"
+
+	[ -e "${REPO_RESTOR}/${TEMP}" ] && TEMP="${TEMP} $(date +%T)"						# if the restore point already exists (e.g. manipulating various package versions), then append time at the end
 
 	# NOTE: the below line will create the entire REPO_RESTOR directory structure if there is no DATA, or just the date directory in the event there is one
 	if [ ! -e "${REPO_RESTOR}/${TEMP}" ]; then
@@ -2674,12 +2680,12 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-o   open a fifo for (remote) communication'		# this will allow remote administration; uses DIR_TEMP/input
 # VER2 - check for updates to installed packages (compare the version numbers in the local .list files vs ones dl'ed from repo server); use cron to do this regularly
 #	echo '	-p   process updates for installed packages'
-#			check		simply checks for updates and notifies
-#			download	checks and downloads updates
-#			install		checks, downloads, and installs updates
-#			checks(etup)	installs a cron job to check and notify
-#			downloads(etup)	installs a cron job to check and download
-#			installs(etup)	installs a cron job to do everything
+#			check		one-time check for updates and notifies
+#			download	one-time check and download of updates
+#			install		one-time check, download, and install of updates			just calls 'pax -p' for the first two steps, then 'pax -u update' for the install
+#			checks(etup)	installs a cron job to routinely check and notify
+#			downloads(etup)	installs a cron job to routinely check and download
+#			installs(etup)	installs a cron job to routinely do everything
 #			deletes(etup)	deletes any existing update cron job
 #	echo '	-q   '
 # REMOVED 2025/12/01
@@ -3542,11 +3548,15 @@ fi
 # UPDATED 2025/12/03
 #if [ ! "$OPEN" ] && [ ! "$LIST" ]; then
 #	if [ "$TEMP" = "$0" ]; then								# if no PACKAGE(S), FILELIST, or DIRECTORY was passed, then...
+
+#echo "TEMP |$TEMP|$1|"
 	if [ "$TEMP" = "$0" ] && ( [ "$INSTALL" ] && [ ! "$RESTORE" ] ) && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ ! "$TREE" ]; then								# if no PACKAGE(S), FILELIST, or DIRECTORY was passed, then...
 #echo "list |$LIST|"
 		showMsg 'failure' "The script must have a PACKAGE(S), FILELIST, and/or DIRECTORY value." 'screen'
 		exit 1
-	elif [ "$TEMP" != "$0" ] && ( echo "$TEMP" | grep -q '/' ) && [ ! -f "$1" ]; then			# if a DIRECTORY was passed, then...	  NOTE: the first check is specifically for OPEN and LIST (since they don't require a PACKAGE(S) or DIRECTORY value), and should NOT effect the other actions
+# UPDATED 2025/12/19
+#	elif [ "$TEMP" != "$0" ] && ( echo "$TEMP" | grep -q '/' ) && [ ! -f "$1" ]; then			# if a DIRECTORY was passed, then...	  NOTE: the first check is specifically for OPEN and LIST (since they don't require a PACKAGE(S) or DIRECTORY value), and should NOT effect the other actions
+	elif [ "$TEMP" != "$0" ] && ( echo "$TEMP" | grep -q '/' ) && [ ! -f "$TEMP" ]; then			# if a DIRECTORY was passed, then...	  NOTE: the last check makes sure a path for a filelist wasn't passed (which would also trigger the 2nd check); the first check is specifically for OPEN and LIST (since they don't require a PACKAGE(S) or DIRECTORY value), and should NOT effect the other actions
 #echo "@ |$@|"
 		if [ ! -d "$TEMP" ]; then							#   if it does NOT exist, then...
 			showMsg 'failure' "The passed directory does not exist (${TEMP})." 'screen'
@@ -3617,12 +3627,12 @@ fi
 # UPDATED 2025/12/12 - to work with -R
 #	elif [ ! "$1" ] && [ ! "$OPEN" ] && ( [ "$TREE" ] || ( [ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) ) ); then		# otherwise only a DIRECTORY was passed, so we need to process all packages in REPO_SOURCE	NOTE: we can't [ -d ] since the REPO_SOURCE will be remote
 	elif [ ! "$1" ] && [ ! "$OPEN" ] && ( [ "$TREE" ] || ( [ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) ) || ( [ "$RESTORE" ] && [ ! "$LIST" ] && [ ! "$UNLOAD" ] ) || ( [ "$INSTALL" ] && [ "$PROXY" ] ) ); then		# if a -S (or -R) was passed with no PACKAGE(S) -AND- we're not opening a fifo -AND- (a -t was pass -or- a -S was passed and it's local -or a -R was passed but not -l), then we need to process all packages in REPO_SOURCE|REPO_RESTOR	NOTE: we can't [ -d ] since the REPO_SOURCE can be remote
-echo "no packages were passed |$REPO_SOURCE|$RESTORE|"
+#echo "no packages were passed |$REPO_SOURCE|$RESTORE|"
 		[ "$TREE" ] && [ ! "$REPO_SOURCE" ] && cd "$REPO_OPTION"				# NOTE: this MUST be handled in this manner so that the -S and DIRECTORY checking doesn't get triggered
 		[ "$REPO_SOURCE" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && cd "${REPO_SOURCE}"
 		[ "$RESTORE" ] && [ -e "${REPO_RESTOR}/${RESTORE}" ] && cd "${REPO_RESTOR}/${RESTORE}"				# NOTE: we include the '-e' check since none of the parameter checks below have taken place, to prevent an error from occurring here
 		[ "$PROXY" ] && [ -e "${PROXY}/pax/optional.proxy" ] && cd "${PROXY}/pax/optional.proxy"
-pwd
+#pwd
 		TEMP="$(ls -1 *.${EXT_SOFT} 2>/dev/null | tr '\n' ' ')"	#   store all the .soft packages to load within the directory
 # REMOVED 2025/12/12 - there would be no logging to indicate the failure; this will be caught below with an error message
 #		[ ! "$TEMP" ] && exit 0						#   if there are NOT any packages in the directory, there's nothing to process so exit
@@ -3707,7 +3717,9 @@ TEMP=0
 #[ "$NOLIST" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -L option." 'screen'; exit 1; }
 # UPDATED 2025/12/15
 #[ "$PACKLIST" ] && [ ! "$INSTALL" ] && [ "$UNLOAD" != 'delete' ] && [ "$UNLOAD" != 'purge' ] && { showMsg 'failure' "This action can't be used with the -L option." 'screen'; exit 1; }
-[ "$PACKLIST" ] && [ ! "$INSTALL" ] && [ "$UNLOAD" != 'delete' ] && [ "$UNLOAD" != 'purge' ] && [ "$UNLOAD" != 'update' ] && { showMsg 'failure' "This action can't be used with the -L option." 'screen'; exit 1; }
+# UPDATED 2025/12/19
+#[ "$PACKLIST" ] && [ ! "$INSTALL" ] && [ "$UNLOAD" != 'delete' ] && [ "$UNLOAD" != 'purge' ] && [ "$UNLOAD" != 'update' ] && { showMsg 'failure' "This action can't be used with the -L option." 'screen'; exit 1; }
+[ "$PACKLIST" ] && [ ! "$INSTALL" ] && [ "$UNLOAD" != 'delete' ] && [ "$UNLOAD" != 'purge' ] && { showMsg 'failure' "This action can't be used with the -L option." 'screen'; exit 1; }
 # UPDATED 2025/12/01
 #[ "$MODE" = 'link' ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -M option." 'screen'; exit 1; }
 [ "$MODE" ] && [ ! "$INSTALL" ] && { showMsg 'failure' "This action can't be used with the -M option." 'screen'; exit 1; }
@@ -3938,13 +3950,11 @@ elif [ "$INSTALL" ] || [ "$VALIDATE" ]; then									# if we are installing -OR-
 			REPO_SOURCE="${REPO_RESTOR}/${RESTORE}"					# store the passed restore point directory
 			REPO_RESTOR="$TEMP"							# store the original REPO_SOURCE value in REPO_RESTOR (so we can copy those packages back into the system)
 		}
-# REMOVED 2025/12/18
 		[ "$PROXY" ] && {								# NOTE: the REPO_RESTOR and REPO_SOURCE values are switched so that the script operates as usual!!!
 			TEMP="$REPO_SOURCE"							# store the existing value first
 			REPO_SOURCE="${PROXY}/pax/optional.proxy"				# store the passed proxy directory and append the rest of the path
 			PROXY="$TEMP"								# store the original REPO_SOURCE value in PROXY (so we can copy those packages back into the system)
 		}
-   #		[ "$PROXY" ] && PROXY="${PROXY}/pax/optional.proxy"				# store the passed proxy directory and append the rest of the path
 		[ "$DIRECTORY" = "$REPO_OPTION" ] && {						#     if the DIRECTORY was NOT passed, then set to the default installation location
 			( echo "$DIR_LIVE" | grep -qE '(/|\.)'$ ) || DIR_LIVE="${DIR_LIVE}/"	#        make sure the directory ends with a '/' or '.' (because the first '/' is stripped from the package files' path to allow for ~/.whatever)
 			DIRECTORY="$DIR_LIVE"
@@ -3954,7 +3964,6 @@ elif [ "$INSTALL" ] || [ "$VALIDATE" ]; then									# if we are installing -OR-
 #	[ "$RESTORE" ] && ( cd "$RESTORE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen' )			#   now cd into the REPO_SOURCE where the packages are
 #	[ ! "$RESTORE" ] && ( cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen' )			#   now cd into the REPO_SOURCE where the packages are
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
-   #	[ "$PROXY" ] && cd "${PROXY}" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the PROXY where the packages are
 # REMOVED 2025/11/24 - this uses DIR_LIVE in all its i/o
 # RESTORED 2025/12/11 - using -R needs to change the source
 elif [ "$LIST" ]; then										# if we are listing installed packages, then...
@@ -4055,7 +4064,9 @@ fi
 	eval FLAG_LIVE="$FLAG_LIVE"
 	[ ! "$ARCH" ] && eval ARCH="$ARCH_SCHEMA"
 	[ ! "$KERNEL" ] && eval KERNEL="$KRNL_SCHEMA"
-	[ ! "$PACKLIST" ] && PACKLIST=$LIST_LIVE
+# UPDATED 2025/12/19
+#	[ ! "$PACKLIST" ] && PACKLIST=$LIST_LIVE
+	[ ! "$PACKLIST" ] && PACKLIST='live'
 
 [ "$COPY" ] && [ "$DEPS" != 'none' ] && [ ! "$PROXY" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
 [ "$DOWNLOAD" ] && [ "$DEPS" != 'none' ] && [ ! "$PROXY" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
@@ -4098,6 +4109,7 @@ for RAWFILE in $@; do
 	#INDEX=0											# reset these values each iteration
 	#TOTAL=0
 #echo 01
+#echo '1st body'
 	splitName "$RAWFILE"									# NOTE: the RAWFILE value will be overwritten by the splitName() call
 #continue
 #	PACKAGE=$RAWFILE
@@ -4106,7 +4118,7 @@ for RAWFILE in $@; do
 
 # UPDATED 2025/10/22 - no longer using APP* variables
 #	[ $DEBUG -gt 0 ] && echo -e "body:\n\tAPPFILE :${APPFILE}:\n\tAPPHEAD :${APPHEAD}:\n\tAPPNAME :${APPNAME}:\n\tAPPARCH :${APPARCH}:\n\tAPPTYPE :${APPTYPE}:\n\tAPPEXTN :${APPEXTN}:\n\tVERSION :${VERSION}:\n\tVERFILE :${VERFILE}:" >>"$LOG_DBUG"
-	[ $DEBUG -gt 0 ] && echo -en "body (dependencies):\n\tFILENAME    |${FILENAME}|\n\tBASENAME    |${BASENAME}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${ARCH}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tpwd         |" >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS";
+	[ $DEBUG -gt 0 ] && echo -en "body (dependencies):\n\tFILENAME    |${FILENAME}|\n\tBASENAME    |${BASENAME}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${ARCH}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\t# @         |${#} ${@}|\n\tpwd         |" >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS";
 #echo 02
 
 	if [ "$PROXY" ] && [ ! "$INSTALL" ]; then									# if we are proxying an action, then...
@@ -4191,7 +4203,7 @@ for RAWFILE in $@; do
 # MOVED 2025/11/13 - moved into processDependencies() so that ALL the dependencies are added to the list
 #		# add the package to the list of dependencies						  NOTE: this lists EVERY dependency for every dependency in one list; not just the dependencies for the requested package!
 #		echo "$FILENAME" >>"${DIR_TEMP}/installed.${EXEID}"					# add the package to the cache file for future unloading/uninstalling information
-echo "fn |$FILENAME|"
+#echo "fn |$FILENAME|"
 		if [ "$PROXY" ]; then
 			# NOTE: the PROXY and REPO_SOURCE values are switched so that the script operates as usual!!!
 			[ -e "${PROXY}/${FILENAME}" ] && [ ! "$FORCE" ] && {
@@ -4199,9 +4211,9 @@ echo "fn |$FILENAME|"
 				showMsg 'failure' "The package currently exists in the repo (${PROXY})." 'log'
 				continue
 			}
-			unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
-
-# MOVED 2025/12/28 - into the second step below
+# MOVED 2025/12/18 - into the second step below
+#			unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
+#
 #			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${BASENAME}\".* \"${REPO_SOURCE}\"" >>"$LOG_DBUG"
 #			[ ! "$DRYRUN" ] && ( cp -f "${BASENAME}".* "${REPO_SOURCE}" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
 #				showMsg 'failure' "The package file restore failed (${SOURCE})." 'log'
@@ -4214,13 +4226,14 @@ echo "fn |$FILENAME|"
 				showMsg 'failure' "The package currently exists in the repo (${REPO_RESTOR})." 'log'
 				continue
 			}
-			unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
-
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${BASENAME}\".* \"${REPO_RESTOR}\"" >>"$LOG_DBUG"
-			[ ! "$DRYRUN" ] && ( cp -f "${BASENAME}".* "${REPO_RESTOR}" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
-				showMsg 'failure' "The package file restore failed (${SOURCE})." 'log'
-				return 1
-			}
+# MOVED 2025/12/19 - into the second step below
+#			unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
+#
+#			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${BASENAME}\".* \"${REPO_RESTOR}\"" >>"$LOG_DBUG"
+#			[ ! "$DRYRUN" ] && ( cp -f "${BASENAME}".* "${REPO_RESTOR}" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
+#				showMsg 'failure' "The package file restore failed (${SOURCE})." 'log'
+#				return 1
+#			}
 		fi
 	elif [ "$LIST" ]; then										# if we are listing installed packages, then...
 # this is handled in the script parameter processing section above
@@ -4553,13 +4566,19 @@ done
 			MODE='link'
 		fi
 
+		# now swap the directories back so that the existing code works as normal
 		if [ "$PROXY" ]; then
-			TEMP="$REPO_SOURCE"							# store the existing value first
-			REPO_SOURCE="${PROXY}"							# store the passed proxy directory and append the rest of the path
-			PROXY="$TEMP"								# store the original REPO_SOURCE value in PROXY (so we can copy those packages back into the system)
-echo "|$REPO_SOURCE|$PROXY|"
+			TEMP="$REPO_SOURCE"
+			REPO_SOURCE="${PROXY}"
+			PROXY="$TEMP"
+#echo "|$REPO_SOURCE|$PROXY|"
 			cd "$REPO_SOURCE"
-pwd
+#pwd
+		elif [ "$RESTORE" ]; then
+			TEMP="$REPO_SOURCE"
+			REPO_SOURCE="${REPO_RESTOR}"
+			REPO_RESTOR="$TEMP"
+			cd "$REPO_SOURCE"
 		fi
 #echo "dbug4 |$MODE|"
 	}
@@ -4576,6 +4595,7 @@ pwd
 	# now process the dependencies obtained from the above segment!
 	while [ "$DEPENDENCY" ] && [ $INDEX -gt 0 ]; do						# while we have a dependency to process via the DEPENDENCY value set by processDependencies() and INDEX adjusted within this loop itself
 # UPDATED 2025/10/22 - no longer using APP* variables; UPDATED AGAIN 2025/11/05 - the dependency files are all the full names so we don't have to worry about splitting anything
+#echo '2nd body'
 		splitName "$DEPENDENCY"
 
 # REMOVED 2025/11/05 - with adjustments made above, these statements may no longer be relevent
@@ -4723,17 +4743,15 @@ pwd
 			[ ! -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [install]" 'both' 0
 			[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [update]" 'both' 0
 
-# LEFT OFF - we have to copy files this way because they were mounting in the original location, so if MODE=link, it would be incorrect
-#	- stop the trailing PROXY code from running at the end of this script
-#	- do the same code for RESTORE that we are for PROXY
-#	- get DRYRUN to work with this code
-			if [ "$PROXY" ]; then
-pwd
+			# NOTE: we have to copy files this way because they were mounting in the original {proxy|restore} location, so if MODE=link, it would be incorrect
+			if [ "$PROXY" ] || [ "$RESTORE" ]; then
+				[ "$PROXY" ] && TEMP="$PROXY" || TEMP="$RESTORE"
+#pwd
 				unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
-echo -e "\tCalling:    cp -f \"${PROXY}/${BASENAME}\".* \"./\""
-				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${PROXY}/${BASENAME}\".* \"./\"" >>"$LOG_DBUG"
-				[ ! "$DRYRUN" ] && ( cp -f "${PROXY}/${BASENAME}".* "./" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
-					showMsg 'failure' "The package file restore failed (${SOURCE})." 'log'
+#echo -e "\tCalling:    cp -f \"${TEMP}/${BASENAME}\".* \"./\""
+				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -f \"${TEMP}/${BASENAME}\".* \"./\"" >>"$LOG_DBUG"
+				[ ! "$DRYRUN" ] && ( cp -f "${TEMP}/${BASENAME}".* "./" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
+					showMsg 'failure' "The package file copy failed (${TEMP})." 'log'
 					return 1
 				}
 			fi
@@ -4949,7 +4967,7 @@ elif [ "$OPEN" ]; then
 	rm -f "${FIFO_SERVER}" 2>>"$LOG_ERRS"
 
 # now move the proxy files to the external storage device
-elif [ "$PROXY" ]; then
+elif [ "$PROXY" ] && [ ! "$INSTALL" ]; then
 # UPDATED 2025/10/28
 #	( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "Creating the proxy information: "
 # UPDATED 2025/10/31
@@ -5077,7 +5095,7 @@ elif [ "$UNLOAD" ]; then
 													# NOTE: we have to include the above line since the 'cat' call in the above 'for' loop will retain all the ORIGINAL values of the text file, not the removals of the 'while' below!
 			[ $DEBUG -gt 0 ] && echo -e "Body (final):\n\tFILE        |${FILE}|" >>"$LOG_DBUG"
 
-			for DEPFILE in $(grep -Hl "$FILE" "${DIR_LIST}/"*.${EXT_DEPS}); do				#   for each .deps file that contains the package (in REPO_SOURCE)...
+			for DEPFILE in $(grep -Hl "$FILE" "${DIR_LIST}/"*.${EXT_DEPS} | sed "s|${DIR_LIST}/||"); do				#   for each .deps file that contains the package (in REPO_SOURCE)...
 #				TEMP="${FILE_SCHEMA#*\}}"						#   remove just the package name portion from the package filename 'schema' - everything before the first '}' character
 #				eval TEMP="${TEMP}.${EXT_DEPS}"						#   combine the 'schema' (less the package name) values and the file extension value (e.g. i32.bin.soft)
 #				DEPNAME="$(echo $DEPFILE | sed "s/${TEMP}//")"				#   remove that combination from the passed package name (in case it was passed like bash.i32.bin.soft) to isolate just the package name (e.g. bash)
@@ -5087,6 +5105,7 @@ elif [ "$UNLOAD" ]; then
 
 				( grep -q ^"$DEPBASE" "${DIR_TEMP}/unload.${EXEID}" ) && continue	#      if the corresponding .soft file of the iterated .deps file, is also listed for removal (in the unload list), then we need to unload so leave it in the list and go to the next DEPFILE
 												#      otherwise a package that is NOT being unloaded still needs this package, so we can't unload it
+echo "|$DEPBASE| depends on |$FILE|"
 # UPDATED 2025/11/17
 #				[ $DEBUG -gt 0 ] && echo -e "\tRemoving:    ${FILE} from unload list; ${DEPBASE}.${EXT_SOFT} depends on it" >>"$LOG_DBUG"
 				[ $DEBUG -gt 0 ] && echo -e "\tOther installed packages depend on ${FILE},\n\tprocessing its dependencies for removal from the unload list..." >>"$LOG_DBUG"

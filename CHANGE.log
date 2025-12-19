@@ -335,3 +335,12 @@
 - Fixed a bug in the startup when no PACKAGE(S) or DIRECTORY is passed
 - Updated -i and -X to copy packages first, then install
 
+2025/12/19
+- Updated installPackage() to mount alternate location with -i, -X, and -Y
+- Fixed a bug in unloadPackage() preventing a dependency of a to-be-unloaded
+  package from also be unloaded
+- Fixed a bug in the DIRECTORY parameter processing
+- Updated how -R was processed with -i
+- Updated an invalid default assignment for -L
+- Created test scripts for -i and -u
+
