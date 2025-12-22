@@ -344,3 +344,14 @@
 - Updated an invalid default assignment for -L
 - Created test scripts for -i and -u
 
+2025/12/22
+- Completed test scripts for -i and -u
+- Added elevated account priviledge checking for base OS packages
+- Adjusted output with the -c, -d, -e, and -i actions
+- Updated the initial directory checking
+- Added a DIR_LIST initial check
+- Added 'directory' as a showMsg tag
+- Updated the coloring with '-l -R'
+- Added EXT_BASE for package marking with single repo's
+- Corrected bugs until -i fully worked
+

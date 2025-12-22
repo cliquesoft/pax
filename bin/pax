@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/12/19 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/12/22 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -87,7 +87,8 @@ DIR_LOGS='/var/log'
 DIR_LOOP='/Mounts/.software'									# directory that symlinked software needs to use as mountpoint
 DIR_TEMP='/tmp/pax'
 
-EXT_CODE='code'											# [tgz file] package source code
+EXT_BASE='base'											# [text file] package base OS marker
+EXT_CODE='code'											# [tgz file]  package source code
 EXT_DEPS='deps'											# [text file] package dependency list
 EXT_HASH='hash'											# [text file] package validation hash
 EXT_INFO='info'											# [text file] package information
@@ -371,7 +372,7 @@ showMsg() {
 #echo 02
 # UPDATED 2025/11/20
 #	[ "$QUIET" = 'default' ] && [ "$TAG" != 'failure' ] && [ "$TAG" != 'success' ] && [ "$TAG" != 'action' ] && [ "$TAG" != 'step' ] && [ "$TAG" != 'package' ] && [ "$TAG" != 'file' ] && [ "$TAG" != 'note' ] && [ "$TAG" != 'prompt' ] && return 1			# if we need to show most output, but this is excess, then exit (writing to the log if desired)
-	[ "$QUIET" = 'default' ] && ( [ "$TAG" = 'dependency' ] || [ "$TAG" = 'duplicate' ] ) && return 1			# if we need to show most output (success,failure,warning,notice,issue,note,location,package,file,action,step,prompt), otherwise exit (writing to the log if desired)
+	[ "$QUIET" = 'default' ] && ( [ "$TAG" = 'dependency' ] || [ "$TAG" = 'duplicate' ] ) && return 1			# if we need to show most output (success,failure,warning,notice,issue,note,location,package,directory,file,action,step,prompt), otherwise exit (writing to the log if desired)
 #echo 03
 	[ "$QUIET" = 'verbose' ] && [ "$TAG" = 'duplicate' ] && return 1			# if we need to show everything but duplicates (warnings,dependency), then exit (writing to the log if desired)
 #echo 04
@@ -401,17 +402,20 @@ showMsg() {
 		[ "$TAG" = 'notice' ] && PREFIX="${PURPLE}"					# [dryrun], [overwrite]
 		[ "$TAG" = 'action' ] && PREFIX="${TEAL}"					# Processing dependencies for the package...
 		[ "$TAG" = 'step' ] && PREFIX="${CYAN}"						# [install], [copy], [extract], ...
-		[ "$TAG" = 'location' ] && PREFIX="${PURPLE}"					# [local], [remote]
+		[ "$TAG" = 'location' ] && PREFIX="${PURPLE}"					# [home], [live], [root], [misc]
 		[ "$TAG" = 'package' ] && PREFIX="${PURPLE}"					# (bin) zip:			< in the final action section (e.g. 'Copying files to specified location...')
+		[ "$TAG" = 'directory' ] && PREFIX="${TEAL}"					# 2025-01-03:			< in the restore point listing
 		[ "$TAG" = 'file' ] && PREFIX="${BLUE}"						# (bin) zip:			< in the final action section (e.g. 'Copying files to specified location...')
 		[ "$TAG" = 'note' ] && PREFIX="${TEAL}"
 		[ "$TAG" = 'issue' ] && ( echo "$MSG" | grep -q ^' !missing!' ) && PREFIX="${RED}"						# !missing!			in the validation checks
 		[ "$TAG" = 'issue' ] && [ ! "$PREFIX" ] && PREFIX="${YELLOW}"
+		[ "$TAG" = 'dependency' ] && ( echo "$MSG" | grep -q ^'\[  local  \]' ) && PREFIX="${BLUE}"
+		[ "$TAG" = 'dependency' ] && ( echo "$MSG" | grep -q ^'\[ foreign \]' ) && PREFIX="${CYAN}"
 		[ "$TAG" = 'dependency' ] && ( echo "$MSG" | grep -q ^'\[ BASE OS \]' ) && PREFIX="${PURPLE}"					# [SYSTEM] (dev) bash		in the 'Processing dependencies for the package...' section
 		[ "$TAG" = 'dependency' ] && ( echo "$MSG" | grep -q ^'\[ optional\]' ) && PREFIX="${DARKGREY}"
 		[ "$TAG" = 'dependency' ] && ( echo "$MSG" | grep -qE ^'(\[  exist  \]|\[installed\])' ) && PREFIX="${GREEN}"
 		[ "$TAG" = 'dependency' ] && ( echo "$MSG" | grep -qE ^'(\[ ignored \]|\[ unloaded\])' ) && PREFIX="${YELLOW}"
-		[ "$TAG" = 'dependency' ] && ( echo "$MSG" | grep -qE ^'(\[ FLAGGED \]|\[ missing \])' ) && PREFIX="${RED}"
+		[ "$TAG" = 'dependency' ] && ( echo "$MSG" | grep -qE ^'(\[ account \]|\[ flagged \]|\[ missing \]|\[ Source! \])' ) && PREFIX="${RED}"
 		[ "$TAG" = 'dependency' ] && [ ! "$PREFIX" ] && PREFIX="${BLUE}"
 		[ "$TAG" = 'duplicate' ] && ( echo "$MSG" | grep -q ^'\[duplicate\]' ) && PREFIX="${DARKGREY}"
 		echo -e${CR} "${PREFIX}${MSG}${SUFFIX}${NORMAL}"
@@ -574,13 +578,13 @@ splitName() {
 #echo "temp2 |$TEMP|"
 # UPDATED 2025/10/31 - so that the VERFILE assignment below works correctly
 #		PACKAGE="$(echo $PARAMETER | sed "s/${TEMP}$//")"				#   remove the TEMP string that was just created to isolate just the package name
-		PACKAGE="$(echo $PARAMETER | sed "s/${TEMP}\.${EXT}$//")"			#   remove the TEMP string that was just created to isolate just the package name
+		PACKAGE="$(echo "$PARAMETER" | sed "s/${TEMP}\.${EXT}$//")"			#   remove the TEMP string that was just created to isolate just the package name
 # MERGED 2025/11/05
 #		BASENAME="$(echo $PARAMETER | sed "s/.${EXT_SOFT}$//")"				#   remove the file extension from the name
 #		BASENAME="$(echo $BASENAME | sed "s/KERNEL/${KERNEL}/")"			#   lastly, perform the KERNEL keyword substitution
 # UPDATED 2025/12/04 - kernel substituion needs to be first
 #		BASENAME="$(echo $PARAMETER | sed "s/.${EXT}$//;s/KERNEL/${KERNEL}/")"		#   remove the file extension from the name and perform the KERNEL keyword substitution
-		BASENAME="$(echo $PARAMETER | sed "s/.${EXT}$//")"				#   remove the file extension from the name and perform the KERNEL keyword substitution
+		BASENAME="$(echo "$PARAMETER" | sed "s/.${EXT}$//")"				#   remove the file extension from the name and perform the KERNEL keyword substitution
 		FILENAME="$PARAMETER"
 
 # UPDATED 2025/11/05
@@ -609,6 +613,7 @@ splitName() {
 	FILETYPE="$(echo "$FILENAME" | grep -oE '[\._\-](bin|dev|doc|drv|gir|lib|loc)' | head -n 1 | sed -E 's/^[\._\-]//')"			# search for any variation of known type abbreviations and remove the preceeding separation character
 	[ "$FILETYPE" = '' ] && FILETYPE="$TYPE"					#   if the line above did not return any value, then default to whatever is specified as TYPE
 
+	# NOTE: the VER* variables are used for the *source* file name
 # UPDATED 2025/12/02
 #	[ "$VERSION" ] && VERBASE="${VERSION}$(echo $BASENAME | sed "s/^${PACKAGE}//")" || VERBASE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
 ## UPDATED 2025/11/05
@@ -621,14 +626,21 @@ splitName() {
 #	[ "$VERSION" ] && VERFILE="${VERSION}${TEMP}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
 	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -gt 1 ] ) ) && VERFILE="${VERBASE}.${EXT}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
 
-#echo "name |$PACKAGE|"
-#echo "base |$BASENAME|"
-#echo "file |$FILENAME|"
-#echo "type |$FILETYPE|"
-#echo "optf |$OPTFILE|"
-#echo "ver  |$VERSION|"
-#echo "verb |$VERBASE|"
-#echo "verf |$VERFILE|"
+# left off - the filename grows in length with each call here
+	eval TEMP="${FILE_SCHEMA#*\}}"
+echo "temp |$TEMP|"
+	[ "$VERFILE" ] && eval BASENAME="${VERT_SCHEMA}"
+	[ "$VERFILE" ] && FILENAME="${BASENAME}.${EXT_SOFT}"
+	[ "$VERBASE" ] && PACKAGE="$(echo "$FILENAME" | sed "s/${TEMP}\.${EXT}$//")"
+
+echo "name |$PACKAGE|"
+echo "base |$BASENAME|"
+echo "file |$FILENAME|"
+echo "type |$FILETYPE|"
+echo "optf |$OPTFILE|"
+echo "ver  |$VERSION|"
+echo "verb |$VERBASE|"
+echo "verf |$VERFILE|"
 
 return 0
 # REMOVED 2025/10/21 - to now be more versatile with package names
@@ -816,14 +828,14 @@ processDependencies() {
 #		[ $DEBUG -gt 0 ] && echo -e "\tPackage flagged from loading..." >>"$LOG_DBUG"
 # UPDATED 2025/10/31 - replace APP* variables and using showMsg()
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo "[ FLAG ] ${APPNAME}.${APPTYPE}"
-		showMsg 'dependency' "[ FLAGGED ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+		showMsg 'dependency' "[ flagged ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 # UPDATED 2025/12/04
 #		showMsg 'failure' "The package is flagged from being loaded." 'log'
 #		return 1
 		return 0													# NOTE: to prevent issues during a bootup, just skip this package
 	fi
 	if [ ! "$BOOTING" ] && ( grep -qwE ^"${PACKAGE}|${FILENAME}"$ "${REPO_PREFIX}/${FLAG_LIVE}" 2>/dev/null ); then		# if the package (by its PACKAGE name -or- complete FILENAME) IS listed as being flagged to not load, then...
-		showMsg 'dependency' "[ FLAGGED ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+		showMsg 'dependency' "[ flagged ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		showMsg 'failure' "The package is flagged from being loaded." 'log'
 # DEV NOTE: you can force an install to just skip processing the overall request
 		if [ "$FORCE" ]; then
@@ -1008,13 +1020,22 @@ processDependencies() {
 #	[ "$UNLOAD" ] && ( [ -L "${DIR_LIST}/${FILENAME}" ] || [ ! -s "${DIR_LIST}/${FILENAME}" ] ) && {	# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then go to the next one!
 # UPDATED 2025/12/15
 #	[ "$UNLOAD" ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && {	# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then go to the next one!
-	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && {	# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then go to the next one!
+# UPDATED 2025/12/22 - installed packages with no script to run will have a 0 byte marker file
+#	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && {	# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then go to the next one!
+# DEV NOTE: the REPO_OPTION directory can no longer contain 0-byte REPO_SYSTEM files; everything needs to go into REPO_LIST/BASENAME[.list|info|hash|deps]
+	# if the iterated dependency has a 'base os' marker (e.g. TinyCore) -OR- the package exists in DIR_LIST (and we're working in REPO_OPTION) but not REPO_OPTION (since it would be in REPO_SYSTEM), then...
+	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_BASE}" ] || ( [ -e "${DIR_LIST}/${FILENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
 # UPDATED 2025/11/07
 #		[ $DEBUG -gt 0 ] && echo -e "\tPackage is being ignored (FIRMWARE package)..." >>"$LOG_DBUG"
 		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The package is part of the base OS and can't be modified." >>"$LOG_DBUG"
 		showMsg 'dependency' "[ BASE OS ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 # REMOVED 2025/11/18 - this is no longer a failure
 #		showMsg 'failure' "The package is part of the base OS and can't be modified." 'log'
+		return 0												# NOTE: we don't exit with failure since this could just be a dependency and left installed
+	}
+	[ "$UNLOAD" = 'update' ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && [ $(id -u) -gt 0 ] && {			# if the iterated dependency is on DATA (via symlink) or BOOT (via 0 byte file), then check the account has priviledges to update
+		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The user account does not have sufficient priviledges to update base OS packages." >>"$LOG_DBUG"
+		showMsg 'dependency' "[ account ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0												# NOTE: we don't exit with failure since this could just be a dependency and left installed
 	}
 # UPDATED 2025/11/07 - removed COPY since it would already error out with the other check above; also we simply need to check if it's local or not
@@ -1143,7 +1164,10 @@ if [ 1 -eq 0 ]; then
 	[ -e "${REPO_SOURCE}/${FILENAME}" ] && SOURCE='  local  '
 	[ ! -e "${REPO_SOURCE}/${FILENAME}" ] && {
 		( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) || {
-			showMsg 'step' "[!REPO!] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+#echo "|"$REPO_SOURCE"|"
+# UPDATED 2025/12/22
+#			showMsg 'step' "[!REPO!] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+			showMsg 'dependency' "[ Source! ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 			showMsg 'failure' "The package needs to be downloaded, but the REPO_SOURCE is local." 'log'
 			return 1
 		}
@@ -1702,8 +1726,13 @@ installPackage() {
 		[ "$UNLOAD" = 'update2' ] && TEMP="./${FILENAME}"						# we need to use the package in the current directory where the update is
 		[ "$UNLOAD" != 'update2' ] && TEMP="${REPO_SOURCE}/${FILENAME}"					# we need to use the package in REPO_SOURCE
 
-		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    sudo /bin/mount -t squashfs -o loop,ro,bs=4096 \"${REPO_SOURCE}/${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
-		[ "$PROXY" ] && TEMP="${PROXY}" || TEMP="${REPO_SOURCE}"		# if we're issuing a '-Y -X -i', then mount an alternative location, otherwise we're doing any other combination without -X, so mount the normal spot
+# UPDATED 2025/12/22 - this had to be expanded so remote REPO_SOURCE's could be used to download packages
+#		[ "$PROXY" ] && TEMP="${PROXY}" || TEMP="${REPO_SOURCE}"		# if we're issuing a '-Y -X -i', then mount an alternative location, otherwise we're doing any other combination without -X, so mount the normal spot
+		[ "$PROXY" ] && TEMP="${PROXY}"									# if a '-X -i' was issued, then mount an alternative location
+		[ ! "$PROXY" ] && ( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${REPO_OPTION}"	# if a remote -S was passed, then mount from the default local repo storage location
+		[ ! "$PROXY" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${REPO_SOURCE}"	# if a local -S was passed, then mount from the provided, local location
+
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    sudo /bin/mount -t squashfs -o loop,ro,bs=4096 \"${TEMP}/${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
 		sudo /bin/mount -t squashfs -o loop,ro,bs=4096 "${TEMP}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1
 	fi
 	# check if the package has any libs we need to load later						  NOTE: we check this way because simply checking for the directory can produce false positives
@@ -1969,17 +1998,29 @@ continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory
 #	# if we are NOT validating -AND- installing a requested package [INDEX==1] (not a dependency for it [INDEX>1]) -AND- it needs to be added to the optional.list -AND- the package isn't already in the LIST, then add the package to the LIST file
 #	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ ! "$NOLIST" ] && ( ! grep -q $RAWFILE "${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS"
 	# if we are NOT validating -AND- installing a requested package [INDEX==1] (not a dependency for it [INDEX>1]) -AND- it needs to be added to a list -AND- the package isn't already in the LIST, then add the package to the LIST file
-	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ "$PACKLIST" = 'boot' ] && ( ! grep -q $RAWFILE "${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS"
-	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ "$PACKLIST" = 'live' ] && ( ! grep -q $RAWFILE "${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS"
+# UPDATED 2025/12/22
+#	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ "$PACKLIST" = 'boot' ] && ( ! grep -q $RAWFILE "${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS"
+#	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ "$PACKLIST" = 'live' ] && ( ! grep -q $RAWFILE "${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS"
+	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ "$PACKLIST" = 'boot' ] && ( ! grep -q "$FILENAME" "${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS"
+	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ "$PACKLIST" = 'live' ] && ( ! grep -q "$FILENAME" "${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS"
 
 	# defer the execution of any related marker/service scripts from the package(s) until everything is installed - if we are not validating package data!
 	[ ! "$VALIDATE" ] && [ -x "${DIR_INST}/${BASENAME}" ] && ( ! grep -q "${DIR_INST}/${BASENAME}" ${DIR_TEMP}/installs.${EXEID} 2>/dev/null ) && echo "${BASENAME}" >>${DIR_TEMP}/installs.${EXEID} 2>>"$LOG_ERRS"
 	[ ! "$VALIDATE" ] && [ -e "${DIR_INIT}/${BASENAME}" ] && ( ! grep -q "${DIR_INIT}/${BASENAME}" ${DIR_TEMP}/services.${EXEID} 2>/dev/null ) && echo "${BASENAME}" >>${DIR_TEMP}/services.${EXEID} 2>>"$LOG_ERRS"
 
 	# now add to the 'catalog' of installed packages
-	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && ln -sf "${REPO_SOURCE}/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
-	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "${REPO_SOURCE}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
-	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "${REPO_SOURCE}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
+# UPDATED 2025/12/22 - this had to be expanded so remote REPO_SOURCE's could be used to download packages
+#	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && ln -sf "${REPO_SOURCE}/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
+#	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "${REPO_SOURCE}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
+#	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "${REPO_SOURCE}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
+	[ "$PROXY" ] && TEMP="${PROXY}"									# if a '-X -i' was issued, then mount an alternative location
+	[ ! "$PROXY" ] && ( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${REPO_OPTION}"	# if a remote -S was passed, then mount from the default local repo storage location
+	[ ! "$PROXY" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${REPO_SOURCE}"	# if a local -S was passed, then mount from the provided, local location
+	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && ln -sf "${TEMP}/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
+	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
+	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
+	# if we're installing -AND- not a dryrun -AND- we're booting the device -AND- there's a single package repo (e.g. TinyCore), then make a marker file indicating the package in a base OS package
+	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ "$BOOTING" ] && [ "$REPO_SYSTEM" = "$REPO_OPTION" ] && touch "${DIR_LIST}/${BASENAME}.${EXT_BASE}" 2>>"$LOG_ERRS"
 
 	return 0
 
@@ -2324,7 +2365,7 @@ unloadPackage() {
 	[ "$DRYRUN" ] && showMsg 'notice' " [dryrun]" 'both' 0 0
 
 	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {				# if the package has been marked for uninstallation (delete, purge, or update) -AND- it currently is NOT installed, then...
-echo 'package not installed, uninstalling...'
+#echo 'package not installed, uninstalling...'
 		uninstallPackage || return 1							#   uninstall the package files
 		return 0									#   no need to process anything further!
 	}
@@ -2383,14 +2424,16 @@ echo 'package not installed, uninstalling...'
 
 	[ $DEBUG -gt 0 ] && echo -e "\tRemoving package contents from filesystem..." >>"$LOG_DBUG"
 	for FILE in $(eval find "${DIR_LOOP}/${BASENAME}" $PARAMS 2>>"$LOG_ERRS" | tail -n +2 | sed "s|^${DIR_LOOP}/${BASENAME}/||" | sort -r); do		# NOTE: the 'tail' removes the first line (mount point); we 'sort -r' to place the file above the directories since they have to be removed first!
-		if [ ! -d "${DIRECTORY}/$FILE" ]; then						#   if the iterated FILE is anything but a directory (e.g. device file, symlink, text file, ...), then delete it!
-#echo "[F] |${DIRECTORY}/$FILE|" >>"$LOG_ERRS"
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIRECTORY}/${FILE}\"" >>"$LOG_DBUG"
-			[ ! "$DRYRUN" ] && ( rm -f "${DIRECTORY}/${FILE}" >>"$LOG_ERRS" 2>&1 || return 1 )
-		elif [ -d "${DIRECTORY}/$FILE" ] && [ ! "$(ls -A "${DIRECTORY}/$FILE" 2>/dev/null)" ]; then				#   otherwise it is a directory, so check if it's empty and delete it if so!
-#echo "[D] |${DIRECTORY}/$FILE|" >>"$LOG_ERRS"
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rmdir \"${DIRECTORY}/${FILE}\"" >>"$LOG_DBUG"
-			[ ! "$DRYRUN" ] && rmdir "${DIRECTORY}/${FILE}" >>"$LOG_ERRS" 2>&1			#   NOTE: we do NOT error out here if we can't delete it!
+		( echo "$DIRECTORY" | grep -q '\.'$ ) && TEMP="${DIRECTORY}${FILE}" || TEMP="${DIRECTORY}/${FILE}"	# adjusts the path if the DIR_LIVE ends with a dot (e.g. /Users/Public/.etc/pax)
+#echo "iterating |$TEMP|"
+		if [ ! -d "${TEMP}" ]; then						#   if the iterated FILE is anything but a directory (e.g. device file, symlink, text file, ...), then delete it!
+#echo "[F] |${TEMP}|"
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${TEMP}/\"" >>"$LOG_DBUG"
+			[ ! "$DRYRUN" ] && ( rm -f "${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1 )
+		elif [ -d "${TEMP}" ] && [ ! "$(ls -A "${TEMP}" 2>/dev/null)" ]; then				#   otherwise it is a directory, so check if it's empty and delete it if so!
+#echo "[D] |${TEMP}|"
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rmdir \"${TEMP}\"" >>"$LOG_DBUG"
+			[ ! "$DRYRUN" ] && rmdir "${TEMP}" >>"$LOG_ERRS" 2>&1			#   NOTE: we do NOT error out here if we can't delete it!
 		fi
 	done
 
@@ -2507,12 +2550,16 @@ echo 'package not installed, uninstalling...'
 # Notes:	this should be called after the package has been unloaded first!!!
 # 		the directory containing the package files should already be entered BEFORE calling this function!
 uninstallPackage() {
-	if [ ! "$DRYRUN" ] && [ "$INDEX" -eq 1 ] && [ "$UNLOAD" != 'unload2' ] && [ "$UNLOAD" != 'update2' ]; then
+# UPDATED 2025/12/22
+#	if [ ! "$DRYRUN" ] && [ "$INDEX" -eq 1 ] && [ "$UNLOAD" != 'unload2' ] && [ "$UNLOAD" != 'update2' ]; then
+	if [ ! "$DRYRUN" ] && [ "$UNLOAD" != 'unload2' ] && [ "$UNLOAD" != 'update2' ]; then
 		[ "$PACKLIST" = 'boot' ] && TEMP="${LIST_BOOT}"
 		[ "$PACKLIST" = 'live' ] && TEMP="${LIST_LIVE}"
+#echo -e "\tCalling: sed -i \"/${FILENAME}/d\" \"${REPO_PREFIX}/${TEMP}\""
+#echo "PACKLIST |$PACKLIST|"
 
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling: sed -i \"/${FILENAME}/d\" \"${REPO_PREFIX}/${TEMP}\"" >>"$LOG_DBUG"
-		[ ! "$DRYRUN" ] && sed -i "/${FILENAME}/d" "${REPO_PREFIX}/${TEMP}" 2>>"$LOG_ERRS"		# if this is a requested package and not one of its dependencies (via INDEX==1) -AND- we're are actually uninstalling (deleting or purging), then remove the package from the LIST file
+		[ ! "$DRYRUN" ] && ( grep -q "$FILENAME" "${REPO_PREFIX}/${TEMP}" 2>>"$LOG_ERRS" ) && sed -i "/${FILENAME}/d" "${REPO_PREFIX}/${TEMP}" 2>>"$LOG_ERRS"		# if this is a requested package and not one of its dependencies (via INDEX==1) -AND- we're are actually uninstalling (deleting or purging), then remove the package from the LIST file
 	fi
 
 # UPDATED 2025/12/15
@@ -2673,7 +2720,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-i   install package(s)'
 #	echo '	-j   '
 #	echo '	-k   '
-# VER2 - ability to show packages that are downloaded, but not installed (e.g. -l all,downloaded,installed)
+# VER2 - ability to show packages that are downloaded, but not installed (e.g. -l -Q none > *package_name [* indicating is downloaded but not installed]); also '-l -Q default' just lists: package, version; '-l -Q verbose' lists the current way with all the package info
 	echo '	-l   list all currently installed packages'
 	echo '	-m   make a new package (requires DIRECTORY)'					# this makes a new .soft package tarball based on the passed directory; 	NOTE: you can just have the .make file call builder to do all the heavy lifting
 #	echo '	-n   '
@@ -2747,6 +2794,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-P   prompt before taking action'
 # UPDATED 2025/11/19
 #	echo '	-Q   quiets the output to only show errors'				# old '-q' > new '-Q'
+# VER2 - 'default' just shows the final action (without the header), verbose shows the current 'default', 'none' shows everything - duplicates, etc
 	echo '	-Q   quiets the output: all, errors, default, verbose, none'		# old '-q' > new '-Q'
 # UPDATED 2025/11/24 - make this an opt-out, not an opt-in
 #	echo '	-R   create a restore point when uninstalling'				# old '-N' > new 'absence of value'; if you want to create a restore point, you must now specify the flag!
@@ -3803,27 +3851,45 @@ rm "${DIR_LIST}/writable" >>"$LOG_ERRS" 2>&1
 #if [ "$INSTALL" ] && [ "$PREFIX" = '' ] && [ "$DIRECTORY" = '' ]; then
 # UPDATED 2025/12/12
 #if [ "$INSTALL" ] && [ "$DIRECTORY" = '' ]; then			# if we're installing -AND- the files need to be copied to the root (e.g. system package update)
-if [ "$INSTALL" ] && [ ! "$DIRECTORY" ]; then			# if we're installing -AND- the files need to be copied to the root (e.g. system package update)
+# UPDATED 2025/12/22
+#if [ "$INSTALL" ] && [ ! "$DIRECTORY" ]; then			# if we're installing -AND- the files need to be copied to the root (e.g. system package update)
+if [ "$INSTALL" ] && ( [ ! "$DIRECTORY" ] || [ "$DIRECTORY" = '/' ] ); then			# if we're installing -AND- the files need to be copied to the root (e.g. system package update)
+	# NOTE: if we aren't installing to the root (e.g. DIRECTORY=/), then it will be another place (e.g. /Users/Public, HOME, /tmp[/staging], etc) which will be presumed to be writable
+
 	if [ ! -d "${DIR_INIT}" ]; then
 # UPDATED 2025/10/27
 #		mkdir -p "${DIR_INIT}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The init script directory (DIR_INIT) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
-		mkdir -p "${DIR_INIT}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The init script directory (DIR_INIT) does not exist and could not be created." 'screen'; exit 1; }
+# UPDATED 2025/12/22
+#		mkdir -p "${DIR_INIT}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The init script directory (DIR_INIT) does not exist and could not be created." 'screen'; exit 1; }
+		mkdir -p "${DIR_INIT}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The service script directory (DIR_INIT) does not exist and could not be created." 'screen'; exit 1; }
 	fi
 # UPDATED 2025/10/27
 #	touch "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The init script directory (DIR_INIT) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
-	touch "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The init script directory (DIR_INIT) is not writable.\n       You may need to execute the command using 'sudo'." 'screen'; exit 1; }
+# UPDATED 2025/12/22
+#	touch "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The init script directory (DIR_INIT) is not writable.\n       You may need to execute the command using 'sudo'." 'screen'; exit 1; }
+	touch "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The service script directory (DIR_INIT) is not writable.\n       You may need to execute the command using 'sudo'." 'screen'; exit 1; }
 	rm "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1
+
+	if [ ! -d "${DIR_INST}" ]; then
+# UPDATED 2025/10/27
+#		mkdir -p "${DIR_INST}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The installed cache directory (DIR_INST) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/12/22
+#		mkdir -p "${DIR_INST}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The installed cache directory (DIR_INST) does not exist and could not be created." 'screen'; exit 1; }
+		mkdir -p "${DIR_INST}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The package script directory (DIR_INST) does not exist and could not be created." 'screen'; exit 1; }
+	fi
+# UPDATED 2025/10/27
+#	touch "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The installed cache directory (DIR_INST) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
+# UPDATED 2025/12/22
+#	touch "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The installed cache directory (DIR_INST) is not writable." 'screen'; exit 1; }
+	touch "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The package script directory (DIR_INST) is not writable." 'screen'; exit 1; }
+	rm "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1
 fi
 
-if [ ! -d "${DIR_INST}" ]; then
-# UPDATED 2025/10/27
-#	mkdir -p "${DIR_INST}" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The installed cache directory (DIR_INST) does not exist and could not be created." | tee -a "$LOG_ERRS"; exit 1; }
-	mkdir -p "${DIR_INST}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The installed cache directory (DIR_INST) does not exist and could not be created." 'screen'; exit 1; }
+if [ ! -d "${DIR_LIST}" ]; then
+	mkdir -p "${DIR_LIST}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The installed package cache directory (DIR_LIST) does not exist and could not be created." 'screen'; exit 1; }
 fi
-# UPDATED 2025/10/27
-#touch "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1 || { echo "ERROR: The installed cache directory (DIR_INST) is not writable." | tee -a "$LOG_ERRS"; exit 1; }
-touch "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The installed cache directory (DIR_INST) is not writable." 'screen'; exit 1; }
-rm "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1
+touch "${DIR_LIST}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The installed package cache directory (DIR_LIST) is not writable." 'screen'; exit 1; }
+rm "${DIR_LIST}/writable" >>"$LOG_ERRS" 2>&1
 
 if [ ! -d "${DIR_LOGS}" ]; then
 # UPDATED 2025/10/27
@@ -3940,7 +4006,8 @@ elif [ "$INSTALL" ] || [ "$VALIDATE" ]; then									# if we are installing -OR-
 # REMOVED 2025/11/26 - this is now the DIRECTORY value
 #		[ "$PREFIX" ] && DIRECTORY="${PREFIX}"						#     if the -D option was passed, add it to the directory structure
 #		[ ! "$PREFIX" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && {			#     if the -D option was NOT passed, and the DIRECTORY was NOT passed, then set to the default installation location
-		[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"		#     if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since this is were we need to store packages by default
+# MOVED 2025/12/22 - we can't change REPO_SOURCE since install may need to download packages; moved below
+#		[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"		#     if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since this is were we need to store packages by default
 # UPDATED 2025/12/12 - the -i can use both -S and -R together
 #		[ "$RESTORE" ] && REPO_SOURCE="$REPO_RESTOR"						#   if -R was passed, then we need to change to the restore point directory
 #		[ "$RESTORE" ] && ( echo "$RESTORE" | grep -q '/' ) && REPO_SOURCE="${REPO_SOURCE}/${RESTORE}"		# if a full restore path was passed to -R, then append it to REPO_SOURCE
@@ -3963,7 +4030,13 @@ elif [ "$INSTALL" ] || [ "$VALIDATE" ]; then									# if we are installing -OR-
 # UPDATED 2025/12/12 - the -i can use both -S and -R together
 #	[ "$RESTORE" ] && ( cd "$RESTORE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen' )			#   now cd into the REPO_SOURCE where the packages are
 #	[ ! "$RESTORE" ] && ( cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen' )			#   now cd into the REPO_SOURCE where the packages are
-	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
+# UPDATED 2025/12/22 - this had to be reworked since -i may need to download
+#	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
+	if ( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ); then				#   if the REPO_SOURCE is remote, then...
+		cd "$REPO_OPTION" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'		#      change it to the REPO_OPTION directory since this is were we need to store packages by default
+	else											#   otherwise a local REPO_SOURCE was passed, so...
+		cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'		#      change into the local REPO_SOURCE
+	fi
 # REMOVED 2025/11/24 - this uses DIR_LIVE in all its i/o
 # RESTORED 2025/12/11 - using -R needs to change the source
 elif [ "$LIST" ]; then										# if we are listing installed packages, then...
@@ -4032,7 +4105,9 @@ elif [ "$UNLOAD" ]; then									# if we are unloading/uninstalling package(s), 
 	[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"			#   if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since we can only unload local packages
 	[ "$RESTORE" ] && REPO_SOURCE="${REPO_RESTOR}"						# if a full restore path was passed to -R, then append it to REPO_SOURCE
 
-	REPO_PREFIX="$(pwd)"									# store the current directory for package checking
+# UPDATED 2025/12/22 - this variable is used later so we have to bogart another one
+#	REPO_PREFIX="$(pwd)"									# store the current directory for package checking
+	REPO_SYSTEM="$(pwd)"									# store the current directory for package checking
 	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
 #elif [ "$VALIDATE" ]; then									# if we are validating package(s) information, then...
 	# see the [ "$INSTALL" ] block above (to prevent code duplication)
@@ -4069,12 +4144,16 @@ fi
 	[ ! "$PACKLIST" ] && PACKLIST='live'
 
 [ "$COPY" ] && [ "$DEPS" != 'none' ] && [ ! "$PROXY" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
-[ "$DOWNLOAD" ] && [ "$DEPS" != 'none' ] && [ ! "$PROXY" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
+[ "$COPY" ] && ( [ "$DEPS" = 'none' ] || [ "$PROXY" ] ) && showMsg 'action' "Generating a package list to copy..." 'both' 1 4
+[ "$DOWNLOAD" ] && [ "$DEPS" != 'none' ] && [ ! "$PROXY" ] && showMsg 'action' "Processing dependencies for the package(s)..." 'both' 1 4
+[ "$DOWNLOAD" ] && ( [ "$DEPS" = 'none' ] || [ "$PROXY" ] ) && showMsg 'action' "Generating a package list to download..." 'both' 1 4
 # MERGED 2025/11/26 - this is now -D none
 #[ "$EXTRACT" ] && [ ! "$ONLY" ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
-[ "$EXTRACT" ] && [ "$DEPS" != 'none' ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
+[ "$EXTRACT" ] && [ "$DEPS" != 'none' ] && showMsg 'action' "Processing dependencies for the package(s)..." 'both' 1 4
+[ "$EXTRACT" ] && [ "$DEPS" = 'none' ] && showMsg 'action' "Generating a package list to extract..." 'both' 1 4
 #[ "$FIND" ]
-[ "$INSTALL" ] && [ "$DEPS" != 'none' ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
+[ "$INSTALL" ] && [ "$DEPS" != 'none' ] && showMsg 'action' "Processing dependencies for the package(s)..." 'both' 1 4
+[ "$INSTALL" ] && [ "$DEPS" = 'none' ] && showMsg 'action' "Generating a package list to install..." 'both' 1 4
 #[ "$LIST" ]
 #[ "$MAKE" ]
 [ "$OPEN" ] && showMsg 'action' "Starting pax in client mode..." 'both' 1 1
@@ -4094,8 +4173,8 @@ fi
 #fi
 [ "$UNLOAD" ] && [ ! "$RESTORE" ] && showMsg 'action' "Building list for all packages to unload..." 'both' 1 4
 [ "$UNLOAD" ] && [ "$RESTORE" ] && showMsg 'action' "Deleting the specified restore point..." 'both' 1 4
-[ "$VALIDATE" = 'data' ] && showMsg 'action' "Processing dependencies for the packages..." 'both' 1 4
-[ "$VALIDATE" = 'deps' ] && showMsg 'action' "Validating dependencies for the packages..." 'both' 1 4
+[ "$VALIDATE" = 'data' ] && showMsg 'action' "Processing dependencies for the package(s)..." 'both' 1 4
+[ "$VALIDATE" = 'deps' ] && showMsg 'action' "Validating dependencies for the package(s)..." 'both' 1 4
 
 
 # PROCESS PASSED PACKAGES
@@ -4130,7 +4209,9 @@ for RAWFILE in $@; do
 #	if [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$MAKE" ] && [ ! "$PROXY" ] && [ ! -e "${REPO_SYSTEM}/${FILENAME}" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ] && [ ! -e "./${FILENAME}" ]; then
 # UPDATED 2025/12/18
 #	if [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! "$PROXY" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ]; then
-	elif [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ]; then
+# UPDATED 2025/12/22
+#	elif [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ]; then
+	elif [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ]; then
 # UPDATED 2025/10/30
 #		showMsg 'msg|failure' "The '${FILENAME}' file does not exist."
 		showMsg 'failure' "The '${FILENAME}' package does not exist." 'both'
@@ -4204,13 +4285,14 @@ for RAWFILE in $@; do
 #		# add the package to the list of dependencies						  NOTE: this lists EVERY dependency for every dependency in one list; not just the dependencies for the requested package!
 #		echo "$FILENAME" >>"${DIR_TEMP}/installed.${EXEID}"					# add the package to the cache file for future unloading/uninstalling information
 #echo "fn |$FILENAME|"
-		if [ "$PROXY" ]; then
-			# NOTE: the PROXY and REPO_SOURCE values are switched so that the script operates as usual!!!
-			[ -e "${PROXY}/${FILENAME}" ] && [ ! "$FORCE" ] && {
-				showMsg 'dependency' "[  exist  ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-				showMsg 'failure' "The package currently exists in the repo (${PROXY})." 'log'
-				continue
-			}
+# CONSOLIDATED 2025/12/22
+#		if [ "$PROXY" ]; then
+#			# NOTE: the PROXY and REPO_SOURCE values are switched so that the script operates as usual!!!
+#			[ -e "${PROXY}/${FILENAME}" ] && [ ! "$FORCE" ] && {
+#				showMsg 'dependency' "[  exist  ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+#				showMsg 'failure' "The package currently exists in the repo (${PROXY})." 'log'
+#				continue
+#			}
 # MOVED 2025/12/18 - into the second step below
 #			unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
 #
@@ -4219,13 +4301,14 @@ for RAWFILE in $@; do
 #				showMsg 'failure' "The package file restore failed (${SOURCE})." 'log'
 #				return 1
 #			}
-		elif [ "$RESTORE" ]; then
-			# NOTE: the REPO_RESTOR and REPO_SOURCE values are switched so that the script operates as usual!!!
-			[ -e "${REPO_RESTOR}/$FILENAME" ] && [ ! "$FORCE" ] && {
-				showMsg 'dependency' "[  exist  ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-				showMsg 'failure' "The package currently exists in the repo (${REPO_RESTOR})." 'log'
-				continue
-			}
+# CONSOLIDATED 2025/12/22
+#		elif [ "$RESTORE" ]; then
+#			# NOTE: the REPO_RESTOR and REPO_SOURCE values are switched so that the script operates as usual!!!
+#			[ -e "${REPO_RESTOR}/$FILENAME" ] && [ ! "$FORCE" ] && {
+#				showMsg 'dependency' "[  exist  ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+#				showMsg 'failure' "The package currently exists in the repo (${REPO_RESTOR})." 'log'
+#				continue
+#			}
 # MOVED 2025/12/19 - into the second step below
 #			unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
 #
@@ -4234,6 +4317,14 @@ for RAWFILE in $@; do
 #				showMsg 'failure' "The package file restore failed (${SOURCE})." 'log'
 #				return 1
 #			}
+		if [ "$PROXY" ] || [ "$RESTORE" ]; then
+			[ "$PROXY" ] && TEMP="$PROXY" || TEMP="$RESTORE"
+			# NOTE: the PROXY|RESTORE and REPO_SOURCE values are switched so that the script operates as usual!!!
+			[ -e "${TEMP}/${FILENAME}" ] && [ ! "$FORCE" ] && {
+				showMsg 'dependency' "[  exist  ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+				showMsg 'failure' "The package currently exists in the repo (${TEMP})." 'log'
+				continue
+			}
 		fi
 	elif [ "$LIST" ]; then										# if we are listing installed packages, then...
 # this is handled in the script parameter processing section above
@@ -4504,6 +4595,10 @@ done
 	# EXIT CHECK
 
 	[ "$VALIDATE" = 'deps' ] && exitGracefully 0 'both' 6 'success'				# there's no more work to perform if this was the action to process
+	[ "$UNLOAD" ] && [ ! "$RESTORE" ] && [ ! -e "${DIR_TEMP}/unload.${EXEID}" ] && {	# there's no more work to perform if the 'unload' file doesn't exist at this point
+		[ "$TREE" != 'relies' ] && showMsg 'action' "There are no package(s) to be processed." 'both' 1 4
+		exitGracefully 0 'both' 6 'success'
+	}
 	[ $INDEX -eq 0 ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ ! "$PROXY" ] && [ "$TREE" != 'reliant' ] && [ ! "$UNLOAD" ] && {
 		[ "$TREE" != 'relies' ] && showMsg 'action' "There are no package(s) to be processed." 'both' 1 4
 		exitGracefully 0 'both' 6 'success'
@@ -4631,55 +4726,64 @@ done
 		[ $DEBUG -gt 0 ] && { echo -en "body (implementation):\n\tINDEX       |${INDEX}|\n\tDEPENDENCY  |${DEPENDENCY}|\n\tFILENAME    |${FILENAME}|\n\tBASENAME    |${BASENAME}|\n\tPACKAGE     |${PACKAGE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tTYPE        |${FILETYPE}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |$VERFILE|\n\tDOWNLOAD    |$DOWNLOAD|\n\tpwd         |" >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
 
 		# NOTE: this is a separate 'if' on purpose!	NOTE: these only need to execute if we are NOT validating packages
-# UPDATED 2025/11/06
-#		if [ ! "$DOWNLOAD" ] && [ ! "$VALIDATE" ]; then
-		if [ ! "$DOWNLOAD" ]; then
-# UPDATED 2025/10/22 - no longer using APP* variables
-#			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "${APPFILE}: [local]"
-# UPDATED 2025/10/28
-#			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "${FILENAME}: [local]"
-# UPDATED 2025/11/05
-#			showMsg 'step' "${FILENAME}: [local]" 'screen' 1
-# UPDATED 2025/11/19 - adjusted for the -Q value
-#			showMsg 'step' "${DEPENDENCY}: [local]" 'both' 0 3
-# UPDATED 2025/12/10
-#			showMsg 'file' "${DEPENDENCY}: [local]" 'both' 0 3
-# UPDATED 2025/12/11
-#			[ "$VALIDATE" ] && showMsg 'package' "${DEPENDENCY}: [local]" 'both' 0 3
-#			[ ! "$VALIDATE" ] && showMsg 'file' "${DEPENDENCY}: [local]" 'both' 0 3
-# UPDATED 2025/12/15
-#			[ "$VALIDATE" ] && showMsg 'package' "${DEPENDENCY}:" 'both' 0 3
-#			[ ! "$VALIDATE" ] && showMsg 'file' "${DEPENDENCY}:" 'both' 0 3
+# REVERSED 2025/12/22
+## UPDATED 2025/11/06
+##		if [ ! "$DOWNLOAD" ] && [ ! "$VALIDATE" ]; then
+#		if [ ! "$DOWNLOAD" ]; then
+## UPDATED 2025/10/22 - no longer using APP* variables
+##			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "${APPFILE}: [local]"
+## UPDATED 2025/10/28
+##			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "${FILENAME}: [local]"
+## UPDATED 2025/11/05
+##			showMsg 'step' "${FILENAME}: [local]" 'screen' 1
+## UPDATED 2025/11/19 - adjusted for the -Q value
+##			showMsg 'step' "${DEPENDENCY}: [local]" 'both' 0 3
+## UPDATED 2025/12/10
+##			showMsg 'file' "${DEPENDENCY}: [local]" 'both' 0 3
+## UPDATED 2025/12/11
+##			[ "$VALIDATE" ] && showMsg 'package' "${DEPENDENCY}: [local]" 'both' 0 3
+##			[ ! "$VALIDATE" ] && showMsg 'file' "${DEPENDENCY}: [local]" 'both' 0 3
+## UPDATED 2025/12/15
+##			[ "$VALIDATE" ] && showMsg 'package' "${DEPENDENCY}:" 'both' 0 3
+##			[ ! "$VALIDATE" ] && showMsg 'file' "${DEPENDENCY}:" 'both' 0 3
+#			[ "$VALIDATE" ] && showMsg 'package' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3
+#			[ ! "$VALIDATE" ] && showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3
+## REMOVED 2025/12/15 - this is already specified in the dependency processing
+##			showMsg 'location' " [local]" 'both' 0 1
+## UPDATED 2025/11/06
+##		elif [ "$DOWNLOAD" ] && [ ! "$VALIDATE" ]; then
+#		elif [ "$DOWNLOAD" ]; then
+## UPDATED 2025/10/22 - no longer using APP* variables
+##			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "${APPFILE}: [remote]"
+## UPDATED 2025/10/28
+##			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "${FILENAME}: [remote]"
+## UPDATED 2025/11/05
+##			showMsg 'step' "${FILENAME}: [remote]" 'screen' 1
+##			[ "$REPO_TARGET" ] && cd "$REPO_TARGET" >>"$LOG_ERRS" 2>&1 || cd "$REPO_OPTION" >>"$LOG_ERRS" 2>&1		# if a different target was specified, then cd into it now, otherwise use the default location!
+## UPDATED 2025/11/19 - adjusted for the -Q value
+##			[ "$DRYRUN" ] && showMsg 'step' "${DEPENDENCY}: [remote] [dryrun]" 'both' 0 3
+##			[ ! "$DRYRUN" ] && showMsg 'step' "${DEPENDENCY}: [remote]" 'both' 0 3
+## UPDATED 2025/12/11
+##			[ "$DRYRUN" ] && showMsg 'file' "${DEPENDENCY}: [remote] [dryrun]" 'both' 0 3
+##			[ ! "$DRYRUN" ] && showMsg 'file' "${DEPENDENCY}: [remote]" 'both' 0 3
+## UPDATED 2025/12/15
+##			showMsg 'file' "${DEPENDENCY}:" 'both' 0 3
+#			showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3
+## REMOVED 2025/12/15 - this is already specified in the dependency processing
+##			showMsg 'location' " [remote]" 'both' 0 1
+## MOVED 2025/12/15
+##			[ "$DRYRUN" ] && showMsg 'action' " [dryrun]" 'both' 0 1
+#			downloadPackage || exitGracefully 4 'screen' 5 'step'
+#		fi
+		[ "$DRYRUN" ] && showMsg 'notice' " [dryrun]" 'both' 0 0
+		if [ "$DOWNLOAD" ] || ( [ "$INSTALL" ] && ( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ); then
+			showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3
+			[ "${INSTALL}" ] && showMsg 'step' " [download]" 'both' 0
+			downloadPackage || exitGracefully 4 'screen' 5 'step'
+		else
 			[ "$VALIDATE" ] && showMsg 'package' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3
 			[ ! "$VALIDATE" ] && showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3
-# REMOVED 2025/12/15 - this is already specified in the dependency processing
-#			showMsg 'location' " [local]" 'both' 0 1
-# UPDATED 2025/11/06
-#		elif [ "$DOWNLOAD" ] && [ ! "$VALIDATE" ]; then
-		elif [ "$DOWNLOAD" ]; then
-# UPDATED 2025/10/22 - no longer using APP* variables
-#			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "${APPFILE}: [remote]"
-# UPDATED 2025/10/28
-#			( [ "$SILENT" ] || [ "$QUIET" ] ) || echo -n "${FILENAME}: [remote]"
-# UPDATED 2025/11/05
-#			showMsg 'step' "${FILENAME}: [remote]" 'screen' 1
-#			[ "$REPO_TARGET" ] && cd "$REPO_TARGET" >>"$LOG_ERRS" 2>&1 || cd "$REPO_OPTION" >>"$LOG_ERRS" 2>&1		# if a different target was specified, then cd into it now, otherwise use the default location!
-# UPDATED 2025/11/19 - adjusted for the -Q value
-#			[ "$DRYRUN" ] && showMsg 'step' "${DEPENDENCY}: [remote] [dryrun]" 'both' 0 3
-#			[ ! "$DRYRUN" ] && showMsg 'step' "${DEPENDENCY}: [remote]" 'both' 0 3
-# UPDATED 2025/12/11
-#			[ "$DRYRUN" ] && showMsg 'file' "${DEPENDENCY}: [remote] [dryrun]" 'both' 0 3
-#			[ ! "$DRYRUN" ] && showMsg 'file' "${DEPENDENCY}: [remote]" 'both' 0 3
-# UPDATED 2025/12/15
-#			showMsg 'file' "${DEPENDENCY}:" 'both' 0 3
-			showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3
-# REMOVED 2025/12/15 - this is already specified in the dependency processing
-#			showMsg 'location' " [remote]" 'both' 0 1
-# MOVED 2025/12/15
-#			[ "$DRYRUN" ] && showMsg 'action' " [dryrun]" 'both' 0 1
-			downloadPackage || exitGracefully 4 'screen' 5 'step'
 		fi
-		[ "$DRYRUN" ] && showMsg 'notice' " [dryrun]" 'both' 0 0
 
 		# NOTE: this is a separate 'if' on purpose!
 		if [ "$COPY" ]; then								# if we're copying package(s), then...
@@ -4692,6 +4796,8 @@ done
 # UPDATED 2025/11/05
 #			copyPackage || exitGracefully 1
 			copyPackage || exitGracefully 4 'screen' 5 'step'
+		#elif [ "$DOWNLOAD" ]; then									# if we are downloading package(s), then...
+			# this is required my several actions and is handled above this 'if' block
 		elif [ "$EXTRACT" ]; then									# if we are extracting package(s) contents, then...
 			# this is handled in the package processing above
 		# NOTE: we can NOT make unsquashfs use the 'pax -F' option since it will just error
@@ -4844,7 +4950,7 @@ if [ "$LIST" ]; then
 
 		IFS=$'\n'							# update the IFS to not split strings using spaces
 		for DATE in $(ls -1 2>/dev/null | grep "$TEMP"); do
-			showMsg 'package' "${DATE}" 'screen' 1 4
+			showMsg 'directory' "${DATE}" 'screen' 1 4
 
 			for POINT in $(cd $DATE && ls -1 2>/dev/null); do
 				showMsg 'file' "  $POINT" 'screen' 1 1 1
@@ -5152,9 +5258,13 @@ echo "|$DEPBASE| depends on |$FILE|"
 #			cd - >/dev/null 2>>"$LOG_ERRS"						# cd back into the original directory storing the updated package	NOTE: we do this since we don't know what the directory was before executing this script
 #pwd
 #echo "mv ${REPO_PREFIX}/${TEMP}* $REPO_SOURCE"
-			# NOTE: REPO_PREFIX holds the pwd when the script was executed to make sure that the updated package exists there
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling: mv \"${REPO_PREFIX}/${TEMP}\"* \"$REPO_SOURCE\"" >>"$LOG_DBUG"
-			[ ! "$DRYRUN" ] && ( mv "${REPO_PREFIX}/${TEMP}"* "$REPO_SOURCE" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )				# move all the updated package files into REPO_SOURCE
+# UPDATED 2025/12/22 - this variable is used later so we have to bogart another one
+#			# NOTE: REPO_PREFIX holds the pwd when the script was executed to make sure that the updated package exists there
+#			[ $DEBUG -gt 0 ] && echo -e "\tCalling: mv \"${REPO_PREFIX}/${TEMP}\"* \"$REPO_SOURCE\"" >>"$LOG_DBUG"
+#			[ ! "$DRYRUN" ] && ( mv "${REPO_PREFIX}/${TEMP}"* "$REPO_SOURCE" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )				# move all the updated package files into REPO_SOURCE
+			# NOTE: REPO_SYSTEM holds the pwd when the script was executed to make sure that the updated package exists there
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling: mv \"${REPO_SYSTEM}/${TEMP}\"* \"$REPO_SOURCE\"" >>"$LOG_DBUG"
+			[ ! "$DRYRUN" ] && ( mv "${REPO_SYSTEM}/${TEMP}"* "$REPO_SOURCE" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )				# move all the updated package files into REPO_SOURCE
 #			cd - >/dev/null 2>>"$LOG_ERRS"						# cd back into REPO_SOURCE and iterate to the next package to be processed
 #pwd
 			installPackage || exitGracefully 3 'both' 6 'failure'			# install THAT copy
