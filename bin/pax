@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/12/22 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/12/23 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -566,7 +566,8 @@ splitName() {
 #		VERSION=''
 #		OPTFILE=''
 	fi
-
+#echo "VERBASE |$VERBASE|"
+if [ ! "$VERBASE" ]; then
 	PARAMETER="$(echo $PARAMETER | sed "s/KERNEL/${KERNEL}/")"				# perform KERNEL substitution first thing so ALL the various names have the change
 	if ( echo "$PARAMETER" | grep -q "$EXT"$ ); then					# if the whole filename was passed, then...
 		TEMP="${FILE_SCHEMA#*\}}"							#   remove just the package name portion from the package filename 'schema' - everything before the first '}' character
@@ -612,7 +613,7 @@ splitName() {
 	fi
 	FILETYPE="$(echo "$FILENAME" | grep -oE '[\._\-](bin|dev|doc|drv|gir|lib|loc)' | head -n 1 | sed -E 's/^[\._\-]//')"			# search for any variation of known type abbreviations and remove the preceeding separation character
 	[ "$FILETYPE" = '' ] && FILETYPE="$TYPE"					#   if the line above did not return any value, then default to whatever is specified as TYPE
-
+fi
 	# NOTE: the VER* variables are used for the *source* file name
 # UPDATED 2025/12/02
 #	[ "$VERSION" ] && VERBASE="${VERSION}$(echo $BASENAME | sed "s/^${PACKAGE}//")" || VERBASE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
@@ -621,26 +622,32 @@ splitName() {
 #	[ "$VERSION" ] && VERFILE="${VERBASE}.${EXT}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
 # UPDATED 2025/12/05
 #	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -gt 1 ] ) ) && VERBASE="${VERSION}$(echo $BASENAME | sed "s/^${PACKAGE}//")" || VERBASE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
-	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -gt 1 ] ) ) && eval VERBASE="${VERS_SCHEMA}" || VERBASE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
+# UPDATED 2025/12/23
+#	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -gt 1 ] ) ) && eval VERBASE="${VERS_SCHEMA}" || VERBASE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
+	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -ge 1 ] ) ) && eval VERBASE="${VERS_SCHEMA}" || VERBASE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
 # UPDATED 2025/11/05
 #	[ "$VERSION" ] && VERFILE="${VERSION}${TEMP}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
-	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -gt 1 ] ) ) && VERFILE="${VERBASE}.${EXT}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
+#echo "VIT |$VERSION|$INDEX|$TOTAL|"
+# UPDATED 2025/12/23
+#	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -gt 1 ] ) ) && VERFILE="${VERBASE}.${EXT}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
+	[ "$VERSION" ] && ( [ $INDEX -eq 0 ] || ( [ $INDEX -eq 1 ] && [ $TOTAL -ge 1 ] ) ) && VERFILE="${VERBASE}.${EXT}" || VERFILE=''				# replace the package name with the version number (e.g. 2025.04.10.i32.bin.soft)	WARNING: this MUST come after the above assignments so the proper values are created
 
-# left off - the filename grows in length with each call here
-	eval TEMP="${FILE_SCHEMA#*\}}"
-echo "temp |$TEMP|"
+	eval TEMP="${VERT_SCHEMA#*\$\{VERSION\}}"						# first attempt to remove everything before (and including) a VERSION number in the schema
+	[ "$TEMP" != "$(eval echo "$VERT_SCHEMA")" ] && eval TEMP="${VERT_SCHEMA#*\}}"		# if that failed (e.g. no VERSION was included), then remove the first variable value in the schema (e.g. PACKAGE) to isolate just the non-package name portion
+#echo "temp |$TEMP|$(eval echo "$VERT_SCHEMA")|"
+
+	# NOTE: we only perform the following if the VERFILE has a value (e.g. for the passed package, not any of its dependencies); we do NOT do this for PACKAGE since it's purpose is for display, not functionality
 	[ "$VERFILE" ] && eval BASENAME="${VERT_SCHEMA}"
 	[ "$VERFILE" ] && FILENAME="${BASENAME}.${EXT_SOFT}"
-	[ "$VERBASE" ] && PACKAGE="$(echo "$FILENAME" | sed "s/${TEMP}\.${EXT}$//")"
 
-echo "name |$PACKAGE|"
-echo "base |$BASENAME|"
-echo "file |$FILENAME|"
-echo "type |$FILETYPE|"
-echo "optf |$OPTFILE|"
-echo "ver  |$VERSION|"
-echo "verb |$VERBASE|"
-echo "verf |$VERFILE|"
+#echo "name |$PACKAGE|"
+#echo "base |$BASENAME|"
+#echo "file |$FILENAME|"
+#echo "type |$FILETYPE|"
+#echo "optf |$OPTFILE|"
+#echo "ver  |$VERSION|"
+#echo "verb |$VERBASE|"
+#echo "verf |$VERFILE|"
 
 return 0
 # REMOVED 2025/10/21 - to now be more versatile with package names
@@ -742,7 +749,7 @@ listDependencies() {
 #echo "TEMP |$TEMP|$I|, press any key..."
 #read
 	done
-	echo -e $TEMP
+	echo -e $TEMP | tail -n +2						# NOTE: we remove the first '  \n' that starts the 'while' loop
 }
 
 
@@ -995,7 +1002,9 @@ processDependencies() {
 		return 0
 	}
 	# NOTE: REPO_PREFIX holds the pwd when the script was executed to make sure that the updated package exists there
-	[ "$UNLOAD" = 'update' ] && [ ! -e "${REPO_PREFIX}/${FILENAME}" ] && {						# if the iterated dependency is already unloaded -AND- we are just unloading (not uninstalling it: delete, purge, or update), then go to the next one!
+# UPDATED 2025/12/23 - this variable is used later so we have to bogart another one
+#	[ "$UNLOAD" = 'update' ] && [ ! -e "${REPO_PREFIX}/${FILENAME}" ] && {						# if the iterated dependency is already unloaded -AND- we are just unloading (not uninstalling it: delete, purge, or update), then go to the next one!
+	[ "$UNLOAD" = 'update' ] && [ ! -e "${REPO_SYSTEM}/${FILENAME}" ] && {						# if the iterated dependency is already unloaded -AND- we are just unloading (not uninstalling it: delete, purge, or update), then go to the next one!
 		[ $DEBUG -gt 0 ] && echo -e "\tThe package update is not in the current directory." >>"$LOG_DBUG"				# NOTE: we left this line like this since this is not a failure, but just a package to skip
 		showMsg 'dependency' "[ missing ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0
@@ -1485,9 +1494,11 @@ downloadPackage() {
 	[ "$VERFILE" ] && eval FILE_SOURCE="${VERFILE}"
 	local BASE_TARGET="${BASENAME}"
 	local FILE_TARGET="${BASENAME}.${EXT_SOFT}"
-	[ "$VERBASE" ] && eval BASE_TARGET="${VERT_SCHEMA}"
-	[ "$VERFILE" ] && eval FILE_TARGET="${BASE_TARGET}.${EXT_SOFT}"
+#	[ "$VERBASE" ] && eval BASE_TARGET="${VERT_SCHEMA}"
+#	[ "$VERFILE" ] && eval FILE_TARGET="${BASE_TARGET}.${EXT_SOFT}"
 	eval REPO_SOURCE="${REPO_SCHEMA}"							# eval REPO_SOURCE incase it has any variables in it
+#echo "VERBASE |$VERBASE|"
+#echo "VERFILE |$VERFILE|"
 #echo "BASE_SOURCE |$BASE_SOURCE|"
 #echo "FILE_SOURCE |$FILE_SOURCE|"
 #echo "BASE_TARGET |$BASE_TARGET|"
@@ -1536,6 +1547,7 @@ downloadPackage() {
 #	[ "$VERSION" ] && sed -i "s/^${PACKAGE}/${VERSION}/" "${BASE_SOURCE}.${EXT_HASH}"		# changing the package name to match the version number in the hash file
 	[ $DEBUG -gt 0 ] && [ ! "$DRYRUN" ] && [ "$VERFILE" ] && echo -e "\tCalling: sed -i \"s/  ${PACKAGE}/  ${PACKAGE}_${VERSION}/\" \"./${BASE_TARGET}.${EXT_HASH}\"" >>"$LOG_DBUG"
 	[ ! "$DRYRUN" ] && [ "$VERFILE" ] && sed -i "s/  ${PACKAGE}/  ${PACKAGE}_${VERSION}/" "./${BASE_TARGET}.${EXT_HASH}"		# changing the package name to match the version number in the hash file
+# LEFT OFF - the above lines need to replace PACKAGE_VERSION with a more dynamic solution (like something from splitName)
 
 	if [ "$EXTRA" ]; then
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'code' ]; then
@@ -1733,7 +1745,8 @@ installPackage() {
 		[ ! "$PROXY" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${REPO_SOURCE}"	# if a local -S was passed, then mount from the provided, local location
 
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    sudo /bin/mount -t squashfs -o loop,ro,bs=4096 \"${TEMP}/${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
-		sudo /bin/mount -t squashfs -o loop,ro,bs=4096 "${TEMP}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1
+		[ $DEBUG -gt 0 ] && [ ! -e "${TEMP}/${FILENAME}" ] && echo -e "\tNote:       The package is foreign so no additional debug commands will be shown for this package" >>"$LOG_DBUG"
+		[ -e "${TEMP}/${FILENAME}" ] && ( sudo /bin/mount -t squashfs -o loop,ro,bs=4096 "${TEMP}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1 )	# NOTE: we test for package existance in case we're doing a dryrun and it's remote (which it wouldn't be if that's true)
 	fi
 	# check if the package has any libs we need to load later						  NOTE: we check this way because simply checking for the directory can produce false positives
 	( ls -1p "${DIR_LOOP}/${BASENAME}/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE				# NOTE: the "grep -qv '/'$" removes directories from the listing so only files remain (otherwise /lib/modules/ would provide a false positive)
@@ -1787,6 +1800,7 @@ installPackage() {
 #	[ "$VALIDATE" ] && [ "$VALIDATE" != 'fix' ] && showMsg 'step' " [${VALIDATE}] ..." 'both' 1 0
 	[ "$VALIDATE" ] && showMsg 'step' " [${VALIDATE}] ${PURPLE}..." 'both' 1 0
 
+# VER2 - if BOOTING or not -N or '-M link' then just issue a cp command for speed (instead of the below 'for' loop)
 	# if we only need to copy specified files out of the package, then lets obtain that list
 	# NOTES:
 	#	- if the passed file does NOT exist, it will NOT be in the filelist.txt
@@ -1974,7 +1988,7 @@ continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory
 	[ -e "${DIR_TEMP}/filelist.${EXEID}" ] && rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>>"$LOG_ERRS"
 
 	# unmount if we copied -OR- are doing a dryrun
-	( [ "$MODE" = 'copy' ] || [ "$DRYRUN" ] ) && ( sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1 )
+	( [ "$MODE" = 'copy' ] || [ "$DRYRUN" ] ) && ( /bin/mount | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && ( sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1 )	# NOTE: we test for mouting in case we're doing a dryrun and the package is remote (which it wouldn't be if that's true)
 
 # REMOVED 2025/11/10 - this doesn't look like it's necessary, but left until confirmed
 #	MARKER="$(ls -1 "${DIR_LOOP}/${BASENAME}${DIR_INST}" 2>/dev/null)"							# check for installation scripts
@@ -2016,6 +2030,7 @@ continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory
 	[ "$PROXY" ] && TEMP="${PROXY}"									# if a '-X -i' was issued, then mount an alternative location
 	[ ! "$PROXY" ] && ( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${REPO_OPTION}"	# if a remote -S was passed, then mount from the default local repo storage location
 	[ ! "$PROXY" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${REPO_SOURCE}"	# if a local -S was passed, then mount from the provided, local location
+
 	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && ln -sf "${TEMP}/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
 	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
 	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
@@ -2866,7 +2881,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 # REMOVED 2025/11/24 - this is now handled with error checking
 #	echo "	The '-L', '-M', and '-V' OPTIONS can only be used with the '-i' ACTION."
 	echo "	The '-N' OPTION takes a comma separated list of filenames, or a quoted"
-	echo "	     space separated list."
+	echo "	     space separated list. This option also implies '-D none'."
 	echo "	The '-O' and '-Q' OPTIONS need to start the parameters (for init errs)."
 	echo "	The '-O xmLive' OPTION does NOT encapsulate with <s> tags, so assume"
 	echo "	     success unless an <f> tag is relayed."
@@ -3275,7 +3290,8 @@ fi
 				exit 1
 			   fi
 			   MODE="$OPTARG" ;;
-			N) FILELIST="$OPTARG" ;;
+			N) DEPS='none'									# '-D none' is implied with -N
+			   FILELIST="$OPTARG" ;;
 			o)
 if [ 0 -eq 1 ]; then
 			   [ "$2" ] && [ "$2" != 'clear' ] && FIFO_SERVER="$2"				# NOTE: the second parameter MUST be 'clear', even when using a custom input fifo
@@ -3951,6 +3967,9 @@ if [ "$PROXY" ]; then
 
 	touch "${PROXY}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The proxy media mount point is not writable." 'screen'; exit 1; }
 	rm "${PROXY}/writable" >>"$LOG_ERRS" 2>&1
+
+	# check that a '-X -d' or '-X -c' was performed first
+	[ "$INSTALL" ] && [ ! -e "${PROXY}/pax/optional.proxy" ] && { showMsg 'failure' "There are no packages to install on the proxy media." 'screen'; exit 1; }
 fi
 
 
@@ -4013,9 +4032,12 @@ elif [ "$INSTALL" ] || [ "$VALIDATE" ]; then									# if we are installing -OR-
 #		[ "$RESTORE" ] && ( echo "$RESTORE" | grep -q '/' ) && REPO_SOURCE="${REPO_SOURCE}/${RESTORE}"		# if a full restore path was passed to -R, then append it to REPO_SOURCE
 #		[ "$RESTORE" ] && RESTORE="${REPO_RESTOR}/${RESTORE}"				#     if -R was passed, then append it to REPO_RESTOR
 		[ "$RESTORE" ] && {								# NOTE: the REPO_RESTOR and REPO_SOURCE values are switched so that the script operates as usual!!!
+			[ "$REPO_SOURCE" = "$REPO_SCHEMA" ] && REPO_SOURCE="$REPO_OPTION"		#     if the REPO_SOURCE is still remote, then change it to the REPO_OPTION directory since this is were we need to store packages by default
+#echo "pre  |$REPO_SOURCE|$REPO_RESTOR|"
 			TEMP="$REPO_SOURCE"							# store the existing value first
 			REPO_SOURCE="${REPO_RESTOR}/${RESTORE}"					# store the passed restore point directory
 			REPO_RESTOR="$TEMP"							# store the original REPO_SOURCE value in REPO_RESTOR (so we can copy those packages back into the system)
+#echo "post |$REPO_SOURCE|$REPO_RESTOR|"
 		}
 		[ "$PROXY" ] && {								# NOTE: the REPO_RESTOR and REPO_SOURCE values are switched so that the script operates as usual!!!
 			TEMP="$REPO_SOURCE"							# store the existing value first
@@ -4033,8 +4055,10 @@ elif [ "$INSTALL" ] || [ "$VALIDATE" ]; then									# if we are installing -OR-
 # UPDATED 2025/12/22 - this had to be reworked since -i may need to download
 #	cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'			#   now cd into the REPO_SOURCE where the packages are
 	if ( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ); then				#   if the REPO_SOURCE is remote, then...
+#echo top
 		cd "$REPO_OPTION" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'		#      change it to the REPO_OPTION directory since this is were we need to store packages by default
 	else											#   otherwise a local REPO_SOURCE was passed, so...
+#echo btm
 		cd "$REPO_SOURCE" >>"$LOG_ERRS" 2>&1 || exitGracefully 2 'screen'		#      change into the local REPO_SOURCE
 	fi
 # REMOVED 2025/11/24 - this uses DIR_LIVE in all its i/o
@@ -4629,7 +4653,11 @@ done
 #		echo -en "   Do you want to proceed with the action? [Y/N] (N): "
 		showMsg 'prompt' "   Do you want to proceed with the action? [Y/N] (N): " 'both' 0 1 1
 		[ "$OUTPUT" = 'fifo' ] && read <"$FIFO_SERVER" || read
-		( [ "$REPLY" = 'N' ] || [ "$REPLY" = 'n' ] || [ "$REPLY" = '' ] ) && exitGracefully 0 'both' 6 'success'
+		( [ "$REPLY" = 'N' ] || [ "$REPLY" = 'n' ] || [ "$REPLY" = '' ] ) && {
+			echo 'n' >>"$LOG_ERRS"
+			exitGracefully 0 'both' 6 'success'
+		}
+		echo 'y' >>"$LOG_ERRS"
 	fi
 
 
@@ -4670,9 +4698,11 @@ done
 			cd "$REPO_SOURCE"
 #pwd
 		elif [ "$RESTORE" ]; then
+#echo "pre  |$REPO_SOURCE|$REPO_RESTOR|"
 			TEMP="$REPO_SOURCE"
 			REPO_SOURCE="${REPO_RESTOR}"
 			REPO_RESTOR="$TEMP"
+#echo "post |$REPO_SOURCE|$REPO_RESTOR|"
 			cd "$REPO_SOURCE"
 		fi
 #echo "dbug4 |$MODE|"
@@ -4775,14 +4805,15 @@ done
 ##			[ "$DRYRUN" ] && showMsg 'action' " [dryrun]" 'both' 0 1
 #			downloadPackage || exitGracefully 4 'screen' 5 'step'
 #		fi
-		[ "$DRYRUN" ] && showMsg 'notice' " [dryrun]" 'both' 0 0
 		if [ "$DOWNLOAD" ] || ( [ "$INSTALL" ] && ( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ); then
 			showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3
+			[ "$DRYRUN" ] && showMsg 'notice' " [dryrun]" 'both' 0 0
 			[ "${INSTALL}" ] && showMsg 'step' " [download]" 'both' 0
 			downloadPackage || exitGracefully 4 'screen' 5 'step'
 		else
 			[ "$VALIDATE" ] && showMsg 'package' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3
 			[ ! "$VALIDATE" ] && showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 3
+			[ "$DRYRUN" ] && showMsg 'notice' " [dryrun]" 'both' 0 0
 		fi
 
 		# NOTE: this is a separate 'if' on purpose!
@@ -4851,7 +4882,7 @@ done
 
 			# NOTE: we have to copy files this way because they were mounting in the original {proxy|restore} location, so if MODE=link, it would be incorrect
 			if [ "$PROXY" ] || [ "$RESTORE" ]; then
-				[ "$PROXY" ] && TEMP="$PROXY" || TEMP="$RESTORE"
+				[ "$PROXY" ] && TEMP="$PROXY" || TEMP="$REPO_RESTOR"
 #pwd
 				unalias cp >/dev/null 2>&1							#   remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
 #echo -e "\tCalling:    cp -f \"${TEMP}/${BASENAME}\".* \"./\""
@@ -5200,7 +5231,7 @@ elif [ "$UNLOAD" ]; then
 			( grep -q "$FILE" "${DIR_TEMP}/unload.${EXEID}" ) || continue			# if we've removed files from the unload list in the below 'while [ "$DEPENDENCY" ]; do' section, then this skips their processing
 													# NOTE: we have to include the above line since the 'cat' call in the above 'for' loop will retain all the ORIGINAL values of the text file, not the removals of the 'while' below!
 			[ $DEBUG -gt 0 ] && echo -e "Body (final):\n\tFILE        |${FILE}|" >>"$LOG_DBUG"
-
+echo "file |$FILE|"
 			for DEPFILE in $(grep -Hl "$FILE" "${DIR_LIST}/"*.${EXT_DEPS} | sed "s|${DIR_LIST}/||"); do				#   for each .deps file that contains the package (in REPO_SOURCE)...
 #				TEMP="${FILE_SCHEMA#*\}}"						#   remove just the package name portion from the package filename 'schema' - everything before the first '}' character
 #				eval TEMP="${TEMP}.${EXT_DEPS}"						#   combine the 'schema' (less the package name) values and the file extension value (e.g. i32.bin.soft)
@@ -5208,10 +5239,15 @@ elif [ "$UNLOAD" ]; then
 				DEPBASE="$(echo $DEPFILE | sed "s/.${EXT_DEPS}$//")"			#   remove the file extension from the name
 #				DEPTYPE="$(echo "$DEPFILE" | grep -oE '[\._\-](bin|dev|doc|drv|gir|lib|loc)' | sed -E 's/^[\._\-]//')"	# search for any variation of known type abbreviations and remove the preceeding separation character
 #				[ "$DEPTYPE" = '' ] && DEPTYPE='bin'					#   if the line above did not return any value, then default to 'bin'
-
+echo "depbase |$DEPBASE|"
 				( grep -q ^"$DEPBASE" "${DIR_TEMP}/unload.${EXEID}" ) && continue	#      if the corresponding .soft file of the iterated .deps file, is also listed for removal (in the unload list), then we need to unload so leave it in the list and go to the next DEPFILE
 												#      otherwise a package that is NOT being unloaded still needs this package, so we can't unload it
+				( grep -q ^"$DEPBASE" "${DIR_LIST}/${FILE%.*}.${EXT_DEPS}" ) && {
+echo "the iterated dep is a dep for a package that's being deleted"
+}
+# LEFT OFF - the above line is not being triggered; resolve this
 echo "|$DEPBASE| depends on |$FILE|"
+cat "${DIR_TEMP}/unload.${EXEID}"
 # UPDATED 2025/11/17
 #				[ $DEBUG -gt 0 ] && echo -e "\tRemoving:    ${FILE} from unload list; ${DEPBASE}.${EXT_SOFT} depends on it" >>"$LOG_DBUG"
 				[ $DEBUG -gt 0 ] && echo -e "\tOther installed packages depend on ${FILE},\n\tprocessing its dependencies for removal from the unload list..." >>"$LOG_DBUG"

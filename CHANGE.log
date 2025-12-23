@@ -355,3 +355,7 @@
 - Added EXT_BASE for package marking with single repo's
 - Corrected bugs until -i fully worked
 
+2025/12/23
+- Corrected bugs until -i fully worked
+- Updated the code to imply '-D none' with -N
+
