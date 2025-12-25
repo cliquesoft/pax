@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2025/12/23 by Dave Henderson (support@cliquesoft.org)
+# updated	2025/12/24 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -188,7 +188,7 @@ VALIDATE=''
 # [options]
 BOOTING=''
 ARCH=''												# stores the value of the ARCH_SCHEMA
-DEPS='default'
+DEPS=''
 EXTRA=''
 FORCE=''
 IGNORE=''
@@ -261,6 +261,7 @@ exitGracefully() {
 	[ $DEBUG -eq 0 ] && [ -e "${DIR_TEMP}/services.${EXEID}" ] && rm -f "${DIR_TEMP}/services.${EXEID}" 2>/dev/null
 	[ $DEBUG -eq 0 ] && [ -e "${DIR_TEMP}/filelist.${EXEID}" ] && rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>/dev/null
 	[ $DEBUG -eq 0 ] && [ -e "${DIR_TEMP}/unload.${EXEID}" ] && rm -f "${DIR_TEMP}/unload.${EXEID}" 2>/dev/null
+	[ $DEBUG -eq 0 ] && [ -e "${DIR_TEMP}/unloaded.${EXEID}" ] && rm -f "${DIR_TEMP}/unloaded.${EXEID}" 2>/dev/null
 	[ "$MODE" = 'copy' ] && [ $1 -gt 0 ] && ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1	# if we're copying and an error was encountered, then umount the package
 
 	( [ ! "$1" ] || [ $1 -eq 0 ] ) && {
@@ -749,7 +750,10 @@ listDependencies() {
 #echo "TEMP |$TEMP|$I|, press any key..."
 #read
 	done
-	echo -e $TEMP | tail -n +2						# NOTE: we remove the first '  \n' that starts the 'while' loop
+# UPDATED 2025/12/24
+#	echo -e $TEMP | tail -n +2						# NOTE: we remove the first '  \n' that starts the 'while' loop
+	TEMP=$(echo -e $TEMP | tail -n +2)						# NOTE: we remove the first '  \n' that starts the 'while' loop
+	showMsg 'package' "${TEMP}" 'both' 1 2
 }
 
 
@@ -1198,6 +1202,7 @@ if [ 1 -eq 0 ]; then
 #		[ "$SOURCE" = 'remote' ] && showMsg 'step' "[ missing ] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 # UPDATED 2025/11/05 - replaced the APP* variables
 #		[ -e "${DIR_LIST}/${APPFILE}" ] && showMsg 'step' "[installed] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+#echo "${DIR_LIST}/${FILENAME}"
 		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1 || showMsg 'issue' "[ unloaded] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 # REMOVED 2025/11/14
 #	elif [ "$UNLOAD" ]; then
@@ -1746,7 +1751,7 @@ installPackage() {
 
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    sudo /bin/mount -t squashfs -o loop,ro,bs=4096 \"${TEMP}/${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
 		[ $DEBUG -gt 0 ] && [ ! -e "${TEMP}/${FILENAME}" ] && echo -e "\tNote:       The package is foreign so no additional debug commands will be shown for this package" >>"$LOG_DBUG"
-		[ -e "${TEMP}/${FILENAME}" ] && ( sudo /bin/mount -t squashfs -o loop,ro,bs=4096 "${TEMP}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1 )	# NOTE: we test for package existance in case we're doing a dryrun and it's remote (which it wouldn't be if that's true)
+		[ -e "${TEMP}/${FILENAME}" ] && { sudo /bin/mount -t squashfs -o loop,ro,bs=4096 "${TEMP}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }	# NOTE: we test for package existance in case we're doing a dryrun and it's remote (which it wouldn't be if that's true)
 	fi
 	# check if the package has any libs we need to load later						  NOTE: we check this way because simply checking for the directory can produce false positives
 	( ls -1p "${DIR_LOOP}/${BASENAME}/lib" 2>/dev/null | grep -qv '/'$ ) && LIBRARIES=TRUE				# NOTE: the "grep -qv '/'$" removes directories from the listing so only files remain (otherwise /lib/modules/ would provide a false positive)
@@ -1832,6 +1837,7 @@ installPackage() {
 		if [ "$VALIDATE" ] && [ ! -d "$SOURCE" ]; then					# NOTE: we had to add the directory checking since it would prevent non-root directory structures from getting created (e.g. /usr/local)
 			showMsg 'file' "  $TARGET:" 'both' 0 3 1
 
+					TEMP=''
 					# determine where the file is located (in case the package was installed one place [e.g. HOME] and a dependency in another [e.g. ROOT])
 					# NOTE: this search pattern comes in order of presidence: passed DIRECTORY, HOME, DIR_LIVE, ROOT
 					#	the 'misc' comes first since the package could also be in any of the following directories too, storing an incorrect TARGET path if they were triggered first
@@ -1845,14 +1851,26 @@ installPackage() {
 					elif [ $INDEX -gt 1 ] && [ -e "$TARGET_ROOT" ]; then			# if it's in the root of the OS, then...
 						TARGET="$TARGET_ROOT"
 					else									# if none of the above were triggered, the file isn't installed
-						[ "$VALIDATE" != 'fix' ] && showMsg 'issue' " !missing!" 'both' 0 0
-						[ "$VALIDATE" = 'fix' ] && showMsg 'issue' " [restore]" 'both' 0 0
+						TEMP='else'
+# MOVED 2025/12/24 - moved below
+#						[ "$VALIDATE" != 'fix' ] && showMsg 'issue' " !missing!" 'both' 0 0
+#						[ "$VALIDATE" = 'fix' ] && showMsg 'issue' " [restore]" 'both' 0 0
 					fi
 
-					if [ "$TARGET" = "$TARGET_HOME" ]; then showMsg 'location' " [home]" 'both' 0 0
-					elif [ "$TARGET" = "$TARGET_LIVE" ]; then showMsg 'location' " [live]" 'both' 0 0
-					elif [ "$TARGET" = "$TARGET_ROOT" ]; then showMsg 'location' " [root]" 'both' 0 0
-					else showMsg 'location' " [misc]" 'both' 0 0
+					# NOTE: this needs to be a separate 'if' so the proper location can be found (in the order of presidence)
+					if [ "$TARGET" = "$TARGET_HOME" ]; then
+						showMsg 'location' " [home]" 'both' 0 0
+					elif [ "$TARGET" = "$TARGET_LIVE" ]; then
+						showMsg 'location' " [live]" 'both' 0 0
+					elif [ "$TARGET" = "$TARGET_ROOT" ]; then
+						showMsg 'location' " [root]" 'both' 0 0
+					else
+						[ ! "$TEMP" ] && showMsg 'location' " [misc]" 'both' 0 0
+					fi
+
+					if [ "$TEMP" ]; then
+						[ "$VALIDATE" != 'fix' ] && showMsg 'issue' " !missing!" 'both' 0 0
+						[ "$VALIDATE" = 'fix' ] && showMsg 'issue' " [restore]" 'both' 0 0
 					fi
 		fi
 
@@ -1917,6 +1935,7 @@ installPackage() {
 #					fi
 
 					if [ "$MODE" = 'copy' ]; then
+#echo "st |$SOURCE|$TARGET|"
 						if [ ! -L "$SOURCE" ] && [ -L "$TARGET" ]; then
 							showMsg 'issue' " !symlink!" 'both' 0 0
 							showMsg 'file' ' [done]' 'both' 1 5
@@ -1988,7 +2007,7 @@ continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory
 	[ -e "${DIR_TEMP}/filelist.${EXEID}" ] && rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>>"$LOG_ERRS"
 
 	# unmount if we copied -OR- are doing a dryrun
-	( [ "$MODE" = 'copy' ] || [ "$DRYRUN" ] ) && ( /bin/mount | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && ( sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1 )	# NOTE: we test for mouting in case we're doing a dryrun and the package is remote (which it wouldn't be if that's true)
+	( [ "$MODE" = 'copy' ] || [ "$DRYRUN" ] ) && ( /bin/mount | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }	# NOTE: we test for mouting in case we're doing a dryrun and the package is remote (which it wouldn't be if that's true)
 
 # REMOVED 2025/11/10 - this doesn't look like it's necessary, but left until confirmed
 #	MARKER="$(ls -1 "${DIR_LOOP}/${BASENAME}${DIR_INST}" 2>/dev/null)"							# check for installation scripts
@@ -2390,14 +2409,14 @@ unloadPackage() {
 	# if the package has a service start/stop script, then stop the service before continuing
 	if [ -e "${DIR_INIT}/${PACKAGE}" ]; then
 		[ $DEBUG -gt 0 ] && echo -e "\tPackage has service script...\n\tCalling:    \"${DIR_INIT}/${PACKAGE}\" stop" >>"$LOG_DBUG"
-		[ ! "$DRYRUN" ] && ( "${DIR_INIT}/${PACKAGE}" stop >>"$LOG_ERRS" 2>&1 || return 1 )
+		[ ! "$DRYRUN" ] && { "${DIR_INIT}/${PACKAGE}" stop >>"$LOG_ERRS" 2>&1 || return 1; }
 	fi
 
 	# determine how the package was installed (copied or symlinked) -AND- make sure it's not in use by something else
 	if ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ); then	# if the package has been mounted and symlinked, then...
 		MODE='link'
 		[ $DEBUG -gt 0 ] && echo -e "\tPackage is symlinked...\n\tCalling:    sudo /bin/umount -d \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
-		[ ! "$DRYRUN" ] && ( sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1 )				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
+		[ ! "$DRYRUN" ] && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
 	elif [ $DEBUG -gt 0 ]; then
 		echo -e "\tPackage is copied..." >>"$LOG_DBUG"
 	fi
@@ -2412,7 +2431,7 @@ unloadPackage() {
 		}
 
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    sudo /bin/mount \"./${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\" -t squashfs -o loop,ro,bs=4096" >>"$LOG_DBUG"
-		( [ ! "$DRYRUN" ] || ( [ "$DRYRUN" ] && [ "$MODE" = 'copy' ] ) ) && ( sudo /bin/mount "./${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro,bs=4096 >>"$LOG_ERRS" 2>&1 || return 1 )			# now mount it for processing
+		( [ ! "$DRYRUN" ] || ( [ "$DRYRUN" ] && [ "$MODE" = 'copy' ] ) ) && { sudo /bin/mount "./${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro,bs=4096 >>"$LOG_ERRS" 2>&1 || return 1; }			# now mount it for processing
 	if [ ! "$DRYRUN" ] && [ "$MODE" = 'copy' ]; then
 # UPDATED 2025/11/17 - now using MODE
 #		if [ ! "$DRYRUN" ]; then
@@ -2444,7 +2463,7 @@ unloadPackage() {
 		if [ ! -d "${TEMP}" ]; then						#   if the iterated FILE is anything but a directory (e.g. device file, symlink, text file, ...), then delete it!
 #echo "[F] |${TEMP}|"
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${TEMP}/\"" >>"$LOG_DBUG"
-			[ ! "$DRYRUN" ] && ( rm -f "${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1 )
+			[ ! "$DRYRUN" ] && { rm -f "${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1; }
 		elif [ -d "${TEMP}" ] && [ ! "$(ls -A "${TEMP}" 2>/dev/null)" ]; then				#   otherwise it is a directory, so check if it's empty and delete it if so!
 #echo "[D] |${TEMP}|"
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rmdir \"${TEMP}\"" >>"$LOG_DBUG"
@@ -2594,7 +2613,7 @@ uninstallPackage() {
 #		[ $DEBUG -gt 0 ] && echo -e "\tSkip creating a restore point...\n\trm -f ${APPHEAD}.*" >>$LOG_DBUG
 #		rm -f "${APPHEAD}".* >>"$LOG_ERRS" 2>&1 || return 1				# just delete the packages' files (e.g. .deps, .hash, .soft, ...) and exit
 		[ $DEBUG -gt 0 ] && echo -e "\tSkip creating a restore point...\n\trm -f ${BASENAME}.*" >>$LOG_DBUG
-		[ ! "$DRYRUN" ] && ( rm -f "${BASENAME}".* >>"$LOG_ERRS" 2>&1 || return 1 )				# just delete the packages' files (e.g. .deps, .hash, .soft, ...) and exit
+		[ ! "$DRYRUN" ] && { rm -f "${BASENAME}".* >>"$LOG_ERRS" 2>&1 || return 1; }				# just delete the packages' files (e.g. .deps, .hash, .soft, ...) and exit
 		return 0
 	fi
 
@@ -2635,24 +2654,30 @@ uninstallPackage() {
 # UPDATED 2025/12/01
 #	[ "$INSTALL" ] && TEMP="${TEMP}Updating ${BASENAME}"			# add a description of this process to the restore point
 #	[ "$RESTORE" ] && TEMP="${TEMP}Restoring ${BASENAME}"			# add a description of this process to the restore point
-	[ "$INSTALL" ] && [ "$RESTORE" ] && TEMP="${TEMP}Restoring ${BASENAME}"			# add a description of this process to the restore point
+# UPDATED 2025/12/24
+#	[ "$INSTALL" ] && [ "$RESTORE" ] && TEMP="${TEMP}Restoring ${BASENAME}"			# add a description of this process to the restore point
+	[ "$INSTALL" ] && [ "$RESTORE" ] && TEMP="${TEMP}Restored ${BASENAME}"			# add a description of this process to the restore point
 # UPDATED 2025/12/15
 #	[ "$INSTALL" ] && [ ! "$RESTORE" ] &&  TEMP="${TEMP}Updating ${BASENAME}"			# add a description of this process to the restore point
-	[ "$UNLOAD" = 'update2' ] && TEMP="${TEMP}Updating ${BASENAME}"			# add a description of this process to the restore point
+# UPDATED 2025/12/24
+#	[ "$UNLOAD" = 'update2' ] && TEMP="${TEMP}Updating ${BASENAME}"			# add a description of this process to the restore point
+	[ "$UNLOAD" = 'update2' ] && TEMP="${TEMP}Updated ${BASENAME}"			# add a description of this process to the restore point
 # UPDATED 2025/10/22 - merged -P with -U
 #	[ "$UNLOAD" ] && [ "$PURGE" -gt '0' ] && TEMP="${TEMP}Uninstalling ${APPNAME}.${APPTYPE}"
 # UPDATED 2025/11/13
 #	[ "$UNLOAD" ] && [ "$PURGE" != '' ] && TEMP="${TEMP}Uninstalling ${APPNAME}.${APPTYPE}"
 # UPDATED 2025/12/15
 #	[ "$UNLOAD" != 'unload' ] && TEMP="${TEMP}Uninstalling ${BASENAME}"
-	( [ "$UNLOAD" = 'delete2' ] || [ "$UNLOAD" = 'purge2' ] ) && TEMP="${TEMP}Uninstalling ${BASENAME}"
+# UPDATED 2025/12/24
+#	( [ "$UNLOAD" = 'delete2' ] || [ "$UNLOAD" = 'purge2' ] ) && TEMP="${TEMP}Uninstalling ${BASENAME}"
+	( [ "$UNLOAD" = 'delete2' ] || [ "$UNLOAD" = 'purge2' ] ) && TEMP="${TEMP}Uninstalled ${BASENAME}"
 
 	[ -e "${REPO_RESTOR}/${TEMP}" ] && TEMP="${TEMP} $(date +%T)"						# if the restore point already exists (e.g. manipulating various package versions), then append time at the end
 
 	# NOTE: the below line will create the entire REPO_RESTOR directory structure if there is no DATA, or just the date directory in the event there is one
 	if [ ! -e "${REPO_RESTOR}/${TEMP}" ]; then
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling: mkdir -p \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
-		[ ! "$DRYRUN" ] && ( mkdir -p "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1 )		# if the restore point directory doesn't exist, then create it!
+		[ ! "$DRYRUN" ] && { mkdir -p "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1; }		# if the restore point directory doesn't exist, then create it!
 	fi
 
 # UPDATED 2025/11/13
@@ -2668,7 +2693,7 @@ uninstallPackage() {
 #		[ ! "$DRYRUN" ] && ( mv -f "$(readlink "${FILENAME}" 2>>"$LOG_ERRS" | sed "s|\.${EXT_SOFT}||")".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1 )		# move the actual files referenced by the symlinks to the restore point (which would be the numerical named files)
 #	fi
 	[ $DEBUG -gt 0 ] && echo -e "\tCalling: mv -f ${BASENAME}.* \"${REPO_RESTOR}/${TEMP}\"" >>"$LOG_DBUG"
-	[ ! "$DRYRUN" ] && ( mv -f "${BASENAME}".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1 )		# now move the iterated dependency into the restore point	NOTE: it will be symlinks if VERSION has a value
+	[ ! "$DRYRUN" ] && { mv -f "${BASENAME}".* "${REPO_RESTOR}/${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1; }		# now move the iterated dependency into the restore point	NOTE: it will be symlinks if VERSION has a value
 	return 0
 }
 
@@ -2809,7 +2834,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-P   prompt before taking action'
 # UPDATED 2025/11/19
 #	echo '	-Q   quiets the output to only show errors'				# old '-q' > new '-Q'
-# VER2 - 'default' just shows the final action (without the header), verbose shows the current 'default', 'none' shows everything - duplicates, etc
+# VER2 - 'default' just shows the final action (without the header), verbose shows the current 'default', 'none' shows everything - duplicates, etc	-OR- add a 'brief' value to just show the final action
 	echo '	-Q   quiets the output: all, errors, default, verbose, none'		# old '-q' > new '-Q'
 # UPDATED 2025/11/24 - make this an opt-out, not an opt-in
 #	echo '	-R   create a restore point when uninstalling'				# old '-N' > new 'absence of value'; if you want to create a restore point, you must now specify the flag!
@@ -2893,6 +2918,8 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	The '-T' OPTION can only be used once per call, so all the packages"
 	echo "	     need to be of the same type. Alternatively, you can skip using"
 	echo "	     this option and specify the full name of each package."
+	echo "	The '-U' OPTION will default to '-D all' unless specified otherwise"
+	echo "	     to keep the system as tidy as possible."
 # UPDATED 2025/10/22 - merged -P with -U
 #	echo "	The '-P' and '-U' OPTIONS can only be used with the '-u' ACTION and"
 # REMOVED 2025/11/24 - this is now handled with error checking
@@ -3527,7 +3554,7 @@ fi
 			   # (re-)sync the package contents
 			   showMsg 'action' "Sync'ing necessary package files:" 'screen' 0 3
 			   for BASENAME in $(ls -1 "$DIR_LIST"); do
-				[ ! "$DRYRUN" ] && ( ln -sf "${BASENAME}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1 )
+				[ ! "$DRYRUN" ] && { ln -sf "${BASENAME}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1; }
 				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" ] && ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
 				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" ] && ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
 			   done
@@ -3769,8 +3796,10 @@ TEMP=0
 [ "$ARCH" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$OPEN" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -C option." 'screen'; exit 1; }
 # REMOVED 2025/11/26 - this is now the DIRECTORY value
 #[ "$PREFIX" ] && [ ! "$INSTALL" ] && [ ! "$UNLOAD" ] && { showMsg 'failure' "This action can't be used with the -D option." 'screen'; exit 1; }
-[ "$DEPS" != 'default' ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] ) && { showMsg 'failure' "This action can't be used with the -D option." 'screen'; exit 1; }
-[ "$DEPS" = 'none' ] && [ "$TREE" ] && { showMsg 'failure' "This action can't be used with the '-D none' option." 'screen'; exit 1; }
+# UPDATED 2025/12/24
+#[ "$DEPS" != 'default' ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] ) && { showMsg 'failure' "This action can't be used with the -D option." 'screen'; exit 1; }
+[ "$DEPS" ] && [ ! "$FILELIST" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] ) && { showMsg 'failure' "This action can't be used with the -D option." 'screen'; exit 1; }	# NOTE: the FILELIST test had to be include to prevent the wrong '-N -l' error from showing
+[ "$DEPS" = 'none' ] && [ ! "$FILELIST" ] && [ "$TREE" ] && { showMsg 'failure' "This action can't be used with the '-D none' option." 'screen'; exit 1; }					# NOTE: ditto
 [ "$EXTRA" ] && [ ! "$COPY" ] && [ ! "$DOWNLOAD" ] && [ ! "$INSTALL" ] && [ ! "$UNLOAD" ] && { showMsg 'failure' "This action can't be used with the -E option." 'screen'; exit 1; }
 [ "$FORCE" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -F option." 'screen'; exit 1; }
 [ "$IGNORE" ] && ( [ "$FIND" ] || [ "$LIST" ] || [ "$MAKE" ] || [ "$OPEN" ] || [ "$TREE" ] ) && { showMsg 'failure' "This action can't be used with the -I option." 'screen'; exit 1; }
@@ -4162,6 +4191,8 @@ fi
 	eval LIST_LIVE="$LIST_LIVE"
 	eval FLAG_LIVE="$FLAG_LIVE"
 	[ ! "$ARCH" ] && eval ARCH="$ARCH_SCHEMA"
+	[ ! "$DEPS" ] && [ ! "$UNLOAD" ] && DEPS='default'
+	[ ! "$DEPS" ] && [ "$UNLOAD" ] && DEPS='all'						# this becomes the default if unloading (to keep a tidy system) and -D is not passed
 	[ ! "$KERNEL" ] && eval KERNEL="$KRNL_SCHEMA"
 # UPDATED 2025/12/19
 #	[ ! "$PACKLIST" ] && PACKLIST=$LIST_LIVE
@@ -4385,7 +4416,9 @@ continue
 ##				exitGracefully 1 'action' 'screen' 2
 #				exitGracefully 4 'both' 5 'action'
 #			}
-			./${BASENAME}.${EXT_MAKE} >${BASENAME}.${EXT_MAKE}.log 2>&1 || exitGracefully 4 'both' 5 'action'
+# UPDATED 2025/12/24
+#			./${BASENAME}.${EXT_MAKE} >${BASENAME}.${EXT_MAKE}.log 2>&1 || exitGracefully 4 'both' 5 'action'
+			./${BASENAME}.${EXT_MAKE} >${BASENAME}.${EXT_MAKE}.log 2>&1 || exitGracefully 4 'both' 6 'action'
 # UPDATED 2025/11/20 - so that the compile script can output if desired
 #			showMsg 'action' " [done]" 'both' 1 5
 			showMsg 'action' "" 'both' 1 5
@@ -4846,14 +4879,16 @@ done
 #		[ ! "$REPO_TARGET" ] && REPO_TARGET='./'					# if no directory was passed, then set the current directory as the target
 #		[ $DEBUG -gt 0 ] && echo -e "unsquashfs -f -d \"$REPO_TARGET\" ${FILENAME}" >>"$LOG_DBUG"
 #		unsquashfs -f -d "$REPO_TARGET" ${FILENAME} 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 2
-		[ $DEBUG -gt 0 ] && echo -e "unsquashfs -f -d \"$DIRECTORY\" \"./${FILENAME}\"" >>"$LOG_DBUG"
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    unsquashfs -f -d \"$DIRECTORY\" \"./${FILENAME}\"" >>"$LOG_DBUG"
 # MOVED 2025/12/15
 #		[ "$DRYRUN" ] && showMsg 'file' " [dryrun]" 'both' 0 0
 # UPDATED 2025/11/05 - the directory is changed into above now
 #		unsquashfs -f -d "$DIRECTORY" "${REPO_SOURCE}/${FILENAME}" 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 2
 # UPDATED 2025/12/02 - we are now in the REPO_SOURCE directory
 #		[ ! "$DRYRUN" ] && ( unsquashfs -f -d './' "${REPO_SOURCE}/${FILENAME}" 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'package' )
-		[ ! "$DRYRUN" ] && ( unsquashfs -f -d "$DIRECTORY" "./${FILENAME}" 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'package' )
+# UPDATED 2025/12/24
+#		[ ! "$DRYRUN" ] && ( unsquashfs -f -d "$DIRECTORY" "./${FILENAME}" 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 4 'both' 5 'package' )
+		[ ! "$DRYRUN" ] && { unsquashfs -f -d "$DIRECTORY" "./${FILENAME}" 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure'; }
 # UPDATED 2025/10/27
 #		( [ "$SILENT" ] || [ "$QUIET" ] ) || echo " [done]"
 # UPDATED 2025/10/30
@@ -4877,8 +4912,8 @@ done
 #				[ ! -e "${DIR_LIST}/${FILENAME}" ] && echo -n " [install]"
 #				[ -e "${DIR_LIST}/${FILENAME}" ] && echo -n " [update]"
 #			}
-			[ ! -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [install]" 'both' 0
-			[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [update]" 'both' 0
+			[ ! -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [install]" 'both' 0 0
+			[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [update]" 'both' 0 0
 
 			# NOTE: we have to copy files this way because they were mounting in the original {proxy|restore} location, so if MODE=link, it would be incorrect
 			if [ "$PROXY" ] || [ "$RESTORE" ]; then
@@ -5131,9 +5166,9 @@ elif [ "$PROXY" ] && [ ! "$INSTALL" ]; then
 		showMsg 'step' " [exists]" 'both' 0 5
 		( [ -e "${PROXY}/pax/TEMP" ] || [ -e "${PROXY}/pax/optional.proxy" ] || [ -e "${PROXY}/pax/proxy.sh" ] || [ -e "${PROXY}/pax/proxy.list" ] ) && showMsg 'step' " [cleaning]" 'both' 0 5
 
-		[ -e "${PROXY}/pax/proxy.sh" ] && ( rm -f "${PROXY}/pax/proxy.sh" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )
-		[ -e "${PROXY}/pax/proxy.list" ] && ( rm -f "${PROXY}/pax/proxy.list" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )
-		[ -e "${PROXY}/pax/TEMP" ] && ( rmdir "${PROXY}/pax/TEMP" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )
+		[ -e "${PROXY}/pax/proxy.sh" ] && { rm -f "${PROXY}/pax/proxy.sh" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure'; }
+		[ -e "${PROXY}/pax/proxy.list" ] && { rm -f "${PROXY}/pax/proxy.list" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure'; }
+		[ -e "${PROXY}/pax/TEMP" ] && { rmdir "${PROXY}/pax/TEMP" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure'; }
 		if [ -e "${PROXY}/pax/optional.proxy" ]; then				# if packages were found on here, then move them to a backup location
 			if [ ! -e "${PROXY}/pax/optional.proxy.bak" ]; then		# if a backup directory doesn't already exists, then create it
 				mkdir -p "${PROXY}/pax/optional.proxy.bak" >>"$LOG_ERRS" 2>&1 || exitGracefully 4 'both' 5 'action'
@@ -5225,29 +5260,39 @@ elif [ "$UNLOAD" ]; then
 	if [ "$UNLOAD" != 'update2' ]; then
 		[ ! "$FORCE" ] && showMsg 'action' "Removing packages that can't be unloaded..." 'both' 1 4
 
+		I=1
+		touch "${DIR_TEMP}/compare.${EXEID}"
+#echo "deps |$DEPS|"
+#echo '----'
+#cat "${DIR_TEMP}/unload.${EXEID}"
+#echo '----'
+while ( ! diff "${DIR_TEMP}/unload.${EXEID}" "${DIR_TEMP}/compare.${EXEID}" >/dev/null ); do		# NOTE: this 'while' loop goes through the process below until no more packages can be removed from the list
 		# finalize the packages to unload
 		for FILE in $(cat "${DIR_TEMP}/unload.${EXEID}"); do					# for each package listed for removal (in the unload list from processDependencies() above)...
 			[ "$FORCE" ] && continue							# if the action is being forced, then we need to remove everything
 			( grep -q "$FILE" "${DIR_TEMP}/unload.${EXEID}" ) || continue			# if we've removed files from the unload list in the below 'while [ "$DEPENDENCY" ]; do' section, then this skips their processing
-													# NOTE: we have to include the above line since the 'cat' call in the above 'for' loop will retain all the ORIGINAL values of the text file, not the removals of the 'while' below!
+													# NOTE: we have to include the above line since the 'cat' call in the encapsulating 'for' loop will retain all the ORIGINAL values in the text file, not any of the removals from the 'while' below!
 			[ $DEBUG -gt 0 ] && echo -e "Body (final):\n\tFILE        |${FILE}|" >>"$LOG_DBUG"
-echo "file |$FILE|"
-			for DEPFILE in $(grep -Hl "$FILE" "${DIR_LIST}/"*.${EXT_DEPS} | sed "s|${DIR_LIST}/||"); do				#   for each .deps file that contains the package (in REPO_SOURCE)...
+#echo "file |$FILE|$I|"
+#head -n $I "${DIR_TEMP}/unload.${EXEID}"
+			for DEPFILE in $(grep -Hl "$FILE" "${DIR_LIST}/"*.${EXT_DEPS} | sed "s|${DIR_LIST}/||"); do				#   for each .deps file (in REPO_SOURCE) that contains the iterated to-be-unloaded FILE package...
 #				TEMP="${FILE_SCHEMA#*\}}"						#   remove just the package name portion from the package filename 'schema' - everything before the first '}' character
 #				eval TEMP="${TEMP}.${EXT_DEPS}"						#   combine the 'schema' (less the package name) values and the file extension value (e.g. i32.bin.soft)
 #				DEPNAME="$(echo $DEPFILE | sed "s/${TEMP}//")"				#   remove that combination from the passed package name (in case it was passed like bash.i32.bin.soft) to isolate just the package name (e.g. bash)
-				DEPBASE="$(echo $DEPFILE | sed "s/.${EXT_DEPS}$//")"			#   remove the file extension from the name
+				DEPBASE="$(echo $DEPFILE | sed "s/.${EXT_DEPS}$//")"			#   remove the file extension from the name of that found dependency package to get its basename
 #				DEPTYPE="$(echo "$DEPFILE" | grep -oE '[\._\-](bin|dev|doc|drv|gir|lib|loc)' | sed -E 's/^[\._\-]//')"	# search for any variation of known type abbreviations and remove the preceeding separation character
 #				[ "$DEPTYPE" = '' ] && DEPTYPE='bin'					#   if the line above did not return any value, then default to 'bin'
-echo "depbase |$DEPBASE|"
-				( grep -q ^"$DEPBASE" "${DIR_TEMP}/unload.${EXEID}" ) && continue	#      if the corresponding .soft file of the iterated .deps file, is also listed for removal (in the unload list), then we need to unload so leave it in the list and go to the next DEPFILE
-												#      otherwise a package that is NOT being unloaded still needs this package, so we can't unload it
-				( grep -q ^"$DEPBASE" "${DIR_LIST}/${FILE%.*}.${EXT_DEPS}" ) && {
-echo "the iterated dep is a dep for a package that's being deleted"
-}
-# LEFT OFF - the above line is not being triggered; resolve this
-echo "|$DEPBASE| depends on |$FILE|"
-cat "${DIR_TEMP}/unload.${EXEID}"
+#echo "depbase |$DEPBASE|"
+				# NOTE: the next line can become a problem if the DEPBASE is left on the list, but a package it relies on further down in the list ends up getting removed from
+				#	the unload list - meaning the original DEPBASE now needs to be removed also. We would be removing a dependency for a package that was later removed from
+				#	the list. This is what the outter 'while' loop attempts to resolve by looping until all the dependencies can safely be removed from the list.
+				( grep -q ^"$DEPBASE" "${DIR_TEMP}/unload.${EXEID}" ) && continue	#      if the iterated .deps file (via its basename), is also listed for removal (in the unload list), then it needs to be unloaded also so leave it in the list and go to the next DEPFILE
+				( head -n $I "${DIR_TEMP}/unload.${EXEID}" | grep -q ^"$FILE" ) && continue	# if the iterated to-be-unloaded package is a dependency for a package that's higher in the list (meaning it is definitely being unloaded), then leave it on the list
+
+				# if we've made it here, then a package that is NOT being unloaded still needs the iterated to-be-unloaded package, so we can't unload it and need to remove it from the list
+
+#echo "|$DEPBASE| depends on |$FILE|"
+#cat "${DIR_TEMP}/unload.${EXEID}"
 # UPDATED 2025/11/17
 #				[ $DEBUG -gt 0 ] && echo -e "\tRemoving:    ${FILE} from unload list; ${DEPBASE}.${EXT_SOFT} depends on it" >>"$LOG_DBUG"
 				[ $DEBUG -gt 0 ] && echo -e "\tOther installed packages depend on ${FILE},\n\tprocessing its dependencies for removal from the unload list..." >>"$LOG_DBUG"
@@ -5263,7 +5308,12 @@ cat "${DIR_TEMP}/unload.${EXEID}"
 
 				break									# we only need to check that one other installed, unmarked package depends on the iterated package, so we can exit the inner 'for' loop
 			done
+			I=$(( I + 1 ))
 		done
+
+	unalias cp 2>/dev/null
+	cp -f "${DIR_TEMP}/unload.${EXEID}" "${DIR_TEMP}/compare.${EXEID}" 2>>"$LOG_ERRS"		# now copy the current unload list to compare against (until the two lists are the same)
+done
 	fi
 
 	[ ! -e "${DIR_TEMP}/unload.${EXEID}" ] && {
@@ -5300,7 +5350,7 @@ cat "${DIR_TEMP}/unload.${EXEID}"
 #			[ ! "$DRYRUN" ] && ( mv "${REPO_PREFIX}/${TEMP}"* "$REPO_SOURCE" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )				# move all the updated package files into REPO_SOURCE
 			# NOTE: REPO_SYSTEM holds the pwd when the script was executed to make sure that the updated package exists there
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling: mv \"${REPO_SYSTEM}/${TEMP}\"* \"$REPO_SOURCE\"" >>"$LOG_DBUG"
-			[ ! "$DRYRUN" ] && ( mv "${REPO_SYSTEM}/${TEMP}"* "$REPO_SOURCE" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure' )				# move all the updated package files into REPO_SOURCE
+			[ ! "$DRYRUN" ] && { mv "${REPO_SYSTEM}/${TEMP}"* "$REPO_SOURCE" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure'; }				# move all the updated package files into REPO_SOURCE
 #			cd - >/dev/null 2>>"$LOG_ERRS"						# cd back into REPO_SOURCE and iterate to the next package to be processed
 #pwd
 			installPackage || exitGracefully 3 'both' 6 'failure'			# install THAT copy
