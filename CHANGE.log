@@ -362,8 +362,18 @@
 
 2025/12/24
 - Corrected bugs until -i fully worked
-- run all test scripts to make sure everything runs correctly
+- Ran all test scripts to make sure everything runs correctly
 - Updated several calls surrounded by () to {} to allow returns/exits properly
 - Updated the restore point names to be past tense
 - Updated the --help output
+
+2026/01/05
+- Cleaned up the script
+- Aligned comments
+- Started test scripts to make sure everything runs correctly
+- Corrected a bug when downloading .deps files
+- Corrected a variable name in the debug output for downloadPackage()
+- Corrected spacing in debug output, throughout
+- Updated processDependencies() to process the package .deps file even if
+  '-D none' was passed
 
