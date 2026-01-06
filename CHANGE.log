@@ -377,3 +377,17 @@
 - Updated processDependencies() to process the package .deps file even if
   '-D none' was passed
 
+2026/01/06
+- Ran all test scripts to make sure everything runs correctly
+- Updated more debug output to add variable values
+- Fixed a naming bug in splitName() that prevented proper operation
+- Fixed an erroneous return value in unloadPackage()
+- Renamed RAWFILE to PARAMETER
+- Updated processDependencies() to not error out if a dependency was not found
+  during unloading/uninstalling (since it may be in the users' HOME)
+- Added an 'alt dir' test in processDependencies()
+- Fixed a debug output error when it's not turned on
+- Removed the mount option 'bs=4096'
+- Indentified dependencies for pax on TinyCore Linux
+- Started testing on TinyCore Linux
+
