@@ -391,3 +391,15 @@
 - Indentified dependencies for pax on TinyCore Linux
 - Started testing on TinyCore Linux
 
+2026/01/07
+- Updated code so a -S was not necessary to copy, extract, or install all
+  packages from the default REPO_OPTION
+- Added COLORS
+- Fixed a bug when passing '-R none -u'
+- Updated the --help output
+- Added '-D source' to force all dependencies to be in the specified location
+- Fixed a display bug with exitGracefully()
+- Updated the code to check REPO_SOURCE, REPO_OPTION, and REPO_SYSTEM for -c,
+  -e, and -i
+- Fixed a display bug when '-P -u' was called
+
