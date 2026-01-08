@@ -403,3 +403,30 @@
   -e, and -i
 - Fixed a display bug when '-P -u' was called
 
+2026/01/08
+- Added '-u unlist'
+- Removed erroneous output
+- Updated the code to check REPO_SOURCE, REPO_OPTION, and REPO_SYSTEM for -u
+- Fixed a bug with -u and optional dependencies
+- Fixed a bug with filenames in .hash files when -V is used
+- Fixed a bug in processDependencies() and -d to prevent package downloads when
+  dependencies were already installed in the OS
+- Fixed a bug that would write packages to the optional.list when -Y is used
+- Fixed a bug that would only write the first passed package to optional.list
+- Updated code to not execute installation/service scripts when -Y is used
+- Updated code so a single restore directory stores the specified package and
+  its dependencies
+- Updated the --help output
+
+
+2026/01/09
+- Remove commented out code
+- Created the .info file
+
+- test with TC
+- uninstall is removing dependencies for installed packages on TC
+- pax has to be run with sudo on TC - stop this
+- Ran all test scripts to make sure everything runs correctly
+- create a stable package for download on github
+- package and put in TC repo
+
