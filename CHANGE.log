@@ -418,15 +418,7 @@
   its dependencies
 - Updated the --help output
 
-
 2026/01/09
 - Remove commented out code
 - Created the .info file
-
-- test with TC
-- uninstall is removing dependencies for installed packages on TC
-- pax has to be run with sudo on TC - stop this
-- Ran all test scripts to make sure everything runs correctly
-- create a stable package for download on github
-- package and put in TC repo
 

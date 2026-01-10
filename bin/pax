@@ -468,9 +468,7 @@ showMsg() {
 # NAME		[string] the name of the package to parse (e.g. bash.i64.dev.soft)
 # EXTENSION	[string] [optional] the file extension to process (EXT_SOFT is default)
 splitName() {
-# UPDATED 2025/01/08
-#	local NAME="$(echo "$1" | sed 's|.*/||;s|^\s*||')"					# remove any directory structure and store the raw name value	NOTE: we also remove any preceeding spacing that gets injected when using -o for some reason
-	local NAME="$(echo "$1" | sed 's|.*/||;s|^\s*||;s|^\+||;s|^ ||')"				# remove any directory structure and store the raw name value	NOTE: we also remove any preceeding spacing that gets injected when using -o for some reason, and '+' from addDependency(), and ' ' from processDependencies()
+	local NAME="$(echo "$1" | sed 's|.*/||;s|^\s*||;s|^\+||;s|^ ||')"			# remove any directory structure and store the raw name value	NOTE: we also remove any preceeding spacing that gets injected when using -o for some reason, and '+' from addDependency(), and ' ' from processDependencies()
 	local EXT="${EXT_SOFT}"
 	local TEMP=''
 
@@ -533,8 +531,6 @@ addDependency() {
 
 	INDEX=$(( INDEX + 1 ))
 	TOTAL=$(( TOTAL + 1 ))
-# UPDATED 2026/01/08
-#	eval "DEP${INDEX}=$1"									# NOTE: since busybox shell (ash) can't handle arrays (ugh!), we have to use this work around...
 	[ "$2" = 'FALSE' ] && eval "DEP${INDEX}=$1" || eval "DEP${INDEX}=\"+$1\""		# add the package or its dependency (notated with a preceeding '+')	NOTE: since busybox shell (ash) can't handle arrays (ugh!), we have to use this work around...
 	eval "DEPENDENCY=\$DEP${INDEX}"
 
@@ -545,16 +541,13 @@ addDependency() {
 # Usage syntax: deleteDependency [ADJUST]
 # Overview:	deletes the top-most (last added) package from the stack of dependencies
 # Parameters:
-# DECREASE	[boolean] if the INDEX variable needs to be decreased by 1														< DELETE
 # ADJUST	[character] if the INDEX variable needs to be adjusted: (i)ncrease by 1, (d)ecrease by 1, null makes no adjustments
 deleteDependency() {
-	local TARGET
+	local TARGET										# the value that should exit this function
 
 	[ $DEBUG -gt 0 ] && echo -e "deleteDependency (old):\n\tINDEX       |${INDEX}|\n\tDEPENDENCY  |${DEPENDENCY}|" >>"$LOG_DBUG"
 
 	eval "unset DEP${INDEX}"
-# UPDATED 2026/01/08
-#	[ "$1" ] && INDEX=$(( INDEX - 1 ))							# if we need to decrease the INDEX value, then do so!
 	[ "$1" = 'd' ] && {									# if we need to decrease the INDEX value, then do so!
 		INDEX=$(( INDEX - 1 ))
 		TARGET=0									#   so if INDEX = 0, then we've decreased to the last dependency and there's nothing left to process
@@ -563,8 +556,6 @@ deleteDependency() {
 		INDEX=$(( INDEX + 1 ))
 		TARGET=$TOTAL									#   so if INDEX = TARGET, then we've increased to the last dependency and there's nothing left to process
 	}
-# UPDATED 2026/01/08
-#	[ $INDEX -eq 0 ] && {									# if there isn't anything left in the stack, delete the variable and exit
 	[ $INDEX -eq $TARGET ] && {								# if there isn't anything left in the stack, delete the variable and exit
 		unset DEPENDENCY
 		[ $DEBUG -gt 0 ] && echo -e "deleteDependency (new):\n\tINDEX       |${INDEX}|\n\tDEPENDENCY  ||" >>"$LOG_DBUG"
@@ -584,8 +575,6 @@ inDependencies() {
 
 	for I in $(seq 1 $INDEX); do								# check if the dependencies has already been added to the list to be processed, so...
 		eval TEMP="\$DEP${I}"								#   since busybox 'sh' does not support arrays, we have to use this method to check each stored dependency
-# UPDATED 2026/01/08
-#		[ "$TEMP" = "$1" ] && return 0							#   if the iterated dependency is already in the list (including any specific version number), then...
 		( [ "$TEMP" = "$1" ] || [ "$TEMP" = "+$1" ] ) && return 0			#   if the iterated package or dependency (notated with the preceeding '+') is already in the list (including any specific version number), then...
 	done
 	return 1
@@ -598,13 +587,13 @@ listDependencies() {
 	local I=$INDEX
 	local D=' '
 
-( echo "$DEPENDENCY" | grep -qe ^'+' ) && DEPENDENCY="${DEPENDENCY#*+}"		# if there was a preceeding '+' from addDependency(), then we need to remove that
+	( echo "$DEPENDENCY" | grep -qe ^'+' ) && DEPENDENCY="${DEPENDENCY#*+}"			# if there was a preceeding '+' from addDependency(), then we need to remove that
 	TEMP="$DEPENDENCY"									# start with the DEPENDENCY that was last processed by addDependency()
 
 	while [ "$D" ]; do
 		I=$(( I - 1 ))
 		eval "D=\$DEP${I}"
-( echo "$D" | grep -qe ^'+' ) && D="${D#*+}"					# if there was a preceeding '+' from addDependency(), then we need to remove that
+		( echo "$D" | grep -qe ^'+' ) && D="${D#*+}"					# if there was a preceeding '+' from addDependency(), then we need to remove that
 		TEMP="${D}\n${TEMP}"
 		[ $I -eq 1 ] && unset D
 		[ $I -eq -1 ] && break								# this is a safety net for any issues that may get encountered
@@ -625,8 +614,6 @@ processDependencies() {
 	local SOURCE=''
 	local DEPFILE
 	local DEP="$2"
-# UPDATED 2026/01/08
-#	local INDENT="$2"
 	local INDENT="$3"
 
 	splitName "$1"
@@ -655,8 +642,6 @@ processDependencies() {
 		showMsg 'dependency' "[ optional] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: don't error with exit status for a conditional package
 	}
-# UPDATED 2026/01/08 - if the OPTFILE is NOT installed, it would NOT be in the dependencies list
-#	[ "$OPTFILE" ] && [ "$DEPS" = 'all' ] && [ ! -e "${DIR_LIST}/${OPTFILE}" ] && ( ! inDependencies "$OPTFILE" ) && {			# if we've encountered a conditional package -AND- we are using the '-D all' option -AND- it's dependency is not installed -AND- it's not in the to-be-processed list, then we can safely skip it!
 	[ "$OPTFILE" ] && [ "$DEPS" = 'all' ] && ( [ ! -e "${DIR_LIST}/${OPTFILE}" ] || [ ! -e "${DIR_LIST}/${FILENAME}" ] ) && {		# if we've encountered a conditional package -AND- we are using the '-D all' option -AND- it's dependency -or- the optional package is not installed, then...
 		showMsg 'dependency' "[ unloaded] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		showMsg 'warning' "The conditional package is not installed." 'log'
@@ -723,12 +708,6 @@ processDependencies() {
 		showMsg 'dependency' "[ BASE OS ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: we don't exit with failure since this could just be a dependency and left installed
 	}
-# REMOVED 2026/01/07
-#	# if we're unloading -or- validating -AND- the package does NOT exist in the specified location -AND- ( it does exist in REPO_SYSTEM -or- REPO_OPTION -or- is not a symlink in DIR_LIST [e.g. it was installed @ bootup] ), then go to the next one!
-#	( [ "$UNLOAD" ] || [ "$VALIDATE" ] ) && [ ! -e "${REPO_SOURCE}/${FILENAME}" ] && ( [ -e "${REPO_SYSTEM}/${FILENAME}" ] || [ -e "${REPO_OPTION}/${FILENAME}" ] || [ ! -s "${DIR_LIST}/${FILENAME}" ] ) && {
-#		showMsg 'dependency' "[ alt dir ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-#		return 0															# NOTE: we don't exit with failure since this could be a dependency in the OS, but we're unloading a package in HOME
-#	}
 	# if we're unloading -or- validating -AND- the iterated dependency is not present anywhere, then...
 	( [ "$UNLOAD" ] || [ "$VALIDATE" ] ) && [ ! -e "${REPO_SOURCE}/${FILENAME}" ] && [ ! -e "${REPO_SYSTEM}/${FILENAME}" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] && {
 		showMsg 'dependency' "[ missing ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -768,8 +747,6 @@ processDependencies() {
 	if [ -e "${REPO_SOURCE}/${FILENAME}" ]; then SOURCE='  local  '				# if the package is in the specified directory, then...
 	elif [ -e "${REPO_OPTION}/${FILENAME}" ]; then SOURCE='local opt'			# if the package is in the REPO_OPTION directory, then...
 	elif [ -e "${REPO_SYSTEM}/${FILENAME}" ]; then SOURCE='local sys'; fi			# if the package is in the REPO_SYSTEM directory, then...
-# REMOVED 2026/01/08
-#	elif [ -e "${REPO_SYSTEM}/${FILENAME}" ] || ( [ -e "${DIR_LIST}/${FILENAME}" ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] ); then SOURCE='local sys'; fi			# if the package is in the REPO_SYSTEM directory, then...
 	[ ! "$SOURCE" ] && ( echo "$REPO_SOURCE"|grep -qE ^'(http|ftp)' ) && SOURCE=' foreign '	# if there IS a remote REPO_SOURCE value (either by the action default -OR- a passed -S value), then...
 	[ ! "$SOURCE" ] && {									# if the package could not be found, then...
 		showMsg 'dependency' "[ missing ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -792,8 +769,6 @@ processDependencies() {
 	[ ! "$TREE" ] && ( [ ! "$UNLOAD" ] || ( echo "${UNLOAD}" | grep -q 2 ) ) && addDependency "$FILENAME" "$DEP"				# if we're NOT unloading -OR- we're on the 2nd stage of unloading, then add the passed package to the stack to be processed outside of this function
 	[ ! "$TREE" ] && ( [ ! "$UNLOAD" ] || ( echo "${UNLOAD}" | grep -q 2 ) ) && [ $DEBUG -gt 0 ] && echo "processDependencies (returned):" >>"$LOG_DBUG"
 
-# UPDATED 2026/01/08
-#	[ "$UNLOAD" ] && ( ! echo "${UNLOAD}" | grep -q 2 ) && echo "$FILENAME" >>"${DIR_TEMP}/unload.${EXEID}"					# if we ARE unloading -AND- it's the first stage, then add the dependency to the listing for all packages to unload
 	[ "$UNLOAD" ] && ( ! echo "${UNLOAD}" | grep -q 2 ) && [ "$DEP" = 'FALSE' ] && echo "$FILENAME" >>"${DIR_TEMP}/unload.${EXEID}"		# if we ARE unloading -AND- it's the first stage -AND- it's a specified package, then add it to the unload listing
 	[ "$UNLOAD" ] && ( ! echo "${UNLOAD}" | grep -q 2 ) && [ "$DEP" = 'TRUE' ] && echo "+$FILENAME" >>"${DIR_TEMP}/unload.${EXEID}"		# if we ARE unloading -AND- it's the first stage -AND- it's a package dependency, then add it to the unload listing
 	[ "$UNLOAD" ] && ( ! echo "${UNLOAD}" | grep -q 2 ) && [ $DEBUG -gt 0 ] && echo -e "\tAdding dependency to the unload list: [done]" >>"$LOG_DBUG"
@@ -824,8 +799,6 @@ processDependencies() {
 		[ $DEBUG -gt 0 ] && echo -e " [exists] [processing]" >>"$LOG_DBUG"
 		# NOTE: we have to include DRYRUN as part of the command so the file gets deleted correctly; BASENAME would only have the name of the last dependency for an after-for-loop removal
 		for DEPFILE in $(cat "./${BASENAME}.${EXT_DEPS}" 2>/dev/null && [ "$DRYRUN" ] && ( [ "$COPY" ] || [ "$DOWNLOAD" ] ) && rm -f "./${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"); do	# if the passed dependency also has dependencies, then...
-# UPDATED 2026/01/08
-#			processDependencies "$DEPFILE" "$INDENT  " || return 1			# WARNING: this line needs to execute no matter the outcome of the 'wget' call above (so the addDependency() call can be made if needed) -AND- it needs to be the unaltered DEPFILE variable with any contained version number!!!
 			processDependencies "$DEPFILE" 'TRUE' "$INDENT  " || return 1		# WARNING: this line needs to execute no matter the outcome of the 'wget' call above (so the addDependency() call can be made if needed) -AND- it needs to be the unaltered DEPFILE variable with any contained version number!!!
 		done
 	fi
@@ -963,22 +936,20 @@ downloadPackage() {
 
 	showMsg 'file' " [pack]" 'both' 0 0
 	[ $DEBUG -gt 0 ] && echo -e "\tCalling:    wget -cq \"${REPO_SOURCE}/${BASE_SOURCE}.${EXT_SOFT}\" -O \"./${BASE_TARGET}.${EXT_SOFT}\"" >>"$LOG_DBUG"
-	[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_SOFT}" -O "./${BASE_TARGET}.${EXT_SOFT}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && { # download the package file from the repo	NOTE: the string of commands outputs to the pax.log correctly while still returning a proper exit code from wget
+	# NOTE: the string of commands outputs to the pax.log correctly while still returning a proper exit code from wget
+	[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_SOFT}" -O "./${BASE_TARGET}.${EXT_SOFT}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && { 			# download the package file from the repo
 		showMsg 'failure' "The package file download failed (${BASE_SOURCE}.${EXT_SOFT})." 'log'
 		return 1
 	}
 
 	showMsg 'file' " [hash]" 'both' 0 0
 	[ $DEBUG -gt 0 ] && echo -e "\tCalling:    wget -cq \"${REPO_SOURCE}/${BASE_SOURCE}.${EXT_HASH}\" -O \"./${BASE_TARGET}.${EXT_HASH}\"" >>"$LOG_DBUG"
-	[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_HASH}" -O "./${BASE_TARGET}.${EXT_HASH}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && { # download the corresponding hash file
+	[ ! "$DRYRUN" ] && ( wget -cq "${REPO_SOURCE}/${BASE_SOURCE}.${EXT_HASH}" -O "./${BASE_TARGET}.${EXT_HASH}" 2>&1 | sed 's/^w/ \[failure\]\nw/' | tee -a "$LOG_ERRS" | grep -q 404 ) && { 			# download the corresponding hash file
 		showMsg 'failure' "The package hash file download failed (${BASE_SOURCE}.${EXT_HASH})." 'log'
 		return 1
 	}
 
 	# if we ARE installing a specific version of the software, then...
-# UPDATED 2026/01/08
-#	[ $DEBUG -gt 0 ] && [ ! "$DRYRUN" ] && [ "$VERFILE" ] && echo -e "\tCalling:    sed -i \"s/  ${PACKAGE}/  ${PACKAGE}_${VERSION}/\" \"./${BASE_TARGET}.${EXT_HASH}\"" >>"$LOG_DBUG"
-#	[ ! "$DRYRUN" ] && [ "$VERFILE" ] && sed -i "s/  ${PACKAGE}/  ${PACKAGE}_${VERSION}/" "./${BASE_TARGET}.${EXT_HASH}"			# changing the package name to match the version number in the hash file
 	[ $DEBUG -gt 0 ] && [ ! "$DRYRUN" ] && [ "$VERFILE" ] && echo -e "\tCalling:    sed -i \"s/  .*/  ${FILENAME}/\" \"./${BASE_TARGET}.${EXT_HASH}\"" >>"$LOG_DBUG"
 	[ ! "$DRYRUN" ] && [ "$VERFILE" ] && sed -i "s/  .*/  ${FILENAME}/" "./${BASE_TARGET}.${EXT_HASH}"					# changing the package name to match the version number in the hash file
 
@@ -1219,9 +1190,6 @@ installPackage() {
 
 	# update the "install" list
 	# if we are NOT validating -AND- installing a requested package [INDEX==1] (not a dependency for it [INDEX>1]) -AND- it needs to be added to a list -AND- the package isn't already in the LIST, then add the package to the LIST file
-# UPDATED 2026/01/08
-#	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ "$PACKLIST" = 'boot' ] && ( ! grep -q "$FILENAME" "${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS"
-#	[ ! "$VALIDATE" ] && [ "$INDEX" -eq 1 ] && [ "$PACKLIST" = 'live' ] && ( ! grep -q "$FILENAME" "${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ "$PACKLIST" = 'boot' ] && ( ! echo "$DEPENDENCY" | grep -qe ^'+' ) && ( ! grep -q "$FILENAME" "${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ "$PACKLIST" = 'live' ] && ( ! echo "$DEPENDENCY" | grep -qe ^'+' ) && ( ! grep -q "$FILENAME" "${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS"
 
@@ -1320,8 +1288,6 @@ proxyAction() {
 	echo >>"${DIR_TEMP}/proxy.sh"
 	echo "for PARAMETER in \$(cat ../proxy.list); do" >>"${DIR_TEMP}/proxy.sh"
 	echo "	splitName \"\$PARAMETER\"" >>"${DIR_TEMP}/proxy.sh"
-# UPDATED 2026/01/08
-#	echo "	processDependencies \"\${PARAMETER}\"" >>"${DIR_TEMP}/proxy.sh"
 	echo "	processDependencies \"\${PARAMETER}\" 'FALSE'" >>"${DIR_TEMP}/proxy.sh"
 	echo "done" >>"${DIR_TEMP}/proxy.sh"
 	echo >>"${DIR_TEMP}/proxy.sh"
@@ -1339,8 +1305,6 @@ proxyAction() {
 	echo "		copyPackage || exitGracefully 1" >>"${DIR_TEMP}/proxy.sh"
 	echo "	fi" >>"${DIR_TEMP}/proxy.sh"
 	echo "	showMsg 'file' \" [done]\" 'both' 1 5" >> "${DIR_TEMP}/proxy.sh"
-# UPDATED 2026/01/08
-#	echo "	deleteDependency TRUE" >> "${DIR_TEMP}/proxy.sh"
 	echo "	deleteDependency 'd'" >> "${DIR_TEMP}/proxy.sh"
 	echo "done">>"${DIR_TEMP}/proxy.sh"
 }
@@ -1483,12 +1447,7 @@ uninstallPackage() {
 	# if we've made it down here then we need to delete package files
 
 	[ $DEBUG -gt 0 ] && { echo -en "uninstallPackage:\n\tPARAMETER   |${PARAMETER}|\n\tFILENAME    |${FILENAME}|\n\tBASENAME    |${BASENAME}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${ARCH}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tVERBASE     |${VERBASE}|\n\tOPTFILE     |${OPTFILE}|\n\tSOURCE      |${SOURCE}|\n\tREPO_SOURCE |${REPO_SOURCE}|\n\tDIRECTORY   |${DIRECTORY}|\n\tpwd         |" >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
-# UPDATED 2026/01/08 - to allow for more versatility
-#	if [ "$UNLOAD" ] && [ "$RESTORE" = 'none' ]; then					# if we do NOT need a restore point (via -u -R none), then...		NOTE: we need the UNLOAD check since INSTALL can call this function too (for updating packages)
 	if [ "$RESTORE" = 'none' ]; then							# if we do NOT need a restore point (via -u -R none), then...
-# REMOVED 2026/01/08 - this may cause problems by not indicating a second stage
-#		UNLOAD="${UNLOAD%2*}"								# remove the trailing '2' (indicating the second stage of processing)
-#		showMsg 'step' " [${UNLOAD}]" 'both' 0 0
 		showMsg 'step' " [${UNLOAD%2*}]" 'both' 0 0					# remove the trailing '2' (indicating the second stage of processing)
 
 		[ $DEBUG -gt 0 ] && echo -e "\tSkip creating a restore point...\n\trm -f ${SOURCE}/${BASENAME}.*" >>$LOG_DBUG
@@ -1530,7 +1489,6 @@ uninstallPackage() {
 
 		[ -e "${REPO_RESTOR}/${RPD}" ] && RPD="${RPD} $(date +%T)"			# if the restore point already exists (e.g. manipulating various package versions), then append time at the end
 	fi
-#echo "dep |$DEPENDENCY|$RPD|"
 
 	# NOTE: the below line will create the entire REPO_RESTOR directory structure if there is no DATA, or just the date directory in the event there is one
 	if [ ! -e "${REPO_RESTOR}/${RPD}" ]; then
@@ -2360,7 +2318,6 @@ for PARAMETER in $@; do
 	if [ "$PROXY" ] && [ ! "$INSTALL" ]; then						# if we are proxying an action, then...
 		echo "$FILENAME" >> "${DIR_TEMP}/proxy.list"					# create the proxy package list
 		continue
-#	elif [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ]; then
 	elif [ ! "$DOWNLOAD" ] && [ ! "$FIND" ] && [ ! "$INSTALL" ] && [ ! "$LIST" ] && [ ! "$MAKE" ] && [ ! "$OPEN" ]; then
 		if ( [ "$DEPS" = 'source' ] && [ ! -e "${REPO_SOURCE}/${FILENAME}" ] ) || ( [ ! -e "${REPO_SOURCE}/${FILENAME}" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] && [ ! -e "${REPO_SYSTEM}/${FILENAME}" ] ); then
 			showMsg 'failure' "The '${FILENAME}' package does not exist." 'both'
@@ -2457,8 +2414,6 @@ for PARAMETER in $@; do
 	fi
 
 	# NOTE: everything below this point in this segment is simply to build the dependency list, the actual work is done in the following 'while' loop
-# UPDATED 2026/01/08
-#	processDependencies "${FILENAME}" || exitGracefully 2 'screen' 5 'step'
 	processDependencies "${FILENAME}" 'FALSE' || exitGracefully 2 'screen' 5 'step'
 done
 
@@ -2467,12 +2422,8 @@ done
 
 # EXIT CHECK
 
-[ "$VALIDATE" = 'deps' ] && exitGracefully 0 'both' 6 'success'					# there's no more work to perform if this was the action to process
-[ "$UNLOAD" ] && [ ! "$RESTORE" ] && [ ! -e "${DIR_TEMP}/unload.${EXEID}" ] && {		# there's no more work to perform if the 'unload' file doesn't exist at this point
-# REMOVED 2026/01/08 - this would never be executed because -u would be issued, not -t
-#	[ "$TREE" != 'relies' ] && showMsg 'action' "There are no package(s) to be processed." 'both' 1 4
-	exitGracefully 0 'both' 6 'success'
-}
+[ "$VALIDATE" = 'deps' ] && exitGracefully 0 'both' 6 'success'											# there's no more work to perform if this was the action to process
+[ "$UNLOAD" ] && [ ! "$RESTORE" ] && [ ! -e "${DIR_TEMP}/unload.${EXEID}" ] && exitGracefully 0 'both' 6 'success'				# there's no more work to perform if the 'unload' file doesn't exist at this point
 [ $INDEX -eq 0 ] && [ ! "$FIND" ] && [ ! "$LIST" ] && [ ! "$OPEN" ] && [ ! "$PROXY" ] && [ "$TREE" != 'reliant' ] && [ ! "$UNLOAD" ] && {
 	[ "$TREE" != 'relies' ] && showMsg 'action' "There are no package(s) to be processed." 'both' 1 4
 	exitGracefully 0 'both' 6 'success'
@@ -2549,10 +2500,6 @@ fi
 
 
 # now process the dependencies obtained from the above segment!
-# UPDATED 2026/01/08
-#while [ "$DEPENDENCY" ] && [ $INDEX -gt 0 ]; do						# while we have a dependency to process via the DEPENDENCY value set by processDependencies() and INDEX adjusted within this loop itself
-#for (( I=1; I>0; I++ )); do									# while we have a dependency to process via the DEPENDENCY value set by processDependencies() and INDEX adjusted within this loop itself
-#while [ "$DEPENDENCY" ]; do									# while we have a dependency to process via the DEPENDENCY value set by processDependencies() and INDEX adjusted within this loop itself
 for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process (via the TOTAL value set by addDependency())
 	eval DEPENDENCY="\$DEP${INDEX}"								#   set the dependency to process each iteration
 
@@ -2574,8 +2521,6 @@ for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process 
 
 	# NOTE: this is a separate 'if' on purpose (since several actions require downloading)!
 	if [ "$COPY" ]; then									# if we're copying package(s), then...
-# UPDATED 2025/01/07
-#		copyPackage || exitGracefully 4 'screen' 5 'step'
 		copyPackage || {
 # VER2 - we need to re-work the exitGracefully() so that we don't need three different calls
 			[ "$OUTPUT" = 'text' ] && exitGracefully 3 'screen' 0
@@ -2633,8 +2578,6 @@ for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process 
 	fi
 	[ ! "$VALIDATE" ] && showMsg 'file' " [done]" 'both' 1 5 || showMsg 'file' "" 'both' 1 5
 
-# UPDATED 2026/01/08
-#	deleteDependency TRUE									# delete the dependency before assigning the next one below
 	deleteDependency 'i'									# delete the dependency before assigning the next one below
 done
 
@@ -2832,23 +2775,18 @@ elif [ "$UNLOAD" ]; then
 					# NOTE: the next line can become a problem if the DEPBASE is left on the list, but a package it relies on further down in the list ends up getting removed from
 					#	the unload list - meaning the original DEPBASE now needs to be removed also. We would be removing a dependency for a package that was later removed from
 					#	the list. This is what the outter 'while' loop attempts to resolve by looping until all the dependencies can safely be removed from the list.
-# UPDATED 2026/01/08
-#					( grep -q ^"$DEPBASE" "${DIR_TEMP}/unload.${EXEID}" ) && continue					#   if the iterated .deps file (via its basename), is also listed for removal (in the unload list), then it needs to be unloaded also so leave it in the list and go to the next DEPFILE
 					( grep -qe ^"+*$DEPBASE" "${DIR_TEMP}/unload.${EXEID}" ) && continue					#   if the iterated .deps file (via its basename), is also listed for removal (in the unload list), then it needs to be unloaded also so leave it in the list and go to the next DEPFILE; NOTE: the optional preceeding '+' notates a dependency vs specified package
 					( head -n $I "${DIR_TEMP}/unload.${EXEID}" | grep -q ^"+*$DEPFILE" ) && continue			#   if the iterated to-be-unloaded package is a dependency for a package that's higher in the list (meaning it is definitely being unloaded), then leave it on the list
 
 					# if we've made it here, then a package that is NOT being unloaded still needs the iterated to-be-unloaded package, so we can't unload it and need to remove it from the list
-#echo "depfile |$DEPFILE|"
+
 					[ $DEBUG -gt 0 ] && echo -e "\tOther installed packages depend on ${TEMP},\n\tprocessing its dependencies for removal from the unload list..." >>"$LOG_DBUG"
-# UPDATED 2026/01/08
-#					processDependencies "${FILE}"										#   store all it's dependencies
+
 					processDependencies "${TEMP}" 'FALSE'									#   store all it's dependencies
 
 					[ $DEBUG -gt 0 ] && echo -e "Body (final - returned):\n\tFILE        |${TEMP}|\n\tRemoving ${TEMP} and its dependencies from the unload list..." >>"$LOG_DBUG"
 					while [ "$DEPENDENCY" ]; do										#   and delete them (and blank lines) from the removal list (the unload list)
 						sed -i "s/^+*${DEPENDENCY}//;/^$/d" "${DIR_TEMP}/unload.${EXEID}"				#   NOTE: we check for preceeding space too if the DEPENDENCY is actually a dependency
-# UPDATED 2026/01/08
-#						deleteDependency TRUE
 						deleteDependency 'd'
 					done
 
@@ -2878,8 +2816,6 @@ elif [ "$UNLOAD" ]; then
 		echo >>"$LOG_ERRS"
 	fi
 
-# UPDATED 2026/01/08
-#	[ "$UNLOAD" = 'update2' ] && TEMP='Updat' || TEMP='Unload'
 	[ "$UNLOAD" = 'update2' ] && TEMP='Updat'
 	[ "$UNLOAD" = 'unload2' ] && TEMP='Unload'
 	[ "$UNLOAD" = 'unlist2' ] && TEMP='Unlist'
@@ -2891,12 +2827,8 @@ elif [ "$UNLOAD" ]; then
 		unloadPackage "$FILENAME" || exitGracefully 3 'both' 6 'failure'		#   unload it
 		[ "$UNLOAD" = 'update2' ] && {
 			showMsg 'step' " [install]" 'both' 0
-# REMOVED 2026/01/08
-#			TEMP="$(echo "$FILENAME" | sed "s/${EXT_SOFT}$//")"			# remove the file extension to get a BASENAME value
 
 			# NOTE: REPO_SYSTEM holds the pwd when the script was executed to make sure that the updated package exists there
-#			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    mv \"${REPO_SYSTEM}/${TEMP}\"* \"$REPO_SOURCE\"" >>"$LOG_DBUG"
-#			[ ! "$DRYRUN" ] && { mv "${REPO_SYSTEM}/${TEMP}"* "$REPO_SOURCE" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure'; } # move all the updated package files into REPO_SOURCE
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    mv \"${REPO_SYSTEM}/${BASENAME}\"* \"$REPO_SOURCE\"" >>"$LOG_DBUG"
 			[ ! "$DRYRUN" ] && { mv "${REPO_SYSTEM}/${BASENAME}"* "$REPO_SOURCE" 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure'; } # move all the updated package files into REPO_SOURCE
 
