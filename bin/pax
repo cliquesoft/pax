@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/08 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/12 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -642,7 +642,9 @@ processDependencies() {
 		showMsg 'dependency' "[ optional] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: don't error with exit status for a conditional package
 	}
-	[ "$OPTFILE" ] && [ "$DEPS" = 'all' ] && ( [ ! -e "${DIR_LIST}/${OPTFILE}" ] || [ ! -e "${DIR_LIST}/${FILENAME}" ] ) && {		# if we've encountered a conditional package -AND- we are using the '-D all' option -AND- it's dependency -or- the optional package is not installed, then...
+# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+#	[ "$OPTFILE" ] && [ "$DEPS" = 'all' ] && ( [ ! -e "${DIR_LIST}/${OPTFILE}" ] || [ ! -e "${DIR_LIST}/${FILENAME}" ] ) && {		# if we've encountered a conditional package -AND- we are using the '-D all' option -AND- it's dependency -or- the optional package is not installed, then...
+	[ "$OPTFILE" ] && [ "$DEPS" = 'all' ] && ( [ ! -e "${DIR_LIST}/${OPTFILE}" ] || [ ! -e "${DIR_LIST}/${BASENAME}" ] ) && {		# if we've encountered a conditional package -AND- we are using the '-D all' option -AND- it's dependency -or- the optional package is not installed, then...
 		showMsg 'dependency' "[ unloaded] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		showMsg 'warning' "The conditional package is not installed." 'log'
 		return 0															# NOTE: don't error with exit status for a conditional package
@@ -666,13 +668,17 @@ processDependencies() {
 		return 0															# NOTE: do NOT return error, we will just simply skip the file so the user isn't forced to pass '-F' a lot
 	}
 
-	[ "$DOWNLOAD" ] && [ -e "${DIR_LIST}/${FILENAME}" ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && {
+# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+#	[ "$DOWNLOAD" ] && [ -e "${DIR_LIST}/${FILENAME}" ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && {
+	[ "$DOWNLOAD" ] && [ -e "${DIR_LIST}/${BASENAME}" ] && [ ! -s "${DIR_LIST}/${BASENAME}" ] && {
 		[ $DEBUG -gt 0 ] && echo -e "\tPackage is already installed in the OS." >>"$LOG_DBUG"						# NOTE: we left this line like this since this is not a failure, but just a package to skip
 		showMsg 'dependency' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: do NOT return error, we will just simply skip the file so the user isn't forced to pass '-F' a lot
 	}
 
-	[ "$INSTALL" ] && [ ! "$FORCE" ] && [ -e "${DIR_LIST}/${FILENAME}" ] && {								# if we're installing -AND- not forcing -AND- the software is already installed, then...
+# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+#	[ "$INSTALL" ] && [ ! "$FORCE" ] && [ -e "${DIR_LIST}/${FILENAME}" ] && {								# if we're installing -AND- not forcing -AND- the software is already installed, then...
+	[ "$INSTALL" ] && [ ! "$FORCE" ] && [ -e "${DIR_LIST}/${BASENAME}" ] && {								# if we're installing -AND- not forcing -AND- the software is already installed, then...
 		showMsg 'dependency' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		[ $INDEX -eq 0 ] && showMsg 'failure' "The package is currently installed." 'log'
 		[ $DEBUG -gt 0 ] && echo -e "\tThe dependency is currently installed." >>"$LOG_DBUG"
@@ -685,7 +691,9 @@ processDependencies() {
 		return 1
 	}
 
-	( [ "$UNLOAD" = 'unload' ] || [ "$UNLOAD" = 'unlist' ] || [ "$UNLOAD" = 'update' ] ) && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {		# if we're unloading, unlisting, or updating -AND- the package is already unloaded, then go to the next one!
+# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+#	( [ "$UNLOAD" = 'unload' ] || [ "$UNLOAD" = 'unlist' ] || [ "$UNLOAD" = 'update' ] ) && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {		# if we're unloading, unlisting, or updating -AND- the package is already unloaded, then go to the next one!
+	( [ "$UNLOAD" = 'unload' ] || [ "$UNLOAD" = 'unlist' ] || [ "$UNLOAD" = 'update' ] ) && [ ! -e "${DIR_LIST}/${BASENAME}" ] && {		# if we're unloading, unlisting, or updating -AND- the package is already unloaded, then go to the next one!
 		[ $DEBUG -gt 0 ] && echo -e "\tThe package is already unloaded." >>"$LOG_DBUG"							# NOTE: we left this line like this since this is not a failure, but just a package to skip
 		showMsg 'dependency' "[ unloaded] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0
@@ -696,14 +704,18 @@ processDependencies() {
 		showMsg 'dependency' "[ missing ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0
 	}
-	[ "$UNLOAD" = 'update' ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && [ $(id -u) -gt 0 ] && {						# if we're updating -AND- the package is on BOOT (via 0 byte file) -AND- we're not root or sudo, then...
+# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+#	[ "$UNLOAD" = 'update' ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && [ $(id -u) -gt 0 ] && {						# if we're updating -AND- the package is on BOOT (via 0 byte file) -AND- we're not root or sudo, then...
+	[ "$UNLOAD" = 'update' ] && [ ! -s "${DIR_LIST}/${BASENAME}" ] && [ $(id -u) -gt 0 ] && {						# if we're updating -AND- the package is on BOOT (via 0 byte file) -AND- we're not root or sudo, then...
 		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The user account does not have sufficient priviledges to update base OS packages." >>"$LOG_DBUG"
 		showMsg 'dependency' "[ account ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: we don't exit with failure since this could just be a dependency and left installed
 	}
 # DEV NOTE: the REPO_OPTION directory can no longer contain 0-byte REPO_SYSTEM files; everything needs to go into REPO_LIST/BASENAME[.list|info|hash|deps]
 	# if we're unloading, but not updating -AND- the package has a 'base os' marker (e.g. TinyCore) -OR- ( the package exists in DIR_LIST -AND- we're working in REPO_OPTION -AND- the package does NOT exist there (since it would be in REPO_SYSTEM), then...
-	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_BASE}" ] || ( [ -e "${DIR_LIST}/${FILENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
+# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+#	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_BASE}" ] || ( [ -e "${DIR_LIST}/${FILENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
+	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_BASE}" ] || ( [ -e "${DIR_LIST}/${BASENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
 		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The package is part of the base OS and can't be modified." >>"$LOG_DBUG"
 		showMsg 'dependency' "[ BASE OS ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: we don't exit with failure since this could just be a dependency and left installed
@@ -760,7 +772,9 @@ processDependencies() {
 		[ "$INDENT" ] && [ ! "$OPTFILE" ] && showMsg 'file' "${INDENT}${PACKAGE} (${FILETYPE})" 'screen' 1 1				# if this is a depends/dependency package, then...
 		[ "$OPTFILE" ] && showMsg 'file' "${INDENT}${PACKAGE} {COLOR}(${FILETYPE}) [optional]" 'screen' 1 1				# if this is an optional depends/dependency package, then...
 	elif [ "$VALIDATE" ]; then
-		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1 || showMsg 'issue' "[ unloaded] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+#		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1 || showMsg 'issue' "[ unloaded] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+		[ -e "${DIR_LIST}/${BASENAME}" ] && showMsg 'step' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1 || showMsg 'issue' "[ unloaded] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 	else
 		showMsg 'dependency' "[${SOURCE}] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 	fi
@@ -1202,9 +1216,12 @@ installPackage() {
 	[ ! "$PROXY" ] && ( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${REPO_OPTION}"						# if a remote -S was passed, then mount from the default local repo storage location
 	[ ! "$PROXY" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${SOURCE}"						# if a local -S was passed, then mount from the provided, local location
 
-	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && ln -sf "${TEMP}/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
+# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+#	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && ln -sf "${TEMP}/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
+	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
+	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ -e "${BASENAME}.${EXT_INFO}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_INFO}" "${DIR_LIST}/${BASENAME}.${EXT_INFO}" 2>>"$LOG_ERRS"
 	# if we're installing -AND- not a dryrun -AND- we're booting the device -AND- there's a single package repo (e.g. TinyCore), then make a marker file indicating the package in a base OS package
 	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ "$BOOTING" ] && [ "$REPO_SYSTEM" = "$REPO_OPTION" ] && touch "${DIR_LIST}/${BASENAME}.${EXT_BASE}" 2>>"$LOG_ERRS"
 
@@ -1331,7 +1348,9 @@ unloadPackage() {
 	showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 1
 	[ "$DRYRUN" ] && showMsg 'notice' " [dryrun]" 'both' 0 0
 
-	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {			# if the package has been marked for uninstallation (unlist, delete, purge, or update) -AND- it currently is NOT installed, then...
+# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+#	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {			# if the package has been marked for uninstallation (unlist, delete, purge, or update) -AND- it currently is NOT installed, then...
+	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && {			# if the package has been marked for uninstallation (unlist, delete, purge, or update) -AND- it currently is NOT installed, then...
 		uninstallPackage || return 1							#   uninstall the package files
 		return 0									#   no need to process anything further!
 	}
@@ -1394,10 +1413,16 @@ unloadPackage() {
 		fi
 	done
 
-	[ -e "${DIR_LIST}/${FILENAME}" ] && {
-		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${FILENAME}\"" >>"$LOG_DBUG"
-		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${FILENAME}" >>"$LOG_ERRS" 2>&1		# delete the installed marker
+	[ ! "$DRYRUN" ] && 
+	[ -e "${DIR_LIST}/${BASENAME}" ] && {
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${BASENAME}\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${BASENAME}" >>"$LOG_ERRS" 2>&1		# delete the installed marker
 	}
+# REMOVED 2025/01/12 - we use BASENAME not FILENAME
+#	[ -e "${DIR_LIST}/${FILENAME}" ] && {
+#		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${FILENAME}\"" >>"$LOG_DBUG"
+#		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${FILENAME}" >>"$LOG_ERRS" 2>&1		# delete the installed marker
+#	}
 	[ -e "${DIR_LIST}/${BASENAME}.${EXT_HASH}" ] && {
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${BASENAME}.${EXT_HASH}\"" >>"$LOG_DBUG"
 		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${BASENAME}.${EXT_HASH}" >>"$LOG_ERRS" 2>&1
@@ -1406,16 +1431,20 @@ unloadPackage() {
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${BASENAME}.${EXT_DEPS}\"" >>"$LOG_DBUG"
 		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" >>"$LOG_ERRS" 2>&1
 	}
+	[ -e "${DIR_LIST}/${BASENAME}.${EXT_INFO}" ] && {
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${BASENAME}.${EXT_INFO}\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${BASENAME}.${EXT_INFO}" >>"$LOG_ERRS" 2>&1
+	}
 	if [ ! "$DRYRUN" ] || ( [ "$DRYRUN" ] && [ "$MODE" = 'copy' ] ); then
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    sudo /bin/umount -d \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
-		sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1							# finally umount the package
+		sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1	# finally umount the package
 
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rmdir \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
-		rmdir "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1										# delete the packages mount point
+		rmdir "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1				# delete the packages mount point
 	fi
 
 	# if we also need to uninstall (delete, purge, or update), then...
-	[ "$UNLOAD" != 'unload2' ] && { uninstallPackage || return 1; }										# if the package has been marked for uninstallation, then...
+	[ "$UNLOAD" != 'unload2' ] && { uninstallPackage || return 1; }				# if the package has been marked for uninstallation, then...
 # VER2 - when installing, and a file exists (e.g. grep symlink to busybox), then rename to FILE.-PACK.TYPE (or 'SYS' if not part of package); when the PACK.TYPE is uninstalled and one of those files exists, restore it
 #		is this necessary if we are creating restore points?
 
@@ -1916,23 +1945,79 @@ else
 			   PROXY="$OPTARG" ;;
 			Y) DRYRUN=TRUE ;;
 # DEV NOTE: -z must be called for any non-consecutive package manager call to make sure the files represent an up-to-date system (e.g. if pax is used to install something, then tce-load is, the catalog list with become out-of-sync and pax could malfunction)
+#	if a package is in a non-standard directory (e.g. HOME, LIVE, ROOT), then cd into the directory containing those files to be picked up by this action (since we can't process DIRECTORY here)
 			z) # remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
 			   unalias cp >/dev/null 2>&1
 			   unalias ln >/dev/null 2>&1
 
 			   # remove any existing of these files (in case the original package manager was used between runs)
 			   showMsg 'action' "Clearing any prior -z action contents:" 'screen' 0 3
-			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_SOFT}
+# REMOVED 2025/01/12 - we use BASENAME not FILENAME
+#			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_SOFT}
 			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_HASH}
 			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_DEPS}
 			   showMsg 'action' " [done]" 'screen' 1 5
 
 			   # (re-)sync the package contents
-			   showMsg 'action' "Sync'ing necessary package files:" 'screen' 0 3
-			   for BASENAME in $(ls -1 "$DIR_LIST"); do
-				[ ! "$DRYRUN" ] && { ln -sf "${BASENAME}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1; }
-				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" ] && ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
-				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" ] && ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
+			   showMsg 'action' "Sync'ing necessary package files:" 'screen' 0 4
+			   showMsg 'step' " [marked]" 'screen' 0 1
+# UPDATED 2025/01/12
+#			   for BASENAME in $(ls -1 "$DIR_LIST" | grep -vE ".(${EXT_SOFT}|${EXT_DEPS}|${EXT_HASH})"$); do
+			   for BASENAME in $(ls -1 "$DIR_LIST" | grep -vE ".(${EXT_DEPS}|${EXT_HASH})"$); do
+					[ ! "$DRYRUN" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && { touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS" || exit 1; }
+# REMOVED 2025/01/12 - we use BASENAME not FILENAME
+#				[ ! "$DRYRUN" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_SOFT}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1; }
+				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS" || exit 1; }
+				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS" || exit 1; }
+				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_INFO}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_INFO}" "${DIR_LIST}/${BASENAME}.${EXT_INFO}" 2>>"$LOG_ERRS" || exit 1; }
+			   done
+			   showMsg 'step' " [unmarked]" 'screen' 0 1
+			   for BASENAME in $(ls -1 "${REPO_OPTION}/"*.${EXT_SOFT} | sed "s|${REPO_OPTION}/||;s|\.${EXT_SOFT}$||"); do
+				[ -e "${DIR_LIST}/${BASENAME}" ] && continue									# skip any package that have been already processed in the above 'for' loop
+
+				if ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ); then			# if the package IS already mounted (because it's installed via symlink), then...
+					TEMP='TRUE'
+				elif ( ! /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ); then			# if the package is NOT already mounted and symlinked, then...
+					MODE='copy'												# so the exitGracefully() call will umount
+					[ ! -d "${DIR_LOOP}/${BASENAME}" ] && /bin/mkdir -p "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1	# make the mounting directory if it doesn't exist
+
+					sudo /bin/mount -t squashfs -o loop,ro "${REPO_OPTION}/${BASENAME}.${EXT_SOFT}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || exitGracefully 3 'screen' 6 'failure'
+
+					TEMP='FALSE'
+					for ITEM in $(find "${DIR_LOOP}/${BASENAME}"); do
+#echo "item |$ITEM|"
+						TARGET_ROOT="$(echo "$ITEM" | sed "s|^${DIR_LOOP}/${BASENAME}||")"				# (re)set the value; remove the loopback mount point prefix to store only the target '/directory/filename' string "
+#echo "root |$TARGET_ROOT|"
+						( echo "$DIR_LIVE" | grep -q '\.'$ ) && TARGET_LIVE="${DIR_LIVE}$(echo "${TARGET_ROOT}" | tail -c +2)" || TARGET_LIVE="${DIR_LIVE}${TARGET_ROOT}"
+#echo "live |$DIR_LIVE|"
+						TARGET_HOME="${HOME}${TARGET_ROOT}"
+#echo "home |$TARGET_HOME|"
+						TARGET_MISC=".${TARGET_ROOT}"									# set an initial value
+#echo "misc |$TARGET_MISC|"
+
+						# determine where the file is located (in case the package was installed one place [e.g. HOME] and a dependency in another [e.g. ROOT])
+						# NOTE: this search pattern comes in order of presidence: passed DIRECTORY, HOME, DIR_LIVE, ROOT
+						#	the 'misc' comes first since the package could also be in any of the following directories too, storing an incorrect TARGET path if they were triggered first
+						# find the first file in the package to check if it's installed in the filesystem (that's why both tests are performed below)
+#echo "checking |$TARGET|$TARGET_HOME|$TARGET_LIVE|$TARGET_ROOT|"
+						[ ! -d "$ITEM" ] && [ ! -e "$TARGET_MISC" ] && [ ! -e "$TARGET_HOME" ] && [ ! -e "$TARGET_LIVE" ] && [ ! -e "$TARGET_ROOT" ] && break
+						[ ! -d "$ITEM" ] && ( [ -e "$TARGET_MISC" ] || [ -e "$TARGET_HOME" ] || [ -e "$TARGET_LIVE" ] || [ -e "$TARGET_ROOT" ] ) && {
+#echo installed
+							TEMP='TRUE'
+							break
+						}
+					done
+
+					sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || exitGracefully 3 'screen' 6 'failure'
+				fi	
+				if [ "$TEMP" = 'TRUE' ]; then
+					[ ! "$DRYRUN" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && { touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS" || exit 1; }
+# REMOVED 2025/01/12 - we use BASENAME not FILENAME
+#					[ ! "$DRYRUN" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_SOFT}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1; }
+					[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS" || exit 1; }
+					[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS" || exit 1; }
+					[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_INFO}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_INFO}" "${DIR_LIST}/${BASENAME}.${EXT_INFO}" 2>>"$LOG_ERRS" || exit 1; }
+				fi
 			   done
 			   showMsg 'action' " [done]" 'screen' 1 5
 			   exit 0 ;;
@@ -2544,8 +2629,11 @@ for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process 
 	#elif [ "$FIND" ]; then									# if we are finding file(s) in packages, then...
 		# this is handled in the package processing above
 	elif [ "$INSTALL" ]; then								# if we're installing package(s), then...
-		[ ! -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [install]" 'both' 0 0
-		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [update]" 'both' 0 0
+# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+#		[ ! -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [install]" 'both' 0 0
+#		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [update]" 'both' 0 0
+		[ ! -e "${DIR_LIST}/${BASENAME}" ] && showMsg 'step' " [install]" 'both' 0 0
+		[ -e "${DIR_LIST}/${BASENAME}" ] && showMsg 'step' " [update]" 'both' 0 0
 
 		# NOTE: we have to copy files this way because they were mounting in the original {proxy|restore} location, so if MODE=link, it would be incorrect
 		if [ "$PROXY" ] || [ "$RESTORE" ]; then
@@ -2612,7 +2700,9 @@ if [ "$LIST" ]; then
 		printf "${WHITE}%30s %-9s %5s %32s\n" "------------------------------" "---------" "-----" "--------------------------------"
 	fi
 
-	for FILE in $(ls -1 *.${EXT_SOFT} 2>/dev/null | grep -E "${TEMP}"); do			# NOTE: using 'grep' allows for passing specific packages
+# UPDATED 2025/01/12
+#	for FILE in $(ls -1 *.${EXT_SOFT} 2>/dev/null | grep -E "${TEMP}"); do			# NOTE: using 'grep' allows for passing specific packages
+	for FILE in $(ls -1 *.${EXT_HASH} 2>/dev/null | grep -E "${TEMP}"); do			# NOTE: using 'grep' allows for passing specific packages
 		splitName "$FILE"
 		case $BASENAME in
 			*-dev*|*_dev*|*.dev*) TYPE='dev' ;;
@@ -2769,6 +2859,7 @@ elif [ "$UNLOAD" ]; then
 																		# NOTE: we have to include the above line since the 'cat' call in the encapsulating 'for' loop will retain all the ORIGINAL values in the text file, not any of the removals from the 'while' below!
 				TEMP="$(echo "$FILE" | sed 's/^+//')"										# remove the preceeding '+' (notating a dependency vs specified package)
 				[ $DEBUG -gt 0 ] && echo -e "Body (final):\n\tFILE        |${TEMP}|" >>"$LOG_DBUG"				# NOTE: we need to remove any leading spacing (notating the FILE is a dependency instead of a specified package)
+
 				for DEPFILE in $(grep -Hl "${TEMP}" "${DIR_LIST}/"*.${EXT_DEPS} 2>/dev/null | sed "s|${DIR_LIST}/||"); do	#   for each .deps file (in REPO_SOURCE) that contains the iterated to-be-unloaded FILE package...
 					DEPBASE="$(echo "$DEPFILE" | sed "s/.${EXT_DEPS}$//")"							#   remove the file extension from the name of that found dependency package to get its basename
 

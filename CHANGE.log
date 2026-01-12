@@ -420,5 +420,12 @@
 
 2026/01/09
 - Remove commented out code
-- Created the .info file
+- Created the .info file for TinyCore Linux
+
+2026/01/12
+- Continued testing on TinyCore Linux
+- Updated -z to process packages without an installed marker
+- Updated DIR_LIST to only contain BASENAME{.deps|.hash|.info}
+- Updated -l to work with new DIR_LIST contents
+- Updated -i, -u, and -z to incorporate .info files
 
