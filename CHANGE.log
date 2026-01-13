@@ -429,3 +429,10 @@
 - Updated -l to work with new DIR_LIST contents
 - Updated -i, -u, and -z to incorporate .info files
 
+2026/01/13
+- Continued testing on TinyCore Linux
+- Updated the pax.info file
+- Created the tc-install.sh script
+- Created the tc-uninstall.sh script
+- Created the pax installation script
+

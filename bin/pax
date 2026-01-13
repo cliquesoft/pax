@@ -1072,7 +1072,7 @@ installPackage() {
 
 	[ "$VALIDATE" ] && showMsg 'step' " [${VALIDATE}] ${PURPLE}..." 'both' 1 0
 
-# VER2 - if BOOTING or not -N or '-M link' then just issue a cp command for speed (instead of the below 'for' loop)
+# VER2 - if BOOTING or not -N or '-M link' then just issue a cp command for speed (instead of the below 'for' loop)?
 	# if we only need to copy specified files out of the package, then lets obtain that list
 	# NOTES:
 	#	- if the passed file does NOT exist, it will NOT be in the filelist.txt

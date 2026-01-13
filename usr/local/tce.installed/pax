@@ -1,0 +1,23 @@
+#!/bin/sh
+# pax		the package installation script for pax in TinyCore Linux
+#
+# created	2026/01/13 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/13 by Dave Henderson (support@cliquesoft.org)
+
+
+[ -e "/etc/pax/config" ] && . "/etc/pax/config"							# read in a global config file
+[ -e "${HOME}/.etc/config" ] && . "${HOME}/.etc/config"						# same using a personalized config file - using XSB
+[ -e "${HOME}/.pax/config" ] && . "${HOME}/.pax/config"						# same using a personalized config file - using LSB
+
+
+# if the /etc/init.d/tc-config script is running, then we're booting the device
+if ( ps aux | grep [t]c-config ); then
+	# start the first stage package installation (if a list exists)
+	[ -e "$LIST_BOOT" ] && pax -B -i "$LIST_BOOT"
+
+	# start the second stage package installation (if a list exists)
+	[ -e "$LIST_LIVE" ] && pax -i "$LIST_LIVE" &
+fi
+
+# if we're not booting the device, there's nothing to do...
+
