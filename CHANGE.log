@@ -436,3 +436,8 @@
 - Created the tc-uninstall.sh script
 - Created the pax installation script
 
+2026/01/14
+- Continued testing on TinyCore Linux
+- Updated the tc-install.sh script
+- Updated the tc-uninstall.sh script
+

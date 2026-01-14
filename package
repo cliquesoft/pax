@@ -1,0 +1,31 @@
+#!/bin/sh
+# package	the script to package pax for various Linux distros
+#
+# created	2026/01/14 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/14 by Dave Henderson (support@cliquesoft.org)
+
+EXT_SOFT='tcz'
+EXT_HASH='tcz.md5.txt'
+EXT_LIST='tcz.list'
+PROJECT='pax'
+STAGING='/tmp/package'
+LOG=/tmp/package.log
+
+[ ! -d "$STAGING" ] && mkdir "$STAGING"
+rm -Rf "${STAGING}/"*
+
+cp -dpR bin etc usr "$STAGING"
+cd "$STAGING"
+cd etc/pax
+ln -sf tc-install.sh install
+ln -sf tc-uninstall.sh uninstall
+ln -sf tc.conf config
+cd - >/dev/null
+mksquashfs "./" "../pax.tcz" >>"$LOG" 2>&1 || exit 1
+cd ..
+md5sum "${PROJECT}.${EXT_SOFT}" >"${PROJECT}.${EXT_HASH}" 2>>"$LOG" || exit 1
+cd - >/dev/null
+find "./" -not -type d 2>>"$LOG" | sed "s|^./||" >../"${PROJECT}.${EXT_LIST}" 2>>"$LOG" || exit 1
+
+echo -e "\nThe package has been created!\nDon't forget to create/update the .deps and .info files!\n"
+

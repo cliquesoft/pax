@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/12 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/14 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -2703,7 +2703,8 @@ if [ "$LIST" ]; then
 # UPDATED 2025/01/12
 #	for FILE in $(ls -1 *.${EXT_SOFT} 2>/dev/null | grep -E "${TEMP}"); do			# NOTE: using 'grep' allows for passing specific packages
 	for FILE in $(ls -1 *.${EXT_HASH} 2>/dev/null | grep -E "${TEMP}"); do			# NOTE: using 'grep' allows for passing specific packages
-		splitName "$FILE"
+#		splitName "$FILE"
+		splitName "$FILE" "$EXT_HASH"
 		case $BASENAME in
 			*-dev*|*_dev*|*.dev*) TYPE='dev' ;;
 			*-doc*|*_doc*|*.doc*) TYPE='doc' ;;

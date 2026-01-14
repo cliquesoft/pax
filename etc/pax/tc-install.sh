@@ -2,7 +2,7 @@
 # tc-install	the installation script for pax in TinyCore Linux
 #
 # created	2026/01/13 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/13 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/14 by Dave Henderson (support@cliquesoft.org)
 
 
 # define variables
@@ -14,25 +14,33 @@ TWO='option.lst'
 echo
 echo 'INSTALLING'
 
-# if a package list exists -AND- it's not only 'pax', move it to the new name
-if [ -e "${DIR}/${OLD}" ] && [ "$(cat "${DIR}/${OLD}")" != 'pax' ]; then
+# if a package list exists -AND- it IS only 'pax', then this is already the default
+if [ -e "${DIR}/${OLD}" ] && [ "$(cat "${DIR}/${OLD}")" = 'pax' ]; then
+	echo
+	echo "Pax appears to already be installed as the default package manager."
+	echo
+	exit
+fi
+
+# if a package list exists, move it to the new name
+if [ -e "${DIR}/${OLD}" ]; then
 	echo
 	echo "Pax can utilize two-stage package loading during bootup to reduce the"
 	echo "time it takes to get into the OS. While this does increase the speed,"
-	echo "it does prevent the ability to use software until the second stage is"
-	echo "finished (which depends on how much extra software you are installing"
-	echo "of course). Which list a package is placed will designate which stage"
-	echo "it will be processed, giving you flexibility to fine tune your device"
-	echo "during its bootup."
+	echo "it does prevent the ability to use optional software until the second"
+	echo "stage has completed. Movement of a package from one list to the other"
+	echo "allows users the flexibility to fine tune this process."
 	echo
-	echo "The pax installation automatically moves kernel drivers into the list"
-	echo "for first stage loading to ensure they are available for software. It"
-	echo "is recommended to move any other necessary packages into this list so"
-	echo "they will also be available beforehand.  By default the two lists are"
-	echo "defined by the following names, but can be altered via the pax config"
-	echo "file in /etc/pax."
-	echo "   Stage 1 (LIST_BOOT): $ONE"
-	echo "   Stage 2 (LIST_LIVE): $TWO"
+	echo "By default all kernel drivers are placed into the first stage list to"
+	echo "ensure they are available for software loaded during the second stage"
+	echo "of booting. Other important packages should be loaded first, with the"
+	echo "less critical applications (such as your email or office suite) being"
+	echo "processed last."
+	echo
+	echo "Unless a lot of additional software is being added to the device, the"
+	echo "typical user should enable this feature. Likewise, advanced users and"
+	echo "administrators should also take advantage of this option unless there"
+	echo "is a specific need not to. Refer to the man pages for more info."
 	echo
 	echo -n "Do you want to implement dual stage loading? [Y/N] (N): "
 	read
@@ -42,7 +50,7 @@ if [ -e "${DIR}/${OLD}" ] && [ "$(cat "${DIR}/${OLD}")" != 'pax' ]; then
 		# the default answer is to make sure we have the latest version of onboot.lst
 		echo -n "An existing backup of the onboot.lst exists, overwrite? [Y/N] (Y): "
 		read
-		[ "$REPLY" != 'N' ] && [ "$REPLY" != 'n' ] ) && rm -f "${DIR}/${OLD}.pax"
+		[ "$REPLY" != 'N' ] && [ "$REPLY" != 'n' ] && rm -f "${DIR}/${OLD}.pax"
 	}
 	[ ! -e "${DIR}/${OLD}.pax" ] && cp "${DIR}/${OLD}" "${DIR}/${OLD}.pax"
 
@@ -50,18 +58,26 @@ if [ -e "${DIR}/${OLD}" ] && [ "$(cat "${DIR}/${OLD}")" != 'pax' ]; then
 		# migrate kernel drivers to the first stage list
 		( grep -q '\-tinycore' "${DIR}/${OLD}" ) && grep '\-tinycore' "${DIR}/${OLD}" >"${DIR}/${ONE}" 2>/dev/null
 		( grep -q '\-piCore' "${DIR}/${OLD}" ) && grep '\-piCore' "${DIR}/${OLD}" >"${DIR}/${ONE}" 2>/dev/null
+		# if nothing was copied over, create a blank list so pax will still operate dual stages
+		[ ! -e "${DIR}/${ONE}" ] && touch "${DIR}/${ONE}"
 
 		# move the current list to the second stage list (less any drivers)
 		( grep -q '\-tinycore' "${DIR}/${OLD}" ) && grep -v '\-tinycore' "${DIR}/${OLD}" >"${DIR}/${TWO}" 2>/dev/null
 		( grep -q '\-piCore' "${DIR}/${OLD}" ) && grep -v '\-piCore' "${DIR}/${OLD}" >"${DIR}/${TWO}" 2>/dev/null
 	else
-		# move the entire list to first stage loading
-		mv "${DIR}/${OLD}" "${DIR}/${ONE}"
+		# move the entire list to second stage loading (which will be processed as a stage one)
+		# NOTE: we use TWO here since pax will install to it by default in a live environment
+		mv "${DIR}/${OLD}" "${DIR}/${TWO}"
 	fi	
 fi
 
 # if no package list exists (or has been processed above), then put pax as its only value
-( [ ! -e "${DIR}/${OLD}" ] ) && echo 'pax.tcz' >"${DIR}/${OLD}"
+echo 'pax.tcz' >"${DIR}/${OLD}"
+
+# update the package catalog to work with pax
+echo
+echo "Updating the installed software cache..."
+pax -z
 
 # inform the user of a successful installation
 echo

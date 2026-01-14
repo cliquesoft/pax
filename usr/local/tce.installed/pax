@@ -2,21 +2,42 @@
 # pax		the package installation script for pax in TinyCore Linux
 #
 # created	2026/01/13 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/13 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/14 by Dave Henderson (support@cliquesoft.org)
 
 
 [ -e "/etc/pax/config" ] && . "/etc/pax/config"							# read in a global config file
-[ -e "${HOME}/.etc/config" ] && . "${HOME}/.etc/config"						# same using a personalized config file - using XSB
-[ -e "${HOME}/.pax/config" ] && . "${HOME}/.pax/config"						# same using a personalized config file - using LSB
+[ -e "${HOME}/.pax/config" ] && . "${HOME}/.pax/config"						# read in a personalized config file - using LSB
+[ -e "${HOME}/.etc/pax/config" ] && . "${HOME}/.etc/pax/config"					# read in a personalized config file - using XSB
 
+eval LIST_BOOT="$LIST_BOOT"
+eval LIST_LIVE="$LIST_LIVE"
 
+ls /etc >/tmp/debug.txt
+echo '-----' >>/tmp/debug.txt
+ls -al /etc/pax
+echo '-----' >>/tmp/debug.txt
+echo "BOOT,LIVE |$LIST_BOOT|$LIST_LIST|" >>/tmp/debug.txt
+echo '-----' >>/tmp/debug.txt
+echo pax >>/tmp/debug.txt
 # if the /etc/init.d/tc-config script is running, then we're booting the device
 if ( ps aux | grep [t]c-config ); then
-	# start the first stage package installation (if a list exists)
-	[ -e "$LIST_BOOT" ] && pax -B -i "$LIST_BOOT"
+echo booting >>/tmp/debug.txt
+	# if one or both lists exists, then we need to use a dual-stage bootup
+	if [ -e "$LIST_BOOT" ]; then
+#left off - the directory needs to be added to the above test
+echo dual >>/tmp/debug.txt
+		# if the list has contents, then start the first stage
+		[ -s "$LIST_BOOT" ] && pax -B -i "$LIST_BOOT"
 
-	# start the second stage package installation (if a list exists)
-	[ -e "$LIST_LIVE" ] && pax -i "$LIST_LIVE" &
+		# if the list exists -AND- it has contents, then start the second stage
+		[ -e "$LIST_LIVE" ] && [ -s "$LIST_LIVE" ] && pax -i "$LIST_LIVE" &
+
+	# if the user selected single-stage bootup, then...
+	elif [ -e "$LIST_LIVE" ]; then
+echo single >>/tmp/debug.txt
+		# if the list has contents, then start the first stage
+		[ -s "$LIST_LIVE" ] && pax -B -i "$LIST_LIVE"
+	fi
 fi
 
 # if we're not booting the device, there's nothing to do...

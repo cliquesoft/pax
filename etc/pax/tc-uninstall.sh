@@ -2,12 +2,12 @@
 # tc-uninstall	the uninstallation script for pax in TinyCore Linux
 #
 # created	2026/01/13 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/13 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/14 by Dave Henderson (support@cliquesoft.org)
 
 
 # define variables
 DIR='/etc/sysconfig/tcedir'
-ORG='onboot.lst'
+ORG='onboot.lst.pax'
 ONE='bootup.lst'
 TWO='option.lst'
 TMP='temp.lst'
@@ -17,23 +17,23 @@ echo 'UNINSTALLING'
 echo
 echo -n 'Building the package list:'
 
-# first lets verify that all the packages in the original list are still desired
+# first lets verify that all the packages in the original list are still in the dual-stage lists
 echo -n ' [original]'
-for PACK in $(cat "${DIR}/${ORG}"); do
+for PACK in $(cat "${DIR}/${ORG}" 2>/dev/null); do
 	# if the iterated package in the original list is in either the first or second stage pax list, then copy it to the new list
-	( ( grep -q "$PACK" "${DIR}/${ONE}" ) || ( grep -q "$PACK" "${DIR}/${TWO}" ) ) && echo "$PACK" >>"${DIR}/${TMP}"
+	( ( grep -q "$PACK" "${DIR}/${ONE}" 2>/dev/null ) || ( grep -q "$PACK" "${DIR}/${TWO}" 2>/dev/null ) ) && echo "$PACK" >>"${DIR}/${TMP}"
 done
 
 # next lets migrate any packages from the first stage list that isn't present
 echo -n ' [first stage]'
-for PACK in $(cat "${DIR}/${ONE}"); do
+for PACK in $(cat "${DIR}/${ONE}" 2>/dev/null); do
 	# if the iterated package is NOT in the new list, then copy it
 	( ! grep -q "$PACK" "${DIR}/${TMP}" ) && echo "$PACK" >>"${DIR}/${TMP}"
 done
 
 # finally lets migrate any packages from the second stage list that isn't present
 echo -n ' [second stage]'
-for PACK in $(cat "${DIR}/${TWO}"); do
+for PACK in $(cat "${DIR}/${TWO}" 2>/dev/null); do
 	# if the iterated package is NOT in the new list, then copy it
 	( ! grep -q "$PACK" "${DIR}/${TMP}" ) && echo "$PACK" >>"${DIR}/${TMP}"
 done
