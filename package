@@ -2,7 +2,7 @@
 # package	the script to package pax for various Linux distros
 #
 # created	2026/01/14 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/14 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/15 by Dave Henderson (support@cliquesoft.org)
 
 EXT_SOFT='tcz'
 EXT_HASH='tcz.md5.txt'
@@ -15,6 +15,7 @@ LOG=/tmp/package.log
 rm -Rf "${STAGING}/"*
 
 cp -dpR bin etc usr "$STAGING"
+#sudo chown -R 0:50 "${STAGING}/"*		can't perform this step as the user
 cd "$STAGING"
 cd etc/pax
 ln -sf tc-install.sh install

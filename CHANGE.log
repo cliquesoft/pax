@@ -441,3 +441,13 @@
 - Updated the tc-install.sh script
 - Updated the tc-uninstall.sh script
 
+2026/01/15
+- Continued testing on TinyCore Linux
+- Updated the tc-install.sh script
+- Fixed a processing bug with -l
+- Moved where the EXT_CORE files are created
+- Updated the -z checking code
+- Updated the return calls in unloadPackage()
+- Added additional info to debug output for downloadPackage()
+- Updated the log writing before directory checks
+

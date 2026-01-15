@@ -2,7 +2,7 @@
 # pax		the package installation script for pax in TinyCore Linux
 #
 # created	2026/01/13 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/14 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/15 by Dave Henderson (support@cliquesoft.org)
 
 
 [ -e "/etc/pax/config" ] && . "/etc/pax/config"							# read in a global config file
@@ -12,33 +12,37 @@
 eval LIST_BOOT="$LIST_BOOT"
 eval LIST_LIVE="$LIST_LIVE"
 
-ls /etc >/tmp/debug.txt
-echo '-----' >>/tmp/debug.txt
-ls -al /etc/pax
-echo '-----' >>/tmp/debug.txt
-echo "BOOT,LIVE |$LIST_BOOT|$LIST_LIST|" >>/tmp/debug.txt
-echo '-----' >>/tmp/debug.txt
 echo pax >>/tmp/debug.txt
-# if the /etc/init.d/tc-config script is running, then we're booting the device
+# if the /etc/init.d/tc-config script is running, then we're booting the device so...
 if ( ps aux | grep [t]c-config ); then
 echo booting >>/tmp/debug.txt
+	# if there were any packages as part of the ramdisk image, then sync those
+	pax -B -z
+
 	# if one or both lists exists, then we need to use a dual-stage bootup
-	if [ -e "$LIST_BOOT" ]; then
-#left off - the directory needs to be added to the above test
+	if [ -e "/etc/sysconfig/tcedir/${LIST_BOOT}" ]; then
 echo dual >>/tmp/debug.txt
 		# if the list has contents, then start the first stage
-		[ -s "$LIST_BOOT" ] && pax -B -i "$LIST_BOOT"
+		[ -s "/etc/sysconfig/tcedir/${LIST_BOOT}" ] && pax -B -i "/etc/sysconfig/tcedir/${LIST_BOOT}"
 
 		# if the list exists -AND- it has contents, then start the second stage
-		[ -e "$LIST_LIVE" ] && [ -s "$LIST_LIVE" ] && pax -i "$LIST_LIVE" &
+		[ -e "/etc/sysconfig/tcedir/${LIST_LIVE}" ] && [ -s "/etc/sysconfig/tcedir/${LIST_LIVE}" ] && setsid pax -B -i "/etc/sysconfig/tcedir/${LIST_LIVE}" >/dev/null 2>&1 &
 
 	# if the user selected single-stage bootup, then...
-	elif [ -e "$LIST_LIVE" ]; then
+	elif [ -e "/etc/sysconfig/tcedir/${LIST_LIVE}" ]; then
 echo single >>/tmp/debug.txt
 		# if the list has contents, then start the first stage
-		[ -s "$LIST_LIVE" ] && pax -B -i "$LIST_LIVE"
+		[ -s "/etc/sysconfig/tcedir/${LIST_LIVE}" ] && pax -B -i "/etc/sysconfig/tcedir/${LIST_LIVE}"
 	fi
+
+	#exit					NOTE: do NOT exit here so the log permissions get adjusted below
 fi
 
-# if we're not booting the device, there's nothing to do...
+
+# if we're not booting the device, then...
+
+# adjust the permissions on the log file so that trivial errors aren't thrown without using 'sudo'
+[ ! -e "$LOG_ERRS" ] && touch "$LOG_ERRS"
+chown root:staff "$LOG_ERRS"
+chmod 775 "$LOG_ERRS"
 

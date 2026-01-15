@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/14 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/15 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -27,7 +27,8 @@
 #	src	source
 #
 # - The package extensions include:
-#	code	package source code
+#	code	source code
+#	core	core OS package
 #	cpio	ramdisk image
 #	deps	dependencies list
 #	hash	validation hash
@@ -35,7 +36,6 @@
 #	list	manifest list
 #	make	compile script
 #	newr	update available
-#	repo	available in repo
 #	soft	software files
 #
 # - The .deps files can use the following syntax:
@@ -73,7 +73,7 @@ DIR_LOGS='/var/log'
 DIR_LOOP='/Mounts/.software'									# directory that symlinked software needs to use as mountpoint
 DIR_TEMP='/tmp/pax'
 
-EXT_BASE='base'											# [text file] package base OS marker
+EXT_CORE='core'											# [text file] package core OS marker
 EXT_CODE='code'											# [tgz file]  package source code
 EXT_DEPS='deps'											# [text file] package dependency list
 EXT_HASH='hash'											# [text file] package validation hash
@@ -642,7 +642,7 @@ processDependencies() {
 		showMsg 'dependency' "[ optional] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: don't error with exit status for a conditional package
 	}
-# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+# UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	[ "$OPTFILE" ] && [ "$DEPS" = 'all' ] && ( [ ! -e "${DIR_LIST}/${OPTFILE}" ] || [ ! -e "${DIR_LIST}/${FILENAME}" ] ) && {		# if we've encountered a conditional package -AND- we are using the '-D all' option -AND- it's dependency -or- the optional package is not installed, then...
 	[ "$OPTFILE" ] && [ "$DEPS" = 'all' ] && ( [ ! -e "${DIR_LIST}/${OPTFILE}" ] || [ ! -e "${DIR_LIST}/${BASENAME}" ] ) && {		# if we've encountered a conditional package -AND- we are using the '-D all' option -AND- it's dependency -or- the optional package is not installed, then...
 		showMsg 'dependency' "[ unloaded] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -668,7 +668,7 @@ processDependencies() {
 		return 0															# NOTE: do NOT return error, we will just simply skip the file so the user isn't forced to pass '-F' a lot
 	}
 
-# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+# UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	[ "$DOWNLOAD" ] && [ -e "${DIR_LIST}/${FILENAME}" ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && {
 	[ "$DOWNLOAD" ] && [ -e "${DIR_LIST}/${BASENAME}" ] && [ ! -s "${DIR_LIST}/${BASENAME}" ] && {
 		[ $DEBUG -gt 0 ] && echo -e "\tPackage is already installed in the OS." >>"$LOG_DBUG"						# NOTE: we left this line like this since this is not a failure, but just a package to skip
@@ -676,7 +676,7 @@ processDependencies() {
 		return 0															# NOTE: do NOT return error, we will just simply skip the file so the user isn't forced to pass '-F' a lot
 	}
 
-# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+# UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	[ "$INSTALL" ] && [ ! "$FORCE" ] && [ -e "${DIR_LIST}/${FILENAME}" ] && {								# if we're installing -AND- not forcing -AND- the software is already installed, then...
 	[ "$INSTALL" ] && [ ! "$FORCE" ] && [ -e "${DIR_LIST}/${BASENAME}" ] && {								# if we're installing -AND- not forcing -AND- the software is already installed, then...
 		showMsg 'dependency' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -691,7 +691,7 @@ processDependencies() {
 		return 1
 	}
 
-# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+# UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	( [ "$UNLOAD" = 'unload' ] || [ "$UNLOAD" = 'unlist' ] || [ "$UNLOAD" = 'update' ] ) && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {		# if we're unloading, unlisting, or updating -AND- the package is already unloaded, then go to the next one!
 	( [ "$UNLOAD" = 'unload' ] || [ "$UNLOAD" = 'unlist' ] || [ "$UNLOAD" = 'update' ] ) && [ ! -e "${DIR_LIST}/${BASENAME}" ] && {		# if we're unloading, unlisting, or updating -AND- the package is already unloaded, then go to the next one!
 		[ $DEBUG -gt 0 ] && echo -e "\tThe package is already unloaded." >>"$LOG_DBUG"							# NOTE: we left this line like this since this is not a failure, but just a package to skip
@@ -704,7 +704,7 @@ processDependencies() {
 		showMsg 'dependency' "[ missing ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0
 	}
-# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+# UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	[ "$UNLOAD" = 'update' ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && [ $(id -u) -gt 0 ] && {						# if we're updating -AND- the package is on BOOT (via 0 byte file) -AND- we're not root or sudo, then...
 	[ "$UNLOAD" = 'update' ] && [ ! -s "${DIR_LIST}/${BASENAME}" ] && [ $(id -u) -gt 0 ] && {						# if we're updating -AND- the package is on BOOT (via 0 byte file) -AND- we're not root or sudo, then...
 		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The user account does not have sufficient priviledges to update base OS packages." >>"$LOG_DBUG"
@@ -713,11 +713,11 @@ processDependencies() {
 	}
 # DEV NOTE: the REPO_OPTION directory can no longer contain 0-byte REPO_SYSTEM files; everything needs to go into REPO_LIST/BASENAME[.list|info|hash|deps]
 	# if we're unloading, but not updating -AND- the package has a 'base os' marker (e.g. TinyCore) -OR- ( the package exists in DIR_LIST -AND- we're working in REPO_OPTION -AND- the package does NOT exist there (since it would be in REPO_SYSTEM), then...
-# UPDATED 2025/01/12 - we use BASENAME not FILENAME
-#	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_BASE}" ] || ( [ -e "${DIR_LIST}/${FILENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
-	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_BASE}" ] || ( [ -e "${DIR_LIST}/${BASENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
+# UPDATED 2026/01/12 - we use BASENAME not FILENAME
+#	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_CORE}" ] || ( [ -e "${DIR_LIST}/${FILENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
+	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_CORE}" ] || ( [ -e "${DIR_LIST}/${BASENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
 		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The package is part of the base OS and can't be modified." >>"$LOG_DBUG"
-		showMsg 'dependency' "[ BASE OS ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+		showMsg 'dependency' "[ CORE OS ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: we don't exit with failure since this could just be a dependency and left installed
 	}
 	# if we're unloading -or- validating -AND- the iterated dependency is not present anywhere, then...
@@ -772,7 +772,7 @@ processDependencies() {
 		[ "$INDENT" ] && [ ! "$OPTFILE" ] && showMsg 'file' "${INDENT}${PACKAGE} (${FILETYPE})" 'screen' 1 1				# if this is a depends/dependency package, then...
 		[ "$OPTFILE" ] && showMsg 'file' "${INDENT}${PACKAGE} {COLOR}(${FILETYPE}) [optional]" 'screen' 1 1				# if this is an optional depends/dependency package, then...
 	elif [ "$VALIDATE" ]; then
-# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+# UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1 || showMsg 'issue' "[ unloaded] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		[ -e "${DIR_LIST}/${BASENAME}" ] && showMsg 'step' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1 || showMsg 'issue' "[ unloaded] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 	else
@@ -932,7 +932,7 @@ downloadPackage() {
 	local FILE_TARGET="${BASENAME}.${EXT_SOFT}"
 	eval REPO_SOURCE="${REPO_SCHEMA}"							# eval REPO_SOURCE incase it has any variables in it
 
-	[ $DEBUG -gt 0 ] && { echo -en "downloadPackage:\n\tPARAMETER   |${PARAMETER}|\n\tFILENAME    |${FILE_TARGET}|\n\tBASENAME    |${BASE_TARGET}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${ARCH}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tVERBASE     |${VERBASE}|\n\tOPTFILE     |${OPTFILE}|\n\tREPO_SOURCE |${REPO_SOURCE}|\n\tDIRECTORY   |${DIRECTORY}|\n\tpwd         |" >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
+	[ $DEBUG -gt 0 ] && { echo -en "downloadPackage:\n\tOBTAIN .deps|${1}|\n\tPARAMETER   |${PARAMETER}|\n\tFILENAME    |${FILE_TARGET}|\n\tBASENAME    |${BASE_TARGET}|\n\tPACKAGE     |${PACKAGE}|\n\tTYPE        |${FILETYPE}|\n\tEXT_SOFT    |${EXT_SOFT}|\n\tCPU TYPE    |${ARCH}|\n\tVERSION     |${VERSION}|\n\tVERFILE     |${VERFILE}|\n\tVERBASE     |${VERBASE}|\n\tOPTFILE     |${OPTFILE}|\n\tREPO_SOURCE |${REPO_SOURCE}|\n\tDIRECTORY   |${DIRECTORY}|\n\tpwd         |" >>"$LOG_DBUG"; pwd >>"$LOG_DBUG" 2>>"$LOG_ERRS"; }
 
 	( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) || {					# make sure the SOURCE is remote
 		showMsg 'failure' "A non-Internet value is set for REPO_SOURCE." 'log'
@@ -1216,14 +1216,15 @@ installPackage() {
 	[ ! "$PROXY" ] && ( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${REPO_OPTION}"						# if a remote -S was passed, then mount from the default local repo storage location
 	[ ! "$PROXY" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${SOURCE}"						# if a local -S was passed, then mount from the provided, local location
 
-# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+# UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && ln -sf "${TEMP}/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ -e "${BASENAME}.${EXT_INFO}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_INFO}" "${DIR_LIST}/${BASENAME}.${EXT_INFO}" 2>>"$LOG_ERRS"
-	# if we're installing -AND- not a dryrun -AND- we're booting the device -AND- there's a single package repo (e.g. TinyCore), then make a marker file indicating the package in a base OS package
-	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ "$BOOTING" ] && [ "$REPO_SYSTEM" = "$REPO_OPTION" ] && touch "${DIR_LIST}/${BASENAME}.${EXT_BASE}" 2>>"$LOG_ERRS"
+# MOVED 2026/01/15 - this needs to go into the -z action
+#	# if we're installing -AND- not a dryrun -AND- we're booting the device -AND- there's a single package repo (e.g. TinyCore), then make a marker file indicating the package in a base OS package
+#	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ "$BOOTING" ] && [ "$REPO_SYSTEM" = "$REPO_OPTION" ] && touch "${DIR_LIST}/${BASENAME}.${EXT_CORE}" 2>>"$LOG_ERRS"
 
 	return 0
 }
@@ -1348,7 +1349,7 @@ unloadPackage() {
 	showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 1
 	[ "$DRYRUN" ] && showMsg 'notice' " [dryrun]" 'both' 0 0
 
-# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+# UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {			# if the package has been marked for uninstallation (unlist, delete, purge, or update) -AND- it currently is NOT installed, then...
 	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && {			# if the package has been marked for uninstallation (unlist, delete, purge, or update) -AND- it currently is NOT installed, then...
 		uninstallPackage || return 1							#   uninstall the package files
@@ -1360,14 +1361,18 @@ unloadPackage() {
 	# if the package has a service start/stop script, then stop the service before continuing
 	if [ -e "${DIR_INIT}/${PACKAGE}" ]; then
 		[ $DEBUG -gt 0 ] && echo -e "\tPackage has service script...\n\tCalling:    \"${DIR_INIT}/${PACKAGE}\" stop" >>"$LOG_DBUG"
-		[ ! "$DRYRUN" ] && { "${DIR_INIT}/${PACKAGE}" stop >>"$LOG_ERRS" 2>&1 || return 1; }
+# UPDATED 2026/01/15
+#		[ ! "$DRYRUN" ] && { "${DIR_INIT}/${PACKAGE}" stop >>"$LOG_ERRS" 2>&1 || return 1; }
+		[ ! "$DRYRUN" ] && "${DIR_INIT}/${PACKAGE}" stop >>"$LOG_ERRS" 2>&1		# NOTE: we no longer return with an error since a poorly written script would mess up an entire uninstall chain; any errors are logged though
 	fi
 
 	# determine how the package was installed (copied or symlinked) -AND- make sure it's not in use by something else
 	if ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ); then						# if the package has been mounted and symlinked, then...
 		MODE='link'
 		[ $DEBUG -gt 0 ] && echo -e "\tPackage is symlinked...\n\tCalling:    sudo /bin/umount -d \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
-		[ ! "$DRYRUN" ] && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
+# UPDATED 2026/01/15
+#		[ ! "$DRYRUN" ] && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
+		[ ! "$DRYRUN" ] && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 0; }				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
 	elif [ $DEBUG -gt 0 ]; then
 		echo -e "\tPackage is copied..." >>"$LOG_DBUG"
 	fi
@@ -1382,7 +1387,9 @@ unloadPackage() {
 	( [ ! "$DRYRUN" ] || ( [ "$DRYRUN" ] && [ "$MODE" = 'copy' ] ) ) && { sudo /bin/mount "${SOURCE}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro >>"$LOG_ERRS" 2>&1 || return 1; }	# now mount it for processing
 	if [ ! "$DRYRUN" ] && [ "$MODE" = 'copy' ]; then
 		for FILE in $(find "${DIR_LOOP}/${BASENAME}" ! -type d 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||"); do			# scan to make sure that no software in the package is being used
-			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && return 1				#   if one of the files in the package is currently in use, then exit this function	https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
+# UPDATED 2026/01/15
+#			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && return 1				#   if one of the files in the package is currently in use, then exit this function	https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
+			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && return 0				#   if one of the files in the package is currently in use, then exit this function	https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
 		done
 	fi
 
@@ -1406,7 +1413,9 @@ unloadPackage() {
 		( echo "$DIRECTORY" | grep -q '\.'$ ) && TEMP="${DIRECTORY}${FILE}" || TEMP="${DIRECTORY}/${FILE}"				# adjusts the path if the DIR_LIVE ends with a dot (e.g. /Users/Public/.etc/pax)
 		if [ ! -d "${TEMP}" ]; then							#   if the iterated FILE is anything but a directory (e.g. device file, symlink, text file, ...), then delete it!
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${TEMP}/\"" >>"$LOG_DBUG"
+# REVERTED 2026/01/15
 			[ ! "$DRYRUN" ] && { rm -f "${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1; }
+#			[ ! "$DRYRUN" ] && rm -f "${TEMP}" >>"$LOG_ERRS" 2>&1			#   NOTE: we no longer return with an error here in case of a trivial matter (e.g. a file is missing) that would mess up an entire uninstall chain; any errors are logged though
 		elif [ -d "${TEMP}" ] && [ ! "$(ls -A "${TEMP}" 2>/dev/null)" ]; then		#   otherwise it is a directory, so check if it's empty and delete it if so!
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rmdir \"${TEMP}\"" >>"$LOG_DBUG"
 			[ ! "$DRYRUN" ] && rmdir "${TEMP}" >>"$LOG_ERRS" 2>&1			#   NOTE: we do NOT error out here if we can't delete it!
@@ -1418,7 +1427,7 @@ unloadPackage() {
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${BASENAME}\"" >>"$LOG_DBUG"
 		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${BASENAME}" >>"$LOG_ERRS" 2>&1		# delete the installed marker
 	}
-# REMOVED 2025/01/12 - we use BASENAME not FILENAME
+# REMOVED 2026/01/12 - we use BASENAME not FILENAME
 #	[ -e "${DIR_LIST}/${FILENAME}" ] && {
 #		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${FILENAME}\"" >>"$LOG_DBUG"
 #		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${FILENAME}" >>"$LOG_ERRS" 2>&1		# delete the installed marker
@@ -1946,13 +1955,21 @@ else
 			Y) DRYRUN=TRUE ;;
 # DEV NOTE: -z must be called for any non-consecutive package manager call to make sure the files represent an up-to-date system (e.g. if pax is used to install something, then tce-load is, the catalog list with become out-of-sync and pax could malfunction)
 #	if a package is in a non-standard directory (e.g. HOME, LIVE, ROOT), then cd into the directory containing those files to be picked up by this action (since we can't process DIRECTORY here)
-			z) # remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
+			z) # we're booting the device -AND- there's a single package repo (e.g. TinyCore), then make a marker file indicating the package is part of the core OS
+			   if [ "$BOOTING" ] && [ "$REPO_SYSTEM" = "$REPO_OPTION" ]; then
+				for BASENAME in $(ls -1 "$DIR_LIST"); do
+					touch "${DIR_LIST}/${BASENAME}.${EXT_CORE}" 2>>"$LOG_ERRS"
+				done
+				exit 0
+			   fi
+
+			   # remove anything existing that would force prompting for overwritting (e.g. alias cp='cp -i')
 			   unalias cp >/dev/null 2>&1
 			   unalias ln >/dev/null 2>&1
 
 			   # remove any existing of these files (in case the original package manager was used between runs)
 			   showMsg 'action' "Clearing any prior -z action contents:" 'screen' 0 3
-# REMOVED 2025/01/12 - we use BASENAME not FILENAME
+# REMOVED 2026/01/12 - we use BASENAME not FILENAME
 #			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_SOFT}
 			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_HASH}
 			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_DEPS}
@@ -1961,11 +1978,11 @@ else
 			   # (re-)sync the package contents
 			   showMsg 'action' "Sync'ing necessary package files:" 'screen' 0 4
 			   showMsg 'step' " [marked]" 'screen' 0 1
-# UPDATED 2025/01/12
+# UPDATED 2026/01/12
 #			   for BASENAME in $(ls -1 "$DIR_LIST" | grep -vE ".(${EXT_SOFT}|${EXT_DEPS}|${EXT_HASH})"$); do
 			   for BASENAME in $(ls -1 "$DIR_LIST" | grep -vE ".(${EXT_DEPS}|${EXT_HASH})"$); do
 					[ ! "$DRYRUN" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && { touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS" || exit 1; }
-# REMOVED 2025/01/12 - we use BASENAME not FILENAME
+# REMOVED 2026/01/12 - we use BASENAME not FILENAME
 #				[ ! "$DRYRUN" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_SOFT}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1; }
 				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS" || exit 1; }
 				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS" || exit 1; }
@@ -2012,7 +2029,7 @@ else
 				fi	
 				if [ "$TEMP" = 'TRUE' ]; then
 					[ ! "$DRYRUN" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && { touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS" || exit 1; }
-# REMOVED 2025/01/12 - we use BASENAME not FILENAME
+# REMOVED 2026/01/12 - we use BASENAME not FILENAME
 #					[ ! "$DRYRUN" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_SOFT}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1; }
 					[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS" || exit 1; }
 					[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS" || exit 1; }
@@ -2111,7 +2128,11 @@ fi
 # MANDATORY CHECKS BEFORE **ANY** PROCESSING
 
 # general checking			NOTE: we can't write to a log yet since those checks haven't occurred
-( ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) || { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
+# UPDATED 2026/01/15
+#( ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) || { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
+# TESTED 2026/01/15
+#[ ! "$BOOTING" ] && ( ! ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) && { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
+( ! ls -1 "${DIR_LIST}" | grep -q "${EXT_CORE}"$ ) && ( ! ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) && { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
 [ "$VERSION" ] && [ "$2" ] && { showMsg 'failure' "Only one package can be listed with the -V option." 'screen'; exit 1; }
 [ "$RESTORE" ] && ( echo "$RESTORE" | grep -qE '[0-9]/[0-9]{2}/[0-9]' ) && { showMsg 'failure' "The restore point date must be in a YYYY-MM-DD format." 'screen'; exit 1; }
 
@@ -2197,70 +2218,70 @@ eval FLAG_LIVE="$FLAG_LIVE"
 
 # check the directories		NOTE: we can't write to a log yet since those checks are occurring
 if [ ! -d "${DIR_LIST}" ]; then
-	mkdir -p "${DIR_LIST}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The catalog directory (DIR_LIST) does not exist and could not be created." 'screen'; exit 1; }
+	mkdir -p "${DIR_LIST}" >/dev/null 2>&1 || { showMsg 'failure' "The catalog directory (DIR_LIST) does not exist and could not be created." 'screen'; exit 1; }
 fi
-touch "${DIR_LIST}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The catalog directory (DIR_LIST) is not writable." 'screen'; exit 1; }
-rm "${DIR_LIST}/writable" >>"$LOG_ERRS" 2>&1
+touch "${DIR_LIST}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The catalog directory (DIR_LIST) is not writable." 'screen'; exit 1; }
+rm "${DIR_LIST}/writable" >/dev/null 2>&1
 
 if [ "$INSTALL" ] && ( [ ! "$DIRECTORY" ] || [ "$DIRECTORY" = '/' ] ); then			# if we're installing -AND- the files need to be copied to the root (e.g. system package update)
 	# NOTE: if we aren't installing to the root (e.g. DIRECTORY=/), then it will be another place (e.g. /Users/Public, HOME, /tmp[/staging], etc) which will be presumed to be writable
 
 	if [ ! -d "${DIR_INIT}" ]; then
-		mkdir -p "${DIR_INIT}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The service script directory (DIR_INIT) does not exist and could not be created." 'screen'; exit 1; }
+		mkdir -p "${DIR_INIT}" >/dev/null 2>&1 || { showMsg 'failure' "The service script directory (DIR_INIT) does not exist and could not be created." 'screen'; exit 1; }
 	fi
-	touch "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The service script directory (DIR_INIT) is not writable.\n       You may need to execute the command using 'sudo'." 'screen'; exit 1; }
-	rm "${DIR_INIT}/writable" >>"$LOG_ERRS" 2>&1
+	touch "${DIR_INIT}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The service script directory (DIR_INIT) is not writable.\n       You may need to execute the command using 'sudo'." 'screen'; exit 1; }
+	rm "${DIR_INIT}/writable" >/dev/null 2>&1
 
 	if [ ! -d "${DIR_INST}" ]; then
-		mkdir -p "${DIR_INST}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The package script directory (DIR_INST) does not exist and could not be created." 'screen'; exit 1; }
+		mkdir -p "${DIR_INST}" >/dev/null 2>&1 || { showMsg 'failure' "The package script directory (DIR_INST) does not exist and could not be created." 'screen'; exit 1; }
 	fi
-	touch "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The package script directory (DIR_INST) is not writable." 'screen'; exit 1; }
-	rm "${DIR_INST}/writable" >>"$LOG_ERRS" 2>&1
+	touch "${DIR_INST}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The package script directory (DIR_INST) is not writable." 'screen'; exit 1; }
+	rm "${DIR_INST}/writable" >/dev/null 2>&1
 fi
 
 if [ ! -d "${DIR_LIST}" ]; then
-	mkdir -p "${DIR_LIST}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The installed package cache directory (DIR_LIST) does not exist and could not be created." 'screen'; exit 1; }
+	mkdir -p "${DIR_LIST}" >/dev/null 2>&1 || { showMsg 'failure' "The installed package cache directory (DIR_LIST) does not exist and could not be created." 'screen'; exit 1; }
 fi
-touch "${DIR_LIST}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The installed package cache directory (DIR_LIST) is not writable." 'screen'; exit 1; }
-rm "${DIR_LIST}/writable" >>"$LOG_ERRS" 2>&1
+touch "${DIR_LIST}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The installed package cache directory (DIR_LIST) is not writable." 'screen'; exit 1; }
+rm "${DIR_LIST}/writable" >/dev/null 2>&1
 
 if [ ! -d "${DIR_LOGS}" ]; then
-	mkdir -p "${DIR_LOGS}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The logs directory (DIR_LOGS) does not exist and could not be created." 'screen'; exit 1; }
+	mkdir -p "${DIR_LOGS}" >/dev/null 2>&1 || { showMsg 'failure' "The logs directory (DIR_LOGS) does not exist and could not be created." 'screen'; exit 1; }
 fi
-touch "${DIR_LOGS}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The logs directory (DIR_LOGS) is not writable." 'screen'; exit 1; }
-rm "${DIR_LOGS}/writable" >>"$LOG_ERRS" 2>&1
+touch "${DIR_LOGS}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The logs directory (DIR_LOGS) is not writable." 'screen'; exit 1; }
+rm "${DIR_LOGS}/writable" >/dev/null 2>&1
 
 if [ ! -d "${DIR_LOOP}" ]; then
-	mkdir -p "${DIR_LOOP}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The mounting directory (DIR_LOOP) does not exist and could not be created." 'screen'; exit 1; }
+	mkdir -p "${DIR_LOOP}" >/dev/null 2>&1 || { showMsg 'failure' "The mounting directory (DIR_LOOP) does not exist and could not be created." 'screen'; exit 1; }
 fi
-touch "${DIR_LOOP}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The mounting directory (DIR_LOOP) is not writable." 'screen'; exit 1; }
-rm "${DIR_LOOP}/writable" >>"$LOG_ERRS" 2>&1
+touch "${DIR_LOOP}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The mounting directory (DIR_LOOP) is not writable." 'screen'; exit 1; }
+rm "${DIR_LOOP}/writable" >/dev/null 2>&1
 
 if [ ! -d "${DIR_TEMP}" ]; then
-	mkdir -p "${DIR_TEMP}" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The temp directory (DIR_TEMP) does not exist and could not be created." 'screen'; exit 1; }
+	mkdir -p "${DIR_TEMP}" >/dev/null 2>&1 || { showMsg 'failure' "The temp directory (DIR_TEMP) does not exist and could not be created." 'screen'; exit 1; }
 fi
-touch "${DIR_TEMP}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The temp directory (DIR_TEMP) is not writable." 'screen'; exit 1; }
-rm "${DIR_TEMP}/writable" >>"$LOG_ERRS" 2>&1
+touch "${DIR_TEMP}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The temp directory (DIR_TEMP) is not writable." 'screen'; exit 1; }
+rm "${DIR_TEMP}/writable" >/dev/null 2>&1
 
 if [ ! -d "$REPO_PREFIX" ]; then
-	mkdir -p "$REPO_PREFIX" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The package storage directory (REPO_PREFIX) could not be created." 'screen'; exit 1; }
+	mkdir -p "$REPO_PREFIX" >/dev/null 2>&1 || { showMsg 'failure' "The package storage directory (REPO_PREFIX) could not be created." 'screen'; exit 1; }
 fi
-touch "${REPO_PREFIX}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The package storage directory (REPO_PREFIX) is not writable." 'screen'; exit 1; }
-rm "${REPO_PREFIX}/writable" >>"$LOG_ERRS" 2>&1
+touch "${REPO_PREFIX}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The package storage directory (REPO_PREFIX) is not writable." 'screen'; exit 1; }
+rm "${REPO_PREFIX}/writable" >/dev/null 2>&1
 
 if ( [ "$DOWNLOAD" ] || [ "$INSTALL" ] ) && [ ! -d "$REPO_OPTION" ]; then
-	mkdir -p "$REPO_OPTION" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The optional package storage directory (REPO_OPTION) could not be created." 'screen'; exit 1; }
+	mkdir -p "$REPO_OPTION" >/dev/null 2>&1 || { showMsg 'failure' "The optional package storage directory (REPO_OPTION) could not be created." 'screen'; exit 1; }
 fi
-touch "${REPO_OPTION}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The optional package storage directory (REPO_OPTION) is not writable." 'screen'; exit 1; }
-rm "${REPO_OPTION}/writable" >>"$LOG_ERRS" 2>&1
+touch "${REPO_OPTION}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The optional package storage directory (REPO_OPTION) is not writable." 'screen'; exit 1; }
+rm "${REPO_OPTION}/writable" >/dev/null 2>&1
 
 # if we're download -or- installing -AND- the passed directory was '/' -or- we need to use the default DIR_LIVE value and it's '/' -AND- the REPO_SYSTEM doesn't exist, then...
 if ( [ "$DOWNLOAD" ] || [ "$INSTALL" ] ) && ( [ "$DIRECTORY" = '/' ] || ( [ ! "$DIRECTORY" ] && [ "$DIR_LIVE" = '/' ] ) ) && [ ! -d "$REPO_SYSTEM" ]; then
-	mkdir -p "$REPO_SYSTEM" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) could not be created." 'screen'; exit 1; }
+	mkdir -p "$REPO_SYSTEM" >/dev/null 2>&1 || { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) could not be created." 'screen'; exit 1; }
 fi
 if ( [ "$DOWNLOAD" ] || [ "$INSTALL" ] ) && ( [ "$DIRECTORY" = '/' ] || ( [ ! "$DIRECTORY" ] && [ "$DIR_LIVE" = '/' ] ) ); then
-	touch "${REPO_SYSTEM}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) is not writable." 'screen'; exit 1; }
-	rm "${REPO_SYSTEM}/writable" >>"$LOG_ERRS" 2>&1
+	touch "${REPO_SYSTEM}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) is not writable." 'screen'; exit 1; }
+	rm "${REPO_SYSTEM}/writable" >/dev/null 2>&1
 
 	[ "$(stat -c %a "$REPO_SYSTEM" 2>/dev/null)" != "$PRM_SYSTEM" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid permissions." 'screen'; exit 1; }
 	[ "$(stat -c %U "$REPO_SYSTEM" 2>/dev/null)" != "${OWN_SYSTEM%:*}" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid owner ownership." 'screen'; exit 1; }
@@ -2270,8 +2291,8 @@ fi
 if [ "$PROXY" ]; then
 	[ ! -d "$PROXY" ] && { showMsg 'failure' "The proxy media mount point does not exist." 'screen'; exit 1; }
 
-	touch "${PROXY}/writable" >>"$LOG_ERRS" 2>&1 || { showMsg 'failure' "The proxy media mount point is not writable." 'screen'; exit 1; }
-	rm "${PROXY}/writable" >>"$LOG_ERRS" 2>&1
+	touch "${PROXY}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The proxy media mount point is not writable." 'screen'; exit 1; }
+	rm "${PROXY}/writable" >/dev/null 2>&1
 
 	# check that a '-X -d' or '-X -c' was performed first
 	[ "$INSTALL" ] && [ ! -e "${PROXY}/pax/optional.proxy" ] && { showMsg 'failure' "There are no packages to install on the proxy media." 'screen'; exit 1; }
@@ -2629,7 +2650,7 @@ for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process 
 	#elif [ "$FIND" ]; then									# if we are finding file(s) in packages, then...
 		# this is handled in the package processing above
 	elif [ "$INSTALL" ]; then								# if we're installing package(s), then...
-# UPDATED 2025/01/12 - we use BASENAME not FILENAME
+# UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #		[ ! -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [install]" 'both' 0 0
 #		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [update]" 'both' 0 0
 		[ ! -e "${DIR_LIST}/${BASENAME}" ] && showMsg 'step' " [install]" 'both' 0 0
@@ -2700,11 +2721,13 @@ if [ "$LIST" ]; then
 		printf "${WHITE}%30s %-9s %5s %32s\n" "------------------------------" "---------" "-----" "--------------------------------"
 	fi
 
-# UPDATED 2025/01/12
+# UPDATED 2026/01/12
 #	for FILE in $(ls -1 *.${EXT_SOFT} 2>/dev/null | grep -E "${TEMP}"); do			# NOTE: using 'grep' allows for passing specific packages
-	for FILE in $(ls -1 *.${EXT_HASH} 2>/dev/null | grep -E "${TEMP}"); do			# NOTE: using 'grep' allows for passing specific packages
+	for FILE in $(ls -1 *.${EXT_CORE} *.${EXT_HASH} 2>/dev/null | grep -E "${TEMP}"); do	# NOTE: using 'grep' allows for passing specific packages
 #		splitName "$FILE"
-		splitName "$FILE" "$EXT_HASH"
+		( echo "$FILE" | grep -q "$EXT_CORE"$ ) && splitName "$FILE" "$EXT_CORE"
+		( echo "$FILE" | grep -q "$EXT_HASH"$ ) && splitName "$FILE" "$EXT_HASH"
+
 		case $BASENAME in
 			*-dev*|*_dev*|*.dev*) TYPE='dev' ;;
 			*-doc*|*_doc*|*.doc*) TYPE='doc' ;;
@@ -2985,6 +3008,7 @@ exitGracefully 0 'both' 6 'success'
 #	dependency.i64.bin.soft{file1,file2,file3,...}			package requires only certain files from the dependency
 
 # ask where to install: system (/), everyone (/Users/Public/.{bin|sbin|lib|...}), personal (/Users/$USER/.{bin|sbin|lib|...})		NOTE: there are no sbin's any more; also /Users/Public is for system-wide usage WITHOUT having elevated installation credentials (compared to system installations to /)
+# implement a personal list/repo where individual users can have their software loaded upon logging in (and unloaded upon logging out)
 
 # file	description				these are files included in the root of the package			OR, just have the install script put a file somewhere indicating a device reboot (since that's the only meaningful follow-up; services already restart)
 # -------------------				the files would be good to indicate beforehand packages that would require a reboot so the user can choose whether to install them or not

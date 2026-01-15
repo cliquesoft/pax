@@ -2,7 +2,7 @@
 # tc-install	the installation script for pax in TinyCore Linux
 #
 # created	2026/01/13 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/14 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/15 by Dave Henderson (support@cliquesoft.org)
 
 
 # define variables
