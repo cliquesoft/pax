@@ -2,20 +2,34 @@
 # tc-install	the installation script for pax in TinyCore Linux
 #
 # created	2026/01/13 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/15 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/16 by Dave Henderson (support@cliquesoft.org)
 
+
+# Usage syntax: getBootcode CODE
+# Overview:	stores the value of a passed boot code in $VALUE, or blank otherwise
+# Parameters:
+# CODE		[string] the name of the boot code to return its value
+getBootcode() {
+	cat /proc/cmdline | grep -oE "${1}=[^ ]*" | sed 's/.*=//'
+	return 0
+}
+
+
+# read in a global config file
+[ -e "/etc/pax/config" ] && . "/etc/pax/config"
+
+# obtain list values
+eval LIST_BOOT="$LIST_BOOT"
+eval LIST_LIVE="$LIST_LIVE"
 
 # define variables
-DIR='/etc/sysconfig/tcedir'
-OLD='onboot.lst'
-ONE='bootup.lst'
-TWO='option.lst'
+LIST_ORGL='onboot.lst'
 
 echo
 echo 'INSTALLING'
 
 # if a package list exists -AND- it IS only 'pax', then this is already the default
-if [ -e "${DIR}/${OLD}" ] && [ "$(cat "${DIR}/${OLD}")" = 'pax' ]; then
+if [ -e "${REPO_PREFIX}/${LIST_ORGL}" ] && [ "$(cat "${REPO_PREFIX}/${LIST_ORGL}")" = 'pax' ]; then
 	echo
 	echo "Pax appears to already be installed as the default package manager."
 	echo
@@ -23,7 +37,7 @@ if [ -e "${DIR}/${OLD}" ] && [ "$(cat "${DIR}/${OLD}")" = 'pax' ]; then
 fi
 
 # if a package list exists, move it to the new name
-if [ -e "${DIR}/${OLD}" ]; then
+if [ -e "${REPO_PREFIX}/${LIST_ORGL}" ]; then
 	echo
 	echo "Pax can utilize two-stage package loading during bootup to reduce the"
 	echo "time it takes to get into the OS. While this does increase the speed,"
@@ -46,33 +60,36 @@ if [ -e "${DIR}/${OLD}" ]; then
 	read
 
 	# make a backup of the current list
-	[ -e "${DIR}/${OLD}.pax" ] && {
+	[ -e "${REPO_PREFIX}/${LIST_ORGL}.pax" ] && {
 		# the default answer is to make sure we have the latest version of onboot.lst
 		echo -n "An existing backup of the onboot.lst exists, overwrite? [Y/N] (Y): "
 		read
-		[ "$REPLY" != 'N' ] && [ "$REPLY" != 'n' ] && rm -f "${DIR}/${OLD}.pax"
+		[ "$REPLY" != 'N' ] && [ "$REPLY" != 'n' ] && rm -f "${REPO_PREFIX}/${LIST_ORGL}.pax"
 	}
-	[ ! -e "${DIR}/${OLD}.pax" ] && cp "${DIR}/${OLD}" "${DIR}/${OLD}.pax"
+	[ ! -e "${REPO_PREFIX}/${LIST_ORGL}.pax" ] && cp "${REPO_PREFIX}/${LIST_ORGL}" "${REPO_PREFIX}/${LIST_ORGL}.pax"
 
 	if ( [ "$REPLY" = 'Y' ] || [ "$REPLY" = 'y' ] ); then
 		# migrate kernel drivers to the first stage list
-		( grep -q '\-tinycore' "${DIR}/${OLD}" ) && grep '\-tinycore' "${DIR}/${OLD}" >"${DIR}/${ONE}" 2>/dev/null
-		( grep -q '\-piCore' "${DIR}/${OLD}" ) && grep '\-piCore' "${DIR}/${OLD}" >"${DIR}/${ONE}" 2>/dev/null
+		( grep -q '\-tinycore' "${REPO_PREFIX}/${LIST_ORGL}" ) && grep '\-tinycore' "${REPO_PREFIX}/${LIST_ORGL}" >"${REPO_PREFIX}/${LIST_BOOT}" 2>/dev/null
+		( grep -q '\-piCore' "${REPO_PREFIX}/${LIST_ORGL}" ) && grep '\-piCore' "${REPO_PREFIX}/${LIST_ORGL}" >"${REPO_PREFIX}/${LIST_BOOT}" 2>/dev/null
 		# if nothing was copied over, create a blank list so pax will still operate dual stages
-		[ ! -e "${DIR}/${ONE}" ] && touch "${DIR}/${ONE}"
+		[ ! -e "${REPO_PREFIX}/${LIST_BOOT}" ] && touch "${REPO_PREFIX}/${LIST_BOOT}"
 
 		# move the current list to the second stage list (less any drivers)
-		( grep -q '\-tinycore' "${DIR}/${OLD}" ) && grep -v '\-tinycore' "${DIR}/${OLD}" >"${DIR}/${TWO}" 2>/dev/null
-		( grep -q '\-piCore' "${DIR}/${OLD}" ) && grep -v '\-piCore' "${DIR}/${OLD}" >"${DIR}/${TWO}" 2>/dev/null
+		( grep -q '\-tinycore' "${REPO_PREFIX}/${LIST_ORGL}" ) && grep -vE '(\-tinycore|pax.tcz)' "${REPO_PREFIX}/${LIST_ORGL}" >"${REPO_PREFIX}/${LIST_LIVE}" 2>/dev/null
+		( grep -q '\-piCore' "${REPO_PREFIX}/${LIST_ORGL}" ) && grep -vE '(\-piCore|pax.tcz)' "${REPO_PREFIX}/${LIST_ORGL}" >"${REPO_PREFIX}/${LIST_LIVE}" 2>/dev/null
 	else
 		# move the entire list to second stage loading (which will be processed as a stage one)
-		# NOTE: we use TWO here since pax will install to it by default in a live environment
-		mv "${DIR}/${OLD}" "${DIR}/${TWO}"
+		# NOTE: we use LIST_LIVE here since pax will install to it by default in a live environment
+		mv "${REPO_PREFIX}/${LIST_ORGL}" "${REPO_PREFIX}/${LIST_LIVE}"
 	fi	
 fi
 
 # if no package list exists (or has been processed above), then put pax as its only value
-echo 'pax.tcz' >"${DIR}/${OLD}"
+echo 'pax.tcz' >"${REPO_PREFIX}/${LIST_ORGL}"
+
+# make sure that pax is copied and not symlinked
+echo 'pax.tcz' >"${REPO_PREFIX}/copy2fs.lst"
 
 # update the package catalog to work with pax
 echo

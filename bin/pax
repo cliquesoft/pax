@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/15 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/16 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -168,7 +168,7 @@ OPEN=''
 TREE=''
 UNLOAD=''
 VALIDATE=''
-
+					# DEV NOTE: document these variable names so they can be used in scripting (or config file naming conventions)
 # [options]
 BOOTING=''
 ARCH=''												# stores the value of the ARCH_SCHEMA
@@ -670,11 +670,12 @@ processDependencies() {
 
 # UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	[ "$DOWNLOAD" ] && [ -e "${DIR_LIST}/${FILENAME}" ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && {
-	[ "$DOWNLOAD" ] && [ -e "${DIR_LIST}/${BASENAME}" ] && [ ! -s "${DIR_LIST}/${BASENAME}" ] && {
-		[ $DEBUG -gt 0 ] && echo -e "\tPackage is already installed in the OS." >>"$LOG_DBUG"						# NOTE: we left this line like this since this is not a failure, but just a package to skip
-		showMsg 'dependency' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-		return 0															# NOTE: do NOT return error, we will just simply skip the file so the user isn't forced to pass '-F' a lot
-	}
+# REMOVED 2026/01/16 - unclear why this check is in here as it should not matter if the package is already installed (maybe we're downloading a newer version, which this would prevent)
+#	[ "$DOWNLOAD" ] && [ -e "${DIR_LIST}/${BASENAME}" ] && [ ! -s "${DIR_LIST}/${BASENAME}" ] && {
+#		[ $DEBUG -gt 0 ] && echo -e "\tPackage is already installed in the OS." >>"$LOG_DBUG"						# NOTE: we left this line like this since this is not a failure, but just a package to skip
+#		showMsg 'dependency' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
+#		return 0															# NOTE: do NOT return error, we will just simply skip the file so the user isn't forced to pass '-F' a lot
+#	}
 
 # UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	[ "$INSTALL" ] && [ ! "$FORCE" ] && [ -e "${DIR_LIST}/${FILENAME}" ] && {								# if we're installing -AND- not forcing -AND- the software is already installed, then...
@@ -707,16 +708,16 @@ processDependencies() {
 # UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	[ "$UNLOAD" = 'update' ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && [ $(id -u) -gt 0 ] && {						# if we're updating -AND- the package is on BOOT (via 0 byte file) -AND- we're not root or sudo, then...
 	[ "$UNLOAD" = 'update' ] && [ ! -s "${DIR_LIST}/${BASENAME}" ] && [ $(id -u) -gt 0 ] && {						# if we're updating -AND- the package is on BOOT (via 0 byte file) -AND- we're not root or sudo, then...
-		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The user account does not have sufficient priviledges to update base OS packages." >>"$LOG_DBUG"
+		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The user account does not have sufficient priviledges to update core OS packages." >>"$LOG_DBUG"
 		showMsg 'dependency' "[ account ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: we don't exit with failure since this could just be a dependency and left installed
 	}
 # DEV NOTE: the REPO_OPTION directory can no longer contain 0-byte REPO_SYSTEM files; everything needs to go into REPO_LIST/BASENAME[.list|info|hash|deps]
-	# if we're unloading, but not updating -AND- the package has a 'base os' marker (e.g. TinyCore) -OR- ( the package exists in DIR_LIST -AND- we're working in REPO_OPTION -AND- the package does NOT exist there (since it would be in REPO_SYSTEM), then...
+	# if we're unloading, but not updating -AND- we're not forcing (e.g. pax --uinstall) -AND- the package has a 'base os' marker (e.g. TinyCore) -OR- ( the package exists in DIR_LIST -AND- we're working in REPO_OPTION -AND- the package does NOT exist there (since it would be in REPO_SYSTEM), then...
 # UPDATED 2026/01/12 - we use BASENAME not FILENAME
 #	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_CORE}" ] || ( [ -e "${DIR_LIST}/${FILENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
-	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_CORE}" ] || ( [ -e "${DIR_LIST}/${BASENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
-		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The package is part of the base OS and can't be modified." >>"$LOG_DBUG"
+	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && [ ! "$FORCE" ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_CORE}" ] || ( [ -e "${DIR_LIST}/${BASENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
+		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The package is part of the core OS and can't be modified." >>"$LOG_DBUG"
 		showMsg 'dependency' "[ CORE OS ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: we don't exit with failure since this could just be a dependency and left installed
 	}
@@ -1072,7 +1073,7 @@ installPackage() {
 
 	[ "$VALIDATE" ] && showMsg 'step' " [${VALIDATE}] ${PURPLE}..." 'both' 1 0
 
-# VER2 - if BOOTING or not -N or '-M link' then just issue a cp command for speed (instead of the below 'for' loop)?
+# VER2 - if BOOTING or not -N then just issue a cp (with -s for '-M link') command for speed (instead of the below 'for' loop)
 	# if we only need to copy specified files out of the package, then lets obtain that list
 	# NOTES:
 	#	- if the passed file does NOT exist, it will NOT be in the filelist.txt
@@ -1203,9 +1204,9 @@ installPackage() {
 	( [ "$MODE" = 'copy' ] || [ "$DRYRUN" ] ) && ( /bin/mount | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }	# NOTE: we test for mouting in case we're doing a dryrun and the package is remote (which it wouldn't be if that's true)
 
 	# update the "install" list
-	# if we are NOT validating -AND- installing a requested package [INDEX==1] (not a dependency for it [INDEX>1]) -AND- it needs to be added to a list -AND- the package isn't already in the LIST, then add the package to the LIST file
-	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ "$PACKLIST" = 'boot' ] && ( ! echo "$DEPENDENCY" | grep -qe ^'+' ) && ( ! grep -q "$FILENAME" "${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS"
-	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ "$PACKLIST" = 'live' ] && ( ! echo "$DEPENDENCY" | grep -qe ^'+' ) && ( ! grep -q "$FILENAME" "${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS"
+	# if the package needs to be added to a list (e.g. PACKLIST != none) -AND- we are NOT booting -AND- NOT validating -AND- installing a requested package (vs a dependency with a preceeding '+') -AND- the package isn't already in the LIST, then add the package to the LIST file
+	[ ! "$DRYRUN" ] && [ "$PACKLIST" = 'boot' ] && [ ! "$BOOTING" ] && [ ! "$VALIDATE" ] && ( ! echo "$DEPENDENCY" | grep -qe ^'+' ) && ( ! grep -q "$FILENAME" "${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_BOOT}" 2>>"$LOG_ERRS"
+	[ ! "$DRYRUN" ] && [ "$PACKLIST" = 'live' ] && [ ! "$BOOTING" ] && [ ! "$VALIDATE" ] && ( ! echo "$DEPENDENCY" | grep -qe ^'+' ) && ( ! grep -q "$FILENAME" "${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS" ) && echo "$FILENAME" >>"${REPO_PREFIX}/${LIST_LIVE}" 2>>"$LOG_ERRS"
 
 	# defer the execution of any related marker/service scripts from the package(s) until everything is installed - if we are not validating package data!
 	[ ! "$VALIDATE" ] && [ -x "${DIR_INST}/${BASENAME}" ] && ( ! grep -q "${DIR_INST}/${BASENAME}" ${DIR_TEMP}/installs.${EXEID} 2>/dev/null ) && echo "${BASENAME}" >>${DIR_TEMP}/installs.${EXEID} 2>>"$LOG_ERRS"
@@ -1372,7 +1373,12 @@ unloadPackage() {
 		[ $DEBUG -gt 0 ] && echo -e "\tPackage is symlinked...\n\tCalling:    sudo /bin/umount -d \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
 # UPDATED 2026/01/15
 #		[ ! "$DRYRUN" ] && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
-		[ ! "$DRYRUN" ] && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 0; }				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
+		if [ ! "$DRYRUN" ]; then
+			sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || {							#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
+				showMsg 'warning' " [active]" 'both' 0 0
+				return 0
+			}
+		fi
 	elif [ $DEBUG -gt 0 ]; then
 		echo -e "\tPackage is copied..." >>"$LOG_DBUG"
 	fi
@@ -1389,7 +1395,10 @@ unloadPackage() {
 		for FILE in $(find "${DIR_LOOP}/${BASENAME}" ! -type d 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||"); do			# scan to make sure that no software in the package is being used
 # UPDATED 2026/01/15
 #			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && return 1				#   if one of the files in the package is currently in use, then exit this function	https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
-			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && return 0				#   if one of the files in the package is currently in use, then exit this function	https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
+			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && {					#   if one of the files in the package is currently in use, then exit this function
+				showMsg 'warning' " [active]" 'both' 0 0			#   https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/
+				return 0							#   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
+			}
 		done
 	fi
 
@@ -1578,6 +1587,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #	echo '	-j   '
 #	echo '	-k   '
 # VER2 - ability to show packages that are downloaded, but not installed (e.g. -l -Q none > *package_name [* indicating is downloaded but not installed]); also '-l -Q default' just lists: package, version; '-l -Q verbose' lists the current way with all the package info
+#	have a more concise listing too: Type|Name		Version
 	echo '	-l   list all currently installed packages'
 	echo '	-m   make a new package (requires DIRECTORY)'					# this makes a new .soft package tarball based on the passed directory; 	NOTE: you can just have the .make file call builder to do all the heavy lifting
 #	echo '	-n   '
@@ -1980,14 +1990,20 @@ else
 			   showMsg 'step' " [marked]" 'screen' 0 1
 # UPDATED 2026/01/12
 #			   for BASENAME in $(ls -1 "$DIR_LIST" | grep -vE ".(${EXT_SOFT}|${EXT_DEPS}|${EXT_HASH})"$); do
-			   for BASENAME in $(ls -1 "$DIR_LIST" | grep -vE ".(${EXT_DEPS}|${EXT_HASH})"$); do
-					[ ! "$DRYRUN" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && { touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS" || exit 1; }
+			   for BASENAME in $(ls -1 "$DIR_LIST" | grep -vE ".(${EXT_DEPS}|${EXT_HASH}|${EXT_INFO})"$); do
+# REMOVED 2026/01/16 - the below code will never run since there has to be a BASENAME
+#				[ ! "$DRYRUN" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && { touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS" || exit 1; }
 # REMOVED 2026/01/12 - we use BASENAME not FILENAME
 #				[ ! "$DRYRUN" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_SOFT}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1; }
 				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS" || exit 1; }
 				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS" || exit 1; }
 				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_INFO}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_INFO}" "${DIR_LIST}/${BASENAME}.${EXT_INFO}" 2>>"$LOG_ERRS" || exit 1; }
+
+				# if none of the above files were created, then the package has to be part of the core OS
+				[ ! -e "${DIR_LIST}/${BASENAME}.${EXT_HASH}" ] && { touch "${DIR_LIST}/${BASENAME}.${EXT_CORE}" 2>>"$LOG_ERRS" || exit 1; }
 			   done
+
+			   # process all the packages in REPO_OPTION to see if any are installed that do NOT have an install marker
 			   showMsg 'step' " [unmarked]" 'screen' 0 1
 			   for BASENAME in $(ls -1 "${REPO_OPTION}/"*.${EXT_SOFT} | sed "s|${REPO_OPTION}/||;s|\.${EXT_SOFT}$||"); do
 				[ -e "${DIR_LIST}/${BASENAME}" ] && continue									# skip any package that have been already processed in the above 'for' loop
@@ -2009,7 +2025,7 @@ else
 #echo "live |$DIR_LIVE|"
 						TARGET_HOME="${HOME}${TARGET_ROOT}"
 #echo "home |$TARGET_HOME|"
-						TARGET_MISC=".${TARGET_ROOT}"									# set an initial value
+						TARGET_MISC=".${TARGET_ROOT}"									# use pwd as last option
 #echo "misc |$TARGET_MISC|"
 
 						# determine where the file is located (in case the package was installed one place [e.g. HOME] and a dependency in another [e.g. ROOT])

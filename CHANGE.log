@@ -451,3 +451,10 @@
 - Added additional info to debug output for downloadPackage()
 - Updated the log writing before directory checks
 
+2026/01/16
+- Updated the tc-install.sh script
+- Updated the tc-uninstall.sh script
+- Updated installPackage() to not add to a list during bootup
+- Removed a download check in processDependencies()
+- Added a -F check for -u in processDependencies()
+

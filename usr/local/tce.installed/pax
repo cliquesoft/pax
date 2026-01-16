@@ -2,26 +2,35 @@
 # pax		the package installation script for pax in TinyCore Linux
 #
 # created	2026/01/13 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/15 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/16 by Dave Henderson (support@cliquesoft.org)
 
 
+# Usage syntax: getBootcode CODE
+# Overview:	stores the value of a passed boot code in $VALUE, or blank otherwise
+# Parameters:
+# CODE		[string] the name of the boot code to return its value
+getBootcode() {
+	cat /proc/cmdline | grep -oE "${1}=[^ ]*" | sed 's/.*=//'
+	return 0
+}
+
+
+# read in a config file(s)
 [ -e "/etc/pax/config" ] && . "/etc/pax/config"							# read in a global config file
 [ -e "${HOME}/.pax/config" ] && . "${HOME}/.pax/config"						# read in a personalized config file - using LSB
 [ -e "${HOME}/.etc/pax/config" ] && . "${HOME}/.etc/pax/config"					# read in a personalized config file - using XSB
 
+# obtain list values
 eval LIST_BOOT="$LIST_BOOT"
 eval LIST_LIVE="$LIST_LIVE"
 
-echo pax >>/tmp/debug.txt
 # if the /etc/init.d/tc-config script is running, then we're booting the device so...
 if ( ps aux | grep [t]c-config ); then
-echo booting >>/tmp/debug.txt
 	# if there were any packages as part of the ramdisk image, then sync those
 	pax -B -z
 
 	# if one or both lists exists, then we need to use a dual-stage bootup
 	if [ -e "/etc/sysconfig/tcedir/${LIST_BOOT}" ]; then
-echo dual >>/tmp/debug.txt
 		# if the list has contents, then start the first stage
 		[ -s "/etc/sysconfig/tcedir/${LIST_BOOT}" ] && pax -B -i "/etc/sysconfig/tcedir/${LIST_BOOT}"
 
@@ -30,7 +39,6 @@ echo dual >>/tmp/debug.txt
 
 	# if the user selected single-stage bootup, then...
 	elif [ -e "/etc/sysconfig/tcedir/${LIST_LIVE}" ]; then
-echo single >>/tmp/debug.txt
 		# if the list has contents, then start the first stage
 		[ -s "/etc/sysconfig/tcedir/${LIST_LIVE}" ] && pax -B -i "/etc/sysconfig/tcedir/${LIST_LIVE}"
 	fi
