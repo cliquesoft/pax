@@ -52,5 +52,5 @@ fi
 # adjust the permissions on the log file so that trivial errors aren't thrown without using 'sudo'
 [ ! -e "$LOG_ERRS" ] && touch "$LOG_ERRS"
 chown root:staff "$LOG_ERRS"
-chmod 775 "$LOG_ERRS"
+chmod 664 "$LOG_ERRS"
 
