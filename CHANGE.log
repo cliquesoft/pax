@@ -458,3 +458,14 @@
 - Removed a download check in processDependencies()
 - Added a -F check for -u in processDependencies()
 
+2026/01/21
+- Updated installPackage() to use cp unless -N or -v was passed
+- Remove commented out code
+- Tested (un)install for single and dual stage booting
+
+- Test on both editions of TC
+
+- Ran all test scripts to make sure everything runs correctly
+- create a stable package for download on github
+- package and put in TC repo
+

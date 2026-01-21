@@ -1,9 +1,9 @@
 name:		pax
 title:		A very robust and efficient package manager for Linux distros
-version:	2026.01.12.1
+version:	2026.01.21.1
 git:		
-packaged:	2026.01.12
-released:	2026.01.12
+packaged:	2026.01.21
+released:	2026.01.21
 authors:	Cliquesoft
 homepage:	https://www.cliquesoft.org
 download:	https://www.cliquesoft.org/official/vanilla/1.0/pax
@@ -18,11 +18,12 @@ tags:		pax package manager copy extract download dependency trees fifo client fi
 overview:	A very robust and efficient package manager for Linux distros
 		that enables a user to perform various operations such as:
 		copy, extract, download, find which package a file belongs to,
-		install/uninstall/unload (different package versions), list
-		installed packages, make packages (with optional compile step),
-		list dependency trees, validate and repair package contents,
-		and open a fifo for network client operation.  There's even the
-		ability to proxy several actions to a different device!
+		install/uninstall/unload (different package versions) to
+		specified locations, list installed packages, make packages
+		(with optional compile step), list dependency trees, validate
+		and repair package contents, and open a fifo for network client
+		operation.  There's even the ability to proxy several actions
+		to a different device!
 comments:	This is a more feature full and efficient package manager than
 		the default that is included in the TC distro. It can also be
 		installed as the default for command line use.
@@ -30,7 +31,6 @@ comments:	This is a more feature full and efficient package manager than
 		There are several planned updates that will eventually be
 		added. Patches or donations are welcome and will expedite
 		future updates. Features include:
-		- Faster copy if -N is not issued
 		- Concise package listing (instead of current 2 line)
 		- An 'html' output option
 		- More proxy actions

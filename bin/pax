@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/16 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/21 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -642,8 +642,6 @@ processDependencies() {
 		showMsg 'dependency' "[ optional] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: don't error with exit status for a conditional package
 	}
-# UPDATED 2026/01/12 - we use BASENAME not FILENAME
-#	[ "$OPTFILE" ] && [ "$DEPS" = 'all' ] && ( [ ! -e "${DIR_LIST}/${OPTFILE}" ] || [ ! -e "${DIR_LIST}/${FILENAME}" ] ) && {		# if we've encountered a conditional package -AND- we are using the '-D all' option -AND- it's dependency -or- the optional package is not installed, then...
 	[ "$OPTFILE" ] && [ "$DEPS" = 'all' ] && ( [ ! -e "${DIR_LIST}/${OPTFILE}" ] || [ ! -e "${DIR_LIST}/${BASENAME}" ] ) && {		# if we've encountered a conditional package -AND- we are using the '-D all' option -AND- it's dependency -or- the optional package is not installed, then...
 		showMsg 'dependency' "[ unloaded] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		showMsg 'warning' "The conditional package is not installed." 'log'
@@ -668,17 +666,6 @@ processDependencies() {
 		return 0															# NOTE: do NOT return error, we will just simply skip the file so the user isn't forced to pass '-F' a lot
 	}
 
-# UPDATED 2026/01/12 - we use BASENAME not FILENAME
-#	[ "$DOWNLOAD" ] && [ -e "${DIR_LIST}/${FILENAME}" ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && {
-# REMOVED 2026/01/16 - unclear why this check is in here as it should not matter if the package is already installed (maybe we're downloading a newer version, which this would prevent)
-#	[ "$DOWNLOAD" ] && [ -e "${DIR_LIST}/${BASENAME}" ] && [ ! -s "${DIR_LIST}/${BASENAME}" ] && {
-#		[ $DEBUG -gt 0 ] && echo -e "\tPackage is already installed in the OS." >>"$LOG_DBUG"						# NOTE: we left this line like this since this is not a failure, but just a package to skip
-#		showMsg 'dependency' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
-#		return 0															# NOTE: do NOT return error, we will just simply skip the file so the user isn't forced to pass '-F' a lot
-#	}
-
-# UPDATED 2026/01/12 - we use BASENAME not FILENAME
-#	[ "$INSTALL" ] && [ ! "$FORCE" ] && [ -e "${DIR_LIST}/${FILENAME}" ] && {								# if we're installing -AND- not forcing -AND- the software is already installed, then...
 	[ "$INSTALL" ] && [ ! "$FORCE" ] && [ -e "${DIR_LIST}/${BASENAME}" ] && {								# if we're installing -AND- not forcing -AND- the software is already installed, then...
 		showMsg 'dependency' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		[ $INDEX -eq 0 ] && showMsg 'failure' "The package is currently installed." 'log'
@@ -692,8 +679,6 @@ processDependencies() {
 		return 1
 	}
 
-# UPDATED 2026/01/12 - we use BASENAME not FILENAME
-#	( [ "$UNLOAD" = 'unload' ] || [ "$UNLOAD" = 'unlist' ] || [ "$UNLOAD" = 'update' ] ) && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {		# if we're unloading, unlisting, or updating -AND- the package is already unloaded, then go to the next one!
 	( [ "$UNLOAD" = 'unload' ] || [ "$UNLOAD" = 'unlist' ] || [ "$UNLOAD" = 'update' ] ) && [ ! -e "${DIR_LIST}/${BASENAME}" ] && {		# if we're unloading, unlisting, or updating -AND- the package is already unloaded, then go to the next one!
 		[ $DEBUG -gt 0 ] && echo -e "\tThe package is already unloaded." >>"$LOG_DBUG"							# NOTE: we left this line like this since this is not a failure, but just a package to skip
 		showMsg 'dependency' "[ unloaded] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -705,8 +690,6 @@ processDependencies() {
 		showMsg 'dependency' "[ missing ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0
 	}
-# UPDATED 2026/01/12 - we use BASENAME not FILENAME
-#	[ "$UNLOAD" = 'update' ] && [ ! -s "${DIR_LIST}/${FILENAME}" ] && [ $(id -u) -gt 0 ] && {						# if we're updating -AND- the package is on BOOT (via 0 byte file) -AND- we're not root or sudo, then...
 	[ "$UNLOAD" = 'update' ] && [ ! -s "${DIR_LIST}/${BASENAME}" ] && [ $(id -u) -gt 0 ] && {						# if we're updating -AND- the package is on BOOT (via 0 byte file) -AND- we're not root or sudo, then...
 		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The user account does not have sufficient priviledges to update core OS packages." >>"$LOG_DBUG"
 		showMsg 'dependency' "[ account ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -714,8 +697,6 @@ processDependencies() {
 	}
 # DEV NOTE: the REPO_OPTION directory can no longer contain 0-byte REPO_SYSTEM files; everything needs to go into REPO_LIST/BASENAME[.list|info|hash|deps]
 	# if we're unloading, but not updating -AND- we're not forcing (e.g. pax --uinstall) -AND- the package has a 'base os' marker (e.g. TinyCore) -OR- ( the package exists in DIR_LIST -AND- we're working in REPO_OPTION -AND- the package does NOT exist there (since it would be in REPO_SYSTEM), then...
-# UPDATED 2026/01/12 - we use BASENAME not FILENAME
-#	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_CORE}" ] || ( [ -e "${DIR_LIST}/${FILENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
 	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && [ ! "$FORCE" ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_CORE}" ] || ( [ -e "${DIR_LIST}/${BASENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
 		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The package is part of the core OS and can't be modified." >>"$LOG_DBUG"
 		showMsg 'dependency' "[ CORE OS ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -773,8 +754,6 @@ processDependencies() {
 		[ "$INDENT" ] && [ ! "$OPTFILE" ] && showMsg 'file' "${INDENT}${PACKAGE} (${FILETYPE})" 'screen' 1 1				# if this is a depends/dependency package, then...
 		[ "$OPTFILE" ] && showMsg 'file' "${INDENT}${PACKAGE} {COLOR}(${FILETYPE}) [optional]" 'screen' 1 1				# if this is an optional depends/dependency package, then...
 	elif [ "$VALIDATE" ]; then
-# UPDATED 2026/01/12 - we use BASENAME not FILENAME
-#		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1 || showMsg 'issue' "[ unloaded] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		[ -e "${DIR_LIST}/${BASENAME}" ] && showMsg 'step' "[installed] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1 || showMsg 'issue' "[ unloaded] (${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 	else
 		showMsg 'dependency' "[${SOURCE}] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
@@ -1052,7 +1031,7 @@ installPackage() {
 
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    sudo /bin/mount -t squashfs -o loop,ro \"${TEMP}/${FILENAME}\" \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
 		[ $DEBUG -gt 0 ] && [ ! -e "${TEMP}/${FILENAME}" ] && echo -e "\tNote:       The package is foreign so no additional debug commands will be shown for this package" >>"$LOG_DBUG"
-		[ -e "${TEMP}/${FILENAME}" ] && { sudo /bin/mount -t squashfs -o loop,ro "${TEMP}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }		# NOTE: we test for package existance in case we're doing a dryrun and it's remote (which it wouldn't be if that's true)
+		[ -e "${TEMP}/${FILENAME}" ] && { sudo /bin/mount -t squashfs -o loop,ro "${TEMP}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }			# NOTE: we test for package existance in case we're doing a dryrun and it's remote (which it wouldn't be if that's true)
 	fi
 
 	# check if the package has any libs we need to load later										  NOTE: we check this way because simply checking for the directory can produce false positives
@@ -1073,129 +1052,139 @@ installPackage() {
 
 	[ "$VALIDATE" ] && showMsg 'step' " [${VALIDATE}] ${PURPLE}..." 'both' 1 0
 
-# VER2 - if BOOTING or not -N then just issue a cp (with -s for '-M link') command for speed (instead of the below 'for' loop)
-	# if we only need to copy specified files out of the package, then lets obtain that list
-	# NOTES:
-	#	- if the passed file does NOT exist, it will NOT be in the filelist.txt
-	#	- the final sed adds the directory to the listing so the 'for' loop below works correctly (since it needs preceeding directories, then files)
-	#	  EXPLAINED: stores the entire line (with the filename) in the hold buffer; removes the filename from the line (leaving just the directory); prints the line; prints the hold buffer
-	#	  SEE: https://stackoverflow.com/questions/12833714/the-concept-of-hold-space-and-pattern-space-in-sed
-	[ "$FILELIST" ] && find "${DIR_LOOP}/${BASENAME}" ! -type d -name $(echo "$FILELIST" | sed 's/,/ -o -name /g;s/ / -o -name /g') | sed 'h;s|[^/]*$||;p;x' >"${DIR_TEMP}/filelist.${EXEID}" 2>>"$LOG_ERRS"
+	# if we're booting the device -AND- not using -N then just issue a 'cp' command for speed
+	# NOTE: this can only occur during boot since package installation in a live system will need to determine a TARGET value (found in the 'else' portion of this 'if')
+	if [ "$BOOTING" ] && [ ! "$FILELIST" ]; then
+		[ "$MODE" = 'link' ] && TEMP="${TEMP}s"						# if we're symlinking, then add that switch to 'cp'
+		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -dpR${TEMP} \"${DIR_LOOP}/${BASENAME}/\"* \"/\"" >>"$LOG_DBUG"
+		[ ! "$DRYRUN" ] && ( cp -dpR${TEMP} "${DIR_LOOP}/${BASENAME}/"* "/" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# copy the file from the source directory
+			showMsg 'failure' "The package file copy failed (${ITEM})." 'log'
+			return 1
+		}
+	else
+		# if we only need to copy specified files out of the package, then lets obtain that list
+		# NOTES:
+		#	- if the passed file does NOT exist, it will NOT be in the filelist.txt
+		#	- the final sed adds the directory to the listing so the 'for' loop below works correctly (since it needs preceeding directories, then files)
+		#	  EXPLAINED: stores the entire line (with the filename) in the hold buffer; removes the filename from the line (leaving just the directory); prints the line; prints the hold buffer
+		#	  SEE: https://stackoverflow.com/questions/12833714/the-concept-of-hold-space-and-pattern-space-in-sed
+		[ "$FILELIST" ] && find "${DIR_LOOP}/${BASENAME}" ! -type d -name $(echo "$FILELIST" | sed 's/,/ -o -name /g;s/ / -o -name /g') | sed 'h;s|[^/]*$||;p;x' >"${DIR_TEMP}/filelist.${EXEID}" 2>>"$LOG_ERRS"
 
-	# if a filelist.EXEID file does NOT exist, then we need to process all files in the package, otherwise -N was passed so only certain ones need to be
-	# NOTES:
-	#	- the sub-shell was constructed using to different conditions so the failure of a prior execution did not erroneously trigger an '||' execution
-	#	- the '| tail -n +2' skips the first line of output, which is the current directory and should NOT be processed
-	#	- we use EXEID here so simultaneous pax executions can operate without issues
-	# WARNING: multiple problems occurred trying to use 'cp' (with these params: -aisL, -LRis, -HRis) but the task failed for one reason or another; the below was used instead
-	for ITEM in $([ ! -e "${DIR_TEMP}/filelist.${EXEID}" ] && find "${DIR_LOOP}/${BASENAME}" | tail -n +2; [ -e "${DIR_TEMP}/filelist.${EXEID}" ] && cat "${DIR_TEMP}/filelist.${EXEID}"); do
-		TARGET_ROOT="$(echo "$ITEM" | sed "s|^${DIR_LOOP}/${BASENAME}||")"		# (re)set the value; remove the loopback mount point prefix to store only the target '/directory/filename' string
-		( echo "$DIR_LIVE" | grep -q '\.'$ ) && TARGET_LIVE="${DIR_LIVE}$(echo "${TARGET_ROOT}" | tail -c +2)" || TARGET_LIVE="${DIR_LIVE}${TARGET_ROOT}"
-		TARGET_HOME="${HOME}${TARGET_ROOT}"
-		TARGET="${DIRECTORY}${TARGET_ROOT}"						# set an initial value
-		[ "$DIRECTORY" = '/' ] && TARGET="${TARGET_ROOT}"				# adjust if we need to search ROOT (so TARGET != '//...')
-		( echo "$DIR_LIVE" | grep -q '\.'$ ) && ( echo "$DIRECTORY" | grep -q ^"${DIR_LIVE}" ) && TARGET="${DIR_LIVE}$(echo "${TARGET_ROOT}" | tail -c +2)"				# adjust if DIR_LIVE ends with a '.' -AND- that's the DIRECTORY value, to remove the preceeding '/' (for XSB)
+		# if a filelist.EXEID file does NOT exist, then we need to process all files in the package, otherwise -N was passed so only certain ones need to be
+		# NOTES:
+		#	- the sub-shell was constructed using to different conditions so the failure of a prior execution did not erroneously trigger an '||' execution
+		#	- the '| tail -n +2' skips the first line of output, which is the current directory and should NOT be processed
+		#	- we use EXEID here so simultaneous pax executions can operate without issues
+		# WARNING: multiple problems occurred trying to use 'cp' (with these params: -aisL, -LRis, -HRis) but the task failed for one reason or another; the below was used instead
+		for ITEM in $([ ! -e "${DIR_TEMP}/filelist.${EXEID}" ] && find "${DIR_LOOP}/${BASENAME}" | tail -n +2; [ -e "${DIR_TEMP}/filelist.${EXEID}" ] && cat "${DIR_TEMP}/filelist.${EXEID}"); do
+			TARGET_ROOT="$(echo "$ITEM" | sed "s|^${DIR_LOOP}/${BASENAME}||")"	# (re)set the value; remove the loopback mount point prefix to store only the target '/directory/filename' string
+			( echo "$DIR_LIVE" | grep -q '\.'$ ) && TARGET_LIVE="${DIR_LIVE}$(echo "${TARGET_ROOT}" | tail -c +2)" || TARGET_LIVE="${DIR_LIVE}${TARGET_ROOT}"
+			TARGET_HOME="${HOME}${TARGET_ROOT}"
+			TARGET="${DIRECTORY}${TARGET_ROOT}"					# set an initial value
+			[ "$DIRECTORY" = '/' ] && TARGET="${TARGET_ROOT}"			# adjust if we need to search ROOT (so TARGET != '//...')
+			( echo "$DIR_LIVE" | grep -q '\.'$ ) && ( echo "$DIRECTORY" | grep -q ^"${DIR_LIVE}" ) && TARGET="${DIR_LIVE}$(echo "${TARGET_ROOT}" | tail -c +2)"			# adjust if DIR_LIVE ends with a '.' -AND- that's the DIRECTORY value, to remove the preceeding '/' (for XSB)
 
-		if [ "$VALIDATE" ] && [ ! -d "$ITEM" ]; then					# NOTE: we had to add the directory checking since it would prevent non-root directory structures from getting created (e.g. /usr/local)
-			showMsg 'file' "  $TARGET:" 'both' 0 3 1
+			if [ "$VALIDATE" ] && [ ! -d "$ITEM" ]; then				# NOTE: we had to add the directory checking since it would prevent non-root directory structures from getting created (e.g. /usr/local)
+				showMsg 'file' "  $TARGET:" 'both' 0 3 1
 
-			TEMP=''
-			# determine where the file is located (in case the package was installed one place [e.g. HOME] and a dependency in another [e.g. ROOT])
-			# NOTE: this search pattern comes in order of presidence: passed DIRECTORY, HOME, DIR_LIVE, ROOT
-			#	the 'misc' comes first since the package could also be in any of the following directories too, storing an incorrect TARGET path if they were triggered first
-			# if the file exists -AND- ( we're dealing with a passed package [that should be in the passed DIRECTORY] -OR- it's a dependency [that could be somewhere else] -and- DIRECTORY is not HOME, DIR_LIVE, or ROOT [that need to be triggered below] ), then...
-			if [ -e "$TARGET" ] && ( [ $INDEX -eq 1 ] || ( [ $INDEX -gt 1 ] && ( ! echo "$DIRECTORY" | grep -q ^"$HOME" ) && [ "$DIRECTORY" != "$DIR_LIVE" ] && [ "$DIRECTORY" != '/' ] ) ); then	# if it's in the passed DIRECTORY (DIV_LIVE would be default value), then...
-				echo -n ''
-			elif [ $INDEX -gt 1 ] && [ -e "$TARGET_HOME" ]; then			# if it's in HOME, then...
-				TARGET="$TARGET_HOME"
-			elif [ $INDEX -gt 1 ] && [ -e "$TARGET_LIVE" ]; then			# if it's in DIR_LIVE (default), then...
-				TARGET="$TARGET_LIVE"
-			elif [ $INDEX -gt 1 ] && [ -e "$TARGET_ROOT" ]; then			# if it's in the root of the OS, then...
-				TARGET="$TARGET_ROOT"
-			else									# if none of the above were triggered, the file isn't installed
-				TEMP='else'
-			fi
-
-			# NOTE: this needs to be a separate 'if' so the proper location can be found (in the order of presidence)
-			if [ "$TARGET" = "$TARGET_HOME" ]; then
-				showMsg 'location' " [home]" 'both' 0 0
-			elif [ "$TARGET" = "$TARGET_LIVE" ]; then
-				showMsg 'location' " [live]" 'both' 0 0
-			elif [ "$TARGET" = "$TARGET_ROOT" ]; then
-				showMsg 'location' " [root]" 'both' 0 0
-			else
-				[ ! "$TEMP" ] && showMsg 'location' " [misc]" 'both' 0 0
-			fi
-
-			if [ "$TEMP" ]; then							# if none of the directory locations matched above, then go in here...
-				[ "$VALIDATE" != 'fix' ] && showMsg 'issue' " !missing!" 'both' 0 0
-				[ "$VALIDATE" = 'fix' ] && showMsg 'issue' " [restore]" 'both' 0 0
-			fi
-		fi
-
-		if [ ! -d "$ITEM" ]; then													# for each file...
-			[ ! "$DRYRUN" ] && [ ! "$FORCE" ] && [ ! "$VALIDATE" ] && [ -e "${TARGET}" ] && continue				#   if we're NOT forcing -AND- we're NOT validating -AND- the file does exist then go to the next file
-
-			# NOE: the PREFIX will already be part of DIRECTORY (assigned at the beginning of the script processing)
-			if ( [ "$INSTALL" ] || [ "$VALIDATE" = 'fix' ] || [ "$UNLOAD" = 'update2' ] ) && [ "$MODE" = 'copy' ]; then
-				# NOTE: if the package installation is done with root, the USER:GROUP ownership is preserved (e.g. when installing to /), otherwise it will default to the user and their default group (e.g. when installing to /Users/Public or $HOME)
-				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -dp${TEMP} \"${ITEM}\" \"${TARGET}\"" >>"$LOG_DBUG"
-				[ ! "$DRYRUN" ] && ( cp -dp${TEMP} "${ITEM}" "${TARGET}" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {		# copy the file from the source directory
-					showMsg 'failure' "The package file copy failed (${ITEM})." 'log'
-					return 1
-				}
-			elif ( [ "$INSTALL" ] || [ "$VALIDATE" = 'fix' ] || [ "$UNLOAD" = 'update2' ] ) && [ "$MODE" = 'link' ]; then
-				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    ln -s${TEMP} \"${ITEM}\" \"${TARGET}\"" >>"$LOG_DBUG"
-				[ ! "$DRYRUN" ] && ( ln -s${TEMP} "${ITEM}" "${TARGET}" 2>&1 | sed 's/^l/ \[failure\]\nl/' | tee -a "$LOG_ERRS" | grep -q ^'ln: ' ) && {			# symlink the file from the source directory
-					showMsg 'failure' "The package file symlink failed (${ITEM})." 'log'
-					return 1
-				}
-			elif [ ! "$INSTALL" ] && [ ! "$UNLOAD" ] && ( [ "$VALIDATE" = 'data' ] || [ "$VALIDATE" = 'hash' ] ); then
-				if [ -e "$TARGET" ]; then											# NOTE: the TARGET value will be altered in the 'if' block above
-					if [ "$MODE" = 'copy' ]; then
-						if [ ! -L "$ITEM" ] && [ -L "$TARGET" ]; then
-							showMsg 'issue' " !symlink!" 'both' 0 0
-							showMsg 'file' ' [done]' 'both' 1 5
-							continue
-						else
-							# check for possible malicious (malware?) replacements with mismatched file sizes or hashing
-							[ "$VALIDATE" = 'data' ] && ( [ "$(stat -c %s "$ITEM" 2>/dev/null)" = "$(stat -c %s "$TARGET" 2>/dev/null)" ] && showMsg 'step' " [size]" 'both' 0 0 || showMsg 'issue' " !size!" 'both' 0 0 )
-							[ "$VALIDATE" = 'hash' ] && ( [ "$(md5sum "$ITEM" | sed 's/  .*//')" = "$(md5sum "$TARGET" | sed 's/  .*//')" ] && showMsg 'step' " [hash]" 'both' 0 0 || showMsg 'issue' " !hash!" 'both' 0 0 )
-							# check the file permissions match those in the package
-							[ "$(stat -c %a "$ITEM" 2>/dev/null)" = "$(stat -c %a "$TARGET" 2>/dev/null)" ] && showMsg 'step' " [perm]" 'both' 0 0 || showMsg 'issue' " !perm!" 'both' 0 0
-						fi
-					elif [ "$MODE" = 'link' ]; then
-						[ "$(readlink "${TARGET}")" = "$ITEM" ] && showMsg 'step' " [link]" 'both' 0 0 || showMsg 'issue' " !link!" 'both' 0 0				# if the symlink isn't pointing to the source file, then...
-						[ "$(stat -c %a "$TARGET" 2>/dev/null)" = '777' ] && showMsg 'step' " [perm]" 'both' 0 0 || showMsg 'issue' " !perm!" 'both' 0 0		# if the symlink permissions aren't correct, then...
-					fi
-
-					if [ "$DIRECTORY" = '/' ]; then				# if the package was installed in the root of the filesystem, then make sure the ownership is root
-						[ "$(stat -c %G "$TARGET" 2>/dev/null)" = 'root' ] && showMsg 'step' " [owner]" 'both' 0 0 || showMsg 'issue' " !owner!" 'both' 0 0
-					# if the package was installed anywhere else (/Users/Public or HOME), then it should match the default group of the user account that installed the software (e.g. 'everyone')
-					elif [ "$DIRECTORY" != '/' ]; then
-						 [ "$(stat -c %G "$TARGET" 2>/dev/null)" = "$OWN_GROUP" ] && showMsg 'step' " [owner]" 'both' 0 0 || showMsg 'issue' " !owner!" 'both' 0 0
-					fi
+				TEMP=''
+				# determine where the file is located (in case the package was installed one place [e.g. HOME] and a dependency in another [e.g. ROOT])
+				# NOTE: this search pattern comes in order of presidence: passed DIRECTORY, HOME, DIR_LIVE, ROOT
+				#	the 'misc' comes first since the package could also be in any of the following directories too, storing an incorrect TARGET path if they were triggered first
+				# if the file exists -AND- ( we're dealing with a passed package [that should be in the passed DIRECTORY] -OR- it's a dependency [that could be somewhere else] -and- DIRECTORY is not HOME, DIR_LIVE, or ROOT [that need to be triggered below] ), then...
+				if [ -e "$TARGET" ] && ( [ $INDEX -eq 1 ] || ( [ $INDEX -gt 1 ] && ( ! echo "$DIRECTORY" | grep -q ^"$HOME" ) && [ "$DIRECTORY" != "$DIR_LIVE" ] && [ "$DIRECTORY" != '/' ] ) ); then		# if it's in the passed DIRECTORY (DIV_LIVE would be default value), then...
+					echo -n ''
+				elif [ $INDEX -gt 1 ] && [ -e "$TARGET_HOME" ]; then		# if it's in HOME, then...
+					TARGET="$TARGET_HOME"
+				elif [ $INDEX -gt 1 ] && [ -e "$TARGET_LIVE" ]; then		# if it's in DIR_LIVE (default), then...
+					TARGET="$TARGET_LIVE"
+				elif [ $INDEX -gt 1 ] && [ -e "$TARGET_ROOT" ]; then		# if it's in the root of the OS, then...
+					TARGET="$TARGET_ROOT"
+				else								# if none of the above were triggered, the file isn't installed
+					TEMP='else'
 				fi
 
+				# NOTE: this needs to be a separate 'if' so the proper location can be found (in the order of presidence)
+				if [ "$TARGET" = "$TARGET_HOME" ]; then
+					showMsg 'location' " [home]" 'both' 0 0
+				elif [ "$TARGET" = "$TARGET_LIVE" ]; then
+					showMsg 'location' " [live]" 'both' 0 0
+				elif [ "$TARGET" = "$TARGET_ROOT" ]; then
+					showMsg 'location' " [root]" 'both' 0 0
+				else
+					[ ! "$TEMP" ] && showMsg 'location' " [misc]" 'both' 0 0
+				fi
+
+				if [ "$TEMP" ]; then						# if none of the directory locations matched above, then go in here...
+					[ "$VALIDATE" != 'fix' ] && showMsg 'issue' " !missing!" 'both' 0 0
+					[ "$VALIDATE" = 'fix' ] && showMsg 'issue' " [restore]" 'both' 0 0
+				fi
 			fi
-			[ "$VALIDATE" ] && showMsg 'file' ' [done]' 'both' 1 5
-			continue
-		fi
 
-		# if we're validating, we can skip checks on directories
-		[ "$VALIDATE" ] && [ "$VALIDATE" != 'fix' ] && continue
+			if [ ! -d "$ITEM" ]; then												# for each file...
+				[ ! "$DRYRUN" ] && [ ! "$FORCE" ] && [ ! "$VALIDATE" ] && [ -e "${TARGET}" ] && continue			#   if we're NOT forcing -AND- we're NOT validating -AND- the file does exist then go to the next file
 
-		# if we've made it here, then we're dealing with a directory, so...
-		( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "${TARGET}" ] && continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory does exist then cycle the 'for' loop
+				# NOE: the PREFIX will already be part of DIRECTORY (assigned at the beginning of the script processing)
+				if ( [ "$INSTALL" ] || [ "$VALIDATE" = 'fix' ] || [ "$UNLOAD" = 'update2' ] ) && [ "$MODE" = 'copy' ]; then
+					# NOTE: if the package installation is done with root, the USER:GROUP ownership is preserved (e.g. when installing to /), otherwise it will default to the user and their default group (e.g. when installing to /Users/Public or $HOME)
+					[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -dp${TEMP} \"${ITEM}\" \"${TARGET}\"" >>"$LOG_DBUG"
+					[ ! "$DRYRUN" ] && ( cp -dp${TEMP} "${ITEM}" "${TARGET}" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# copy the file from the source directory
+						showMsg 'failure' "The package file copy failed (${ITEM})." 'log'
+						return 1
+					}
+				elif ( [ "$INSTALL" ] || [ "$VALIDATE" = 'fix' ] || [ "$UNLOAD" = 'update2' ] ) && [ "$MODE" = 'link' ]; then
+					[ $DEBUG -gt 0 ] && echo -e "\tCalling:    ln -s${TEMP} \"${ITEM}\" \"${TARGET}\"" >>"$LOG_DBUG"
+					[ ! "$DRYRUN" ] && ( ln -s${TEMP} "${ITEM}" "${TARGET}" 2>&1 | sed 's/^l/ \[failure\]\nl/' | tee -a "$LOG_ERRS" | grep -q ^'ln: ' ) && {						# symlink the file from the source directory
+						showMsg 'failure' "The package file symlink failed (${ITEM})." 'log'
+						return 1
+					}
+				elif [ ! "$INSTALL" ] && [ ! "$UNLOAD" ] && ( [ "$VALIDATE" = 'data' ] || [ "$VALIDATE" = 'hash' ] ); then
+					if [ -e "$TARGET" ]; then										# NOTE: the TARGET value will be altered in the 'if' block above
+						if [ "$MODE" = 'copy' ]; then
+							if [ ! -L "$ITEM" ] && [ -L "$TARGET" ]; then
+								showMsg 'issue' " !symlink!" 'both' 0 0
+								showMsg 'file' ' [done]' 'both' 1 5
+								continue
+							else
+								# check for possible malicious (malware?) replacements with mismatched file sizes or hashing
+								[ "$VALIDATE" = 'data' ] && ( [ "$(stat -c %s "$ITEM" 2>/dev/null)" = "$(stat -c %s "$TARGET" 2>/dev/null)" ] && showMsg 'step' " [size]" 'both' 0 0 || showMsg 'issue' " !size!" 'both' 0 0 )
+								[ "$VALIDATE" = 'hash' ] && ( [ "$(md5sum "$ITEM" | sed 's/  .*//')" = "$(md5sum "$TARGET" | sed 's/  .*//')" ] && showMsg 'step' " [hash]" 'both' 0 0 || showMsg 'issue' " !hash!" 'both' 0 0 )
+								# check the file permissions match those in the package
+								[ "$(stat -c %a "$ITEM" 2>/dev/null)" = "$(stat -c %a "$TARGET" 2>/dev/null)" ] && showMsg 'step' " [perm]" 'both' 0 0 || showMsg 'issue' " !perm!" 'both' 0 0
+							fi
+						elif [ "$MODE" = 'link' ]; then
+							[ "$(readlink "${TARGET}")" = "$ITEM" ] && showMsg 'step' " [link]" 'both' 0 0 || showMsg 'issue' " !link!" 'both' 0 0			# if the symlink isn't pointing to the source file, then...
+							[ "$(stat -c %a "$TARGET" 2>/dev/null)" = '777' ] && showMsg 'step' " [perm]" 'both' 0 0 || showMsg 'issue' " !perm!" 'both' 0 0	# if the symlink permissions aren't correct, then...
+						fi
 
-		if [ ! -e "${TARGET}" ]; then							# create the directory
-			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    mkdir -p \"${TARGET}\"" >>"$LOG_DBUG"
-			[ ! "$DRYRUN" ] && ( mkdir -p "${TARGET}" 2>&1 | sed 's/^m/ \[failure\]\nm/' | tee -a "$LOG_ERRS" | grep -q ^'mkdir: ' ) && {
-				showMsg 'failure' "The package directory creation failed (${TARGET})." 'log'
-				 return 1;
-			}
-		fi
-	done
+						if [ "$DIRECTORY" = '/' ]; then			# if the package was installed in the root of the filesystem, then make sure the ownership is root
+							[ "$(stat -c %G "$TARGET" 2>/dev/null)" = 'root' ] && showMsg 'step' " [owner]" 'both' 0 0 || showMsg 'issue' " !owner!" 'both' 0 0
+						# if the package was installed anywhere else (/Users/Public or HOME), then it should match the default group of the user account that installed the software (e.g. 'everyone')
+						elif [ "$DIRECTORY" != '/' ]; then
+							 [ "$(stat -c %G "$TARGET" 2>/dev/null)" = "$OWN_GROUP" ] && showMsg 'step' " [owner]" 'both' 0 0 || showMsg 'issue' " !owner!" 'both' 0 0
+						fi
+					fi
+
+				fi
+				[ "$VALIDATE" ] && showMsg 'file' ' [done]' 'both' 1 5
+				continue
+			fi
+
+			# if we're validating, we can skip checks on directories
+			[ "$VALIDATE" ] && [ "$VALIDATE" != 'fix' ] && continue
+
+			# if we've made it here, then we're dealing with a directory, so...
+			( [ ! "$FORCE" ] && [ ! "$VALIDATE" ] ) && [ -e "${TARGET}" ] && continue	#   if we're NOT forcing -AND- we're NOT validating -AND- the directory does exist then cycle the 'for' loop
+
+			if [ ! -e "${TARGET}" ]; then							# create the directory
+				[ $DEBUG -gt 0 ] && echo -e "\tCalling:    mkdir -p \"${TARGET}\"" >>"$LOG_DBUG"
+				[ ! "$DRYRUN" ] && ( mkdir -p "${TARGET}" 2>&1 | sed 's/^m/ \[failure\]\nm/' | tee -a "$LOG_ERRS" | grep -q ^'mkdir: ' ) && {
+					showMsg 'failure' "The package directory creation failed (${TARGET})." 'log'
+					 return 1;
+				}
+			fi
+		done
+	fi
 
 	# remove any -N filelist files
 	[ -e "${DIR_TEMP}/filelist.${EXEID}" ] && rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>>"$LOG_ERRS"
@@ -1217,15 +1206,10 @@ installPackage() {
 	[ ! "$PROXY" ] && ( echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${REPO_OPTION}"						# if a remote -S was passed, then mount from the default local repo storage location
 	[ ! "$PROXY" ] && ( ! echo "$REPO_SOURCE" | grep -qE ^'(http|ftp)' ) && TEMP="${SOURCE}"						# if a local -S was passed, then mount from the provided, local location
 
-# UPDATED 2026/01/12 - we use BASENAME not FILENAME
-#	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && ln -sf "${TEMP}/${FILENAME}" "${DIR_LIST}/${FILENAME}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ -e "${BASENAME}.${EXT_HASH}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ -e "${BASENAME}.${EXT_DEPS}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS"
 	[ ! "$DRYRUN" ] && [ ! "$VALIDATE" ] && [ -e "${BASENAME}.${EXT_INFO}" ] && ln -sf "${TEMP}/${BASENAME}.${EXT_INFO}" "${DIR_LIST}/${BASENAME}.${EXT_INFO}" 2>>"$LOG_ERRS"
-# MOVED 2026/01/15 - this needs to go into the -z action
-#	# if we're installing -AND- not a dryrun -AND- we're booting the device -AND- there's a single package repo (e.g. TinyCore), then make a marker file indicating the package in a base OS package
-#	[ ! "$VALIDATE" ] && [ ! "$DRYRUN" ] && [ "$BOOTING" ] && [ "$REPO_SYSTEM" = "$REPO_OPTION" ] && touch "${DIR_LIST}/${BASENAME}.${EXT_CORE}" 2>>"$LOG_ERRS"
 
 	return 0
 }
@@ -1350,8 +1334,6 @@ unloadPackage() {
 	showMsg 'file' "(${FILETYPE}) ${PACKAGE}:" 'both' 0 1
 	[ "$DRYRUN" ] && showMsg 'notice' " [dryrun]" 'both' 0 0
 
-# UPDATED 2026/01/12 - we use BASENAME not FILENAME
-#	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${FILENAME}" ] && {			# if the package has been marked for uninstallation (unlist, delete, purge, or update) -AND- it currently is NOT installed, then...
 	[ "$UNLOAD" != 'unload2' ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && {			# if the package has been marked for uninstallation (unlist, delete, purge, or update) -AND- it currently is NOT installed, then...
 		uninstallPackage || return 1							#   uninstall the package files
 		return 0									#   no need to process anything further!
@@ -1362,8 +1344,6 @@ unloadPackage() {
 	# if the package has a service start/stop script, then stop the service before continuing
 	if [ -e "${DIR_INIT}/${PACKAGE}" ]; then
 		[ $DEBUG -gt 0 ] && echo -e "\tPackage has service script...\n\tCalling:    \"${DIR_INIT}/${PACKAGE}\" stop" >>"$LOG_DBUG"
-# UPDATED 2026/01/15
-#		[ ! "$DRYRUN" ] && { "${DIR_INIT}/${PACKAGE}" stop >>"$LOG_ERRS" 2>&1 || return 1; }
 		[ ! "$DRYRUN" ] && "${DIR_INIT}/${PACKAGE}" stop >>"$LOG_ERRS" 2>&1		# NOTE: we no longer return with an error since a poorly written script would mess up an entire uninstall chain; any errors are logged though
 	fi
 
@@ -1371,8 +1351,6 @@ unloadPackage() {
 	if ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ); then						# if the package has been mounted and symlinked, then...
 		MODE='link'
 		[ $DEBUG -gt 0 ] && echo -e "\tPackage is symlinked...\n\tCalling:    sudo /bin/umount -d \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
-# UPDATED 2026/01/15
-#		[ ! "$DRYRUN" ] && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }				#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
 		if [ ! "$DRYRUN" ]; then
 			sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || {							#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
 				showMsg 'warning' " [active]" 'both' 0 0
@@ -1393,8 +1371,6 @@ unloadPackage() {
 	( [ ! "$DRYRUN" ] || ( [ "$DRYRUN" ] && [ "$MODE" = 'copy' ] ) ) && { sudo /bin/mount "${SOURCE}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro >>"$LOG_ERRS" 2>&1 || return 1; }	# now mount it for processing
 	if [ ! "$DRYRUN" ] && [ "$MODE" = 'copy' ]; then
 		for FILE in $(find "${DIR_LOOP}/${BASENAME}" ! -type d 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||"); do			# scan to make sure that no software in the package is being used
-# UPDATED 2026/01/15
-#			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && return 1				#   if one of the files in the package is currently in use, then exit this function	https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
 			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && {					#   if one of the files in the package is currently in use, then exit this function
 				showMsg 'warning' " [active]" 'both' 0 0			#   https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/
 				return 0							#   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
@@ -1422,9 +1398,8 @@ unloadPackage() {
 		( echo "$DIRECTORY" | grep -q '\.'$ ) && TEMP="${DIRECTORY}${FILE}" || TEMP="${DIRECTORY}/${FILE}"				# adjusts the path if the DIR_LIVE ends with a dot (e.g. /Users/Public/.etc/pax)
 		if [ ! -d "${TEMP}" ]; then							#   if the iterated FILE is anything but a directory (e.g. device file, symlink, text file, ...), then delete it!
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${TEMP}/\"" >>"$LOG_DBUG"
-# REVERTED 2026/01/15
+
 			[ ! "$DRYRUN" ] && { rm -f "${TEMP}" >>"$LOG_ERRS" 2>&1 || return 1; }
-#			[ ! "$DRYRUN" ] && rm -f "${TEMP}" >>"$LOG_ERRS" 2>&1			#   NOTE: we no longer return with an error here in case of a trivial matter (e.g. a file is missing) that would mess up an entire uninstall chain; any errors are logged though
 		elif [ -d "${TEMP}" ] && [ ! "$(ls -A "${TEMP}" 2>/dev/null)" ]; then		#   otherwise it is a directory, so check if it's empty and delete it if so!
 			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rmdir \"${TEMP}\"" >>"$LOG_DBUG"
 			[ ! "$DRYRUN" ] && rmdir "${TEMP}" >>"$LOG_ERRS" 2>&1			#   NOTE: we do NOT error out here if we can't delete it!
@@ -1436,11 +1411,6 @@ unloadPackage() {
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${BASENAME}\"" >>"$LOG_DBUG"
 		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${BASENAME}" >>"$LOG_ERRS" 2>&1		# delete the installed marker
 	}
-# REMOVED 2026/01/12 - we use BASENAME not FILENAME
-#	[ -e "${DIR_LIST}/${FILENAME}" ] && {
-#		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${FILENAME}\"" >>"$LOG_DBUG"
-#		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${FILENAME}" >>"$LOG_ERRS" 2>&1		# delete the installed marker
-#	}
 	[ -e "${DIR_LIST}/${BASENAME}.${EXT_HASH}" ] && {
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    rm -f \"${DIR_LIST}/${BASENAME}.${EXT_HASH}\"" >>"$LOG_DBUG"
 		[ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/${BASENAME}.${EXT_HASH}" >>"$LOG_ERRS" 2>&1
@@ -1979,8 +1949,6 @@ else
 
 			   # remove any existing of these files (in case the original package manager was used between runs)
 			   showMsg 'action' "Clearing any prior -z action contents:" 'screen' 0 3
-# REMOVED 2026/01/12 - we use BASENAME not FILENAME
-#			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_SOFT}
 			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_HASH}
 			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_DEPS}
 			   showMsg 'action' " [done]" 'screen' 1 5
@@ -1988,13 +1956,7 @@ else
 			   # (re-)sync the package contents
 			   showMsg 'action' "Sync'ing necessary package files:" 'screen' 0 4
 			   showMsg 'step' " [marked]" 'screen' 0 1
-# UPDATED 2026/01/12
-#			   for BASENAME in $(ls -1 "$DIR_LIST" | grep -vE ".(${EXT_SOFT}|${EXT_DEPS}|${EXT_HASH})"$); do
 			   for BASENAME in $(ls -1 "$DIR_LIST" | grep -vE ".(${EXT_DEPS}|${EXT_HASH}|${EXT_INFO})"$); do
-# REMOVED 2026/01/16 - the below code will never run since there has to be a BASENAME
-#				[ ! "$DRYRUN" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && { touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS" || exit 1; }
-# REMOVED 2026/01/12 - we use BASENAME not FILENAME
-#				[ ! "$DRYRUN" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_SOFT}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1; }
 				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS" || exit 1; }
 				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS" || exit 1; }
 				[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_INFO}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_INFO}" "${DIR_LIST}/${BASENAME}.${EXT_INFO}" 2>>"$LOG_ERRS" || exit 1; }
@@ -2018,24 +1980,17 @@ else
 
 					TEMP='FALSE'
 					for ITEM in $(find "${DIR_LOOP}/${BASENAME}"); do
-#echo "item |$ITEM|"
 						TARGET_ROOT="$(echo "$ITEM" | sed "s|^${DIR_LOOP}/${BASENAME}||")"				# (re)set the value; remove the loopback mount point prefix to store only the target '/directory/filename' string "
-#echo "root |$TARGET_ROOT|"
 						( echo "$DIR_LIVE" | grep -q '\.'$ ) && TARGET_LIVE="${DIR_LIVE}$(echo "${TARGET_ROOT}" | tail -c +2)" || TARGET_LIVE="${DIR_LIVE}${TARGET_ROOT}"
-#echo "live |$DIR_LIVE|"
 						TARGET_HOME="${HOME}${TARGET_ROOT}"
-#echo "home |$TARGET_HOME|"
 						TARGET_MISC=".${TARGET_ROOT}"									# use pwd as last option
-#echo "misc |$TARGET_MISC|"
 
 						# determine where the file is located (in case the package was installed one place [e.g. HOME] and a dependency in another [e.g. ROOT])
 						# NOTE: this search pattern comes in order of presidence: passed DIRECTORY, HOME, DIR_LIVE, ROOT
 						#	the 'misc' comes first since the package could also be in any of the following directories too, storing an incorrect TARGET path if they were triggered first
 						# find the first file in the package to check if it's installed in the filesystem (that's why both tests are performed below)
-#echo "checking |$TARGET|$TARGET_HOME|$TARGET_LIVE|$TARGET_ROOT|"
 						[ ! -d "$ITEM" ] && [ ! -e "$TARGET_MISC" ] && [ ! -e "$TARGET_HOME" ] && [ ! -e "$TARGET_LIVE" ] && [ ! -e "$TARGET_ROOT" ] && break
 						[ ! -d "$ITEM" ] && ( [ -e "$TARGET_MISC" ] || [ -e "$TARGET_HOME" ] || [ -e "$TARGET_LIVE" ] || [ -e "$TARGET_ROOT" ] ) && {
-#echo installed
 							TEMP='TRUE'
 							break
 						}
@@ -2045,8 +2000,6 @@ else
 				fi	
 				if [ "$TEMP" = 'TRUE' ]; then
 					[ ! "$DRYRUN" ] && [ ! -e "${DIR_LIST}/${BASENAME}" ] && { touch "${DIR_LIST}/${BASENAME}" 2>>"$LOG_ERRS" || exit 1; }
-# REMOVED 2026/01/12 - we use BASENAME not FILENAME
-#					[ ! "$DRYRUN" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_SOFT}" "${DIR_LIST}/${BASENAME}.${EXT_SOFT}" 2>>"$LOG_ERRS" || exit 1; }
 					[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_HASH}" "${DIR_LIST}/${BASENAME}.${EXT_HASH}" 2>>"$LOG_ERRS" || exit 1; }
 					[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_DEPS}" "${DIR_LIST}/${BASENAME}.${EXT_DEPS}" 2>>"$LOG_ERRS" || exit 1; }
 					[ ! "$DRYRUN" ] && [ -e "${REPO_OPTION}/${BASENAME}.${EXT_INFO}" ] && { ln -sf "${REPO_OPTION}/${BASENAME}.${EXT_INFO}" "${DIR_LIST}/${BASENAME}.${EXT_INFO}" 2>>"$LOG_ERRS" || exit 1; }
@@ -2144,10 +2097,6 @@ fi
 # MANDATORY CHECKS BEFORE **ANY** PROCESSING
 
 # general checking			NOTE: we can't write to a log yet since those checks haven't occurred
-# UPDATED 2026/01/15
-#( ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) || { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
-# TESTED 2026/01/15
-#[ ! "$BOOTING" ] && ( ! ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) && { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
 ( ! ls -1 "${DIR_LIST}" | grep -q "${EXT_CORE}"$ ) && ( ! ls -1 "${DIR_LIST}" | grep -q "${EXT_HASH}"$ ) && { showMsg 'failure' "pax does not appear to be the default package manager.\nNOTES: Run 'pax --install' to make it the default package manager, or\n       run 'pax -z' to populate the system.\n       'pax -z' will be required after each non-consecutive action by a\n       package manager. Making pax the default will remove this step." 'screen'; exit 1; }
 [ "$VERSION" ] && [ "$2" ] && { showMsg 'failure' "Only one package can be listed with the -V option." 'screen'; exit 1; }
 [ "$RESTORE" ] && ( echo "$RESTORE" | grep -qE '[0-9]/[0-9]{2}/[0-9]' ) && { showMsg 'failure' "The restore point date must be in a YYYY-MM-DD format." 'screen'; exit 1; }
@@ -2650,7 +2599,7 @@ for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process 
 			[ "$OUTPUT" = 'xmLive' ] && exitGracefully 3 'screen' 6
 		}
 	#elif [ "$DOWNLOAD" ]; then								# if we are downloading package(s), then...
-		# this is required my several actions and is handled above this 'if' block
+		# this is required for several actions and is handled above this 'if' block
 	elif [ "$EXTRACT" ]; then								# if we are extracting package(s) contents, then...
 		SOURCE=''
 		if [ -e "${REPO_SOURCE}/${FILENAME}" ]; then SOURCE="$REPO_SOURCE"		# if the package is in the specified directory, then...
@@ -2666,9 +2615,6 @@ for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process 
 	#elif [ "$FIND" ]; then									# if we are finding file(s) in packages, then...
 		# this is handled in the package processing above
 	elif [ "$INSTALL" ]; then								# if we're installing package(s), then...
-# UPDATED 2026/01/12 - we use BASENAME not FILENAME
-#		[ ! -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [install]" 'both' 0 0
-#		[ -e "${DIR_LIST}/${FILENAME}" ] && showMsg 'step' " [update]" 'both' 0 0
 		[ ! -e "${DIR_LIST}/${BASENAME}" ] && showMsg 'step' " [install]" 'both' 0 0
 		[ -e "${DIR_LIST}/${BASENAME}" ] && showMsg 'step' " [update]" 'both' 0 0
 
@@ -2737,10 +2683,7 @@ if [ "$LIST" ]; then
 		printf "${WHITE}%30s %-9s %5s %32s\n" "------------------------------" "---------" "-----" "--------------------------------"
 	fi
 
-# UPDATED 2026/01/12
-#	for FILE in $(ls -1 *.${EXT_SOFT} 2>/dev/null | grep -E "${TEMP}"); do			# NOTE: using 'grep' allows for passing specific packages
 	for FILE in $(ls -1 *.${EXT_CORE} *.${EXT_HASH} 2>/dev/null | grep -E "${TEMP}"); do	# NOTE: using 'grep' allows for passing specific packages
-#		splitName "$FILE"
 		( echo "$FILE" | grep -q "$EXT_CORE"$ ) && splitName "$FILE" "$EXT_CORE"
 		( echo "$FILE" | grep -q "$EXT_HASH"$ ) && splitName "$FILE" "$EXT_HASH"
 
