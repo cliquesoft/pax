@@ -114,6 +114,7 @@ INDEX=0												# since no arrays can be used in this shell, this keeps track
 TOTAL=0												# keeps track of the $DEP 'array' size
 TEMP=''												# used to store information temporarily
 COLORS=''											# if colors should be enabled by default (this is for setting via config file)
+FOLLOWUP=''											# a final command that should be run after an install or uninstall
 LIBRARIES=''											# boolean indicating libraries are contained in the package and need to be loaded after installation
 MODULES=''											# boolean indicating kernel modules are contained in the package and need to be loaded after installation
 RPD=''												# the Restore Point Directory
@@ -538,16 +539,25 @@ addDependency() {
 }
 
 
-# Usage syntax: deleteDependency [ADJUST]
+# Usage syntax: deleteDependency ADJUST
 # Overview:	deletes the top-most (last added) package from the stack of dependencies
 # Parameters:
-# ADJUST	[character] if the INDEX variable needs to be adjusted: (i)ncrease by 1, (d)ecrease by 1, null makes no adjustments
+# ADJUST	[character] if the INDEX variable needs to be adjusted: (i)ncrease by 1, (d)ecrease by 1, blank makes no adjustments
+# DELETE	[boolean] [optional] if the iterated dependency should be deleted from the stack: 1,TRUE,null = yes, 0,FALSE = no
 deleteDependency() {
 	local TARGET										# the value that should exit this function
+	local ADJUST="$1"
+	local DELETE="$2"
+
+	[ ! "$ADJUST" ] && {
+		showMsg 'failure' "No ADJUST value was passed to deleteDependency()." 'screen' 1 1
+		return 1
+	}
+	( [ ! "$DELETE" ] || [ "$DELETE" = 'TRUE' ] || [ "$DELETE" = 'true' ] || [ $DELETE -eq 1 ] ) && DELETE='TRUE' || DELETE=''
 
 	[ $DEBUG -gt 0 ] && echo -e "deleteDependency (old):\n\tINDEX       |${INDEX}|\n\tDEPENDENCY  |${DEPENDENCY}|" >>"$LOG_DBUG"
 
-	eval "unset DEP${INDEX}"
+	[ "$DELETE" ] && eval "unset DEP${INDEX}"
 	[ "$1" = 'd' ] && {									# if we need to decrease the INDEX value, then do so!
 		INDEX=$(( INDEX - 1 ))
 		TARGET=0									#   so if INDEX = 0, then we've decreased to the last dependency and there's nothing left to process
@@ -1092,6 +1102,7 @@ installPackage() {
 				# NOTE: this search pattern comes in order of presidence: passed DIRECTORY, HOME, DIR_LIVE, ROOT
 				#	the 'misc' comes first since the package could also be in any of the following directories too, storing an incorrect TARGET path if they were triggered first
 				# if the file exists -AND- ( we're dealing with a passed package [that should be in the passed DIRECTORY] -OR- it's a dependency [that could be somewhere else] -and- DIRECTORY is not HOME, DIR_LIVE, or ROOT [that need to be triggered below] ), then...
+# VER2 - this may need to get adjust since we're using '+' to indicate dependencies and its absence to indicate a passed package
 				if [ -e "$TARGET" ] && ( [ $INDEX -eq 1 ] || ( [ $INDEX -gt 1 ] && ( ! echo "$DIRECTORY" | grep -q ^"$HOME" ) && [ "$DIRECTORY" != "$DIR_LIVE" ] && [ "$DIRECTORY" != '/' ] ) ); then		# if it's in the passed DIRECTORY (DIV_LIVE would be default value), then...
 					echo -n ''
 				elif [ $INDEX -gt 1 ] && [ -e "$TARGET_HOME" ]; then		# if it's in HOME, then...
@@ -2649,7 +2660,7 @@ for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process 
 	fi
 	[ ! "$VALIDATE" ] && showMsg 'file' " [done]" 'both' 1 5 || showMsg 'file' "" 'both' 1 5
 
-	deleteDependency 'i'									# delete the dependency before assigning the next one below
+	deleteDependency 'i' 0									# delete the dependency before assigning the next one below
 done
 
 
@@ -2934,24 +2945,45 @@ fi
 if [ "$INSTALL" ]; then
 	[ "$DIRECTORY" = '/' ] && DIRECTORY=''							# if DIRECTORY is just the root, then clear its value to prevent leading double slashes in the path
 
-	if [ -s ${DIR_TEMP}/installs.list ]; then
+	if [ -s "${DIR_TEMP}/installs.${EXEID}" ]; then
+		[ $DEBUG -gt 0 ] && echo -e "\tRunning deferred install scripts..." >>"$LOG_DBUG"
 		showMsg 'action' "Running deferred install scripts..." 'both' 1 4
-		for FILE in $(cat ${DIR_TEMP}/installs.list); do
-			showMsg 'file' "  ${DIRECTORY}${DIR_INST}/${FILE}:" 'both' 0 1
+		for FILE in $(cat "${DIR_TEMP}/installs.${EXEID}"); do
+			showMsg 'file' "${FILE}" 'both' 1 1
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    \"${DIRECTORY}${DIR_INST}/${FILE}\"" >>"$LOG_DBUG"
 			[ ! "$DRYRUN" ] && "${DIRECTORY}${DIR_INST}/${FILE}" 2>&1 | tee -a "$LOG_ERRS"
 		done
-		rm -f ${DIR_TEMP}/installs.list 2>>"$LOG_ERRS"
 	fi
 	# NOTE: these are two separate 'if' statements on purpose!
-	if [ -s ${DIR_TEMP}/services.list ]; then
+	if [ -s "${DIR_TEMP}/services.${EXEID}" ]; then
+		[ $DEBUG -gt 0 ] && echo -e "\tRunning deferred service scripts..." >>"$LOG_DBUG"
 		showMsg 'action' "Running deferred service scripts..." 'both' 1 4
-		for FILE in $(cat ${DIR_TEMP}/services.list); do
-			showMsg 'file' "  ${DIRECTORY}${DIR_INIT}/${FILE}:" 'both' 0 1
+		for FILE in $(cat "${DIR_TEMP}/services.${EXEID}"); do
+			showMsg 'file' "${FILE}: " 'both' 0 1
+			[ $DEBUG -gt 0 ] && echo -e "\tCalling:    \"${DIRECTORY}${DIR_INIT}/${FILE}\"" >>"$LOG_DBUG"
 			[ ! "$DRYRUN" ] && "${DIRECTORY}${DIR_INIT}/${FILE}" start 2>&1 | tee -a "$LOG_ERRS"
 		done
-		rm -f ${DIR_TEMP}/services.list 2>>"$LOG_ERRS"
 	fi
 fi
+
+
+# finally execute any follow-up task that needs to be performed on an (un)install
+if ( [ "$INSTALL" ] || [ "$UNLOAD" ] ) && [ "$FOLLOWUP" ]; then
+	[ $DEBUG -gt 0 ] && echo -e "\tExecuting follow-up calls..." >>"$LOG_DBUG"
+	showMsg 'action' "Executing follow-up calls..." 'both' 1 4
+
+	# now process the dependencies obtained from the above segment!
+	for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process (via the TOTAL value set by addDependency())
+		eval DEPENDENCY="\$DEP${INDEX}"								#   set the dependency to process each iteration
+		( echo "$DEPENDENCY" | grep -q ^'+' ) && continue					#   if we're dealing with a dependency, then iterate
+
+		splitName "$DEPENDENCY"
+
+		[ $DEBUG -gt 0 ] && eval echo -e "\tCalling:    ${FOLLOWUP}" >>"$LOG_DBUG"
+		eval $FOLLOWUP 2>&1 | tee -a "$LOG_ERRS"
+	done
+fi
+
 
 exitGracefully 0 'both' 6 'success'
 

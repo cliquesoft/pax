@@ -15,7 +15,7 @@ license:	CPLv2
 licenseURI:	https://www.cliquesoft.org/#Licenses
 maintainer:	wysiwyg
 tags:		pax package manager copy extract download dependency trees fifo client find proxy actions install uninstall unload unlist validate
-overview:	A very robust and efficient package manager for Linux distros
+overview:	A very robust and versatile package manager for Linux distros
 		that enables a user to perform various operations such as:
 		copy, extract, download, find which package a file belongs to,
 		install/uninstall/unload (different package versions) to
@@ -39,6 +39,7 @@ comments:	This is a more feature full and efficient package manager than
 		- Ability to search online repos (including server-side)
 		- A network server to push/manipulate packages to/on clients
 		- Ability to process .deb (and other) package types
+		Feature requests can be sent to: service@cliquesoft.org
 		  [OTHER PROJECTS]
 		Feel free to check out some of our other projects. If they are
 		not in the repo yet, they will be soon. Visit our website to
