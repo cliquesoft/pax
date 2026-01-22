@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/21 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/22 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -345,7 +345,8 @@ showMsg() {
 		[ "$TAG" = 'failure' ] && [ "$MSG" = ' [failure]' ] && PREFIX="${RED}"
 		[ "$TAG" = 'failure' ] && [ "$MSG" != ' [failure]' ] && PREFIX="${RED}ERROR: ${NORMAL}"	# NOTE: the MSG comparison is so that if exitGracefully() was called, then we don't need the prefix
 		[ "$TAG" = 'success' ] && PREFIX="${GREEN}"
-		[ "$TAG" = 'warning' ] && PREFIX="${YELLOW}"
+		[ "$TAG" = 'warning' ] && PREFIX="${YELLOW}"					# used to display a warning message (e.g. ALERT: The package does not exist in the specified location.)
+		[ "$TAG" = 'warn' ] && PREFIX="${YELLOW}"					# used to display an inline warning (e.g. [active])
 		[ "$TAG" = 'notice' ] && PREFIX="${PURPLE}"					# [dryrun], [overwrite]
 		[ "$TAG" = 'action' ] && PREFIX="${TEAL}"					# Processing dependencies for the package...
 		[ "$TAG" = 'step' ] && PREFIX="${CYAN}"						# [install], [copy], [extract], ...
@@ -480,7 +481,7 @@ splitName() {
 	[ "$2" ] && EXT="$2"
 
 	# WARNING: this 'if' must be in this exact order to operate correctly
-	OPTFILE=''										#   erase any existing value from this variable to prevent bugs
+	OPTFILE=''										# erase any existing value from this variable to prevent bugs
 	if ( echo "$NAME" | grep -q ^'\[' ); then						# if an optional package (e.g. [xorg_3d.i32.bin.soft|xorg.bin]) was passed, then...
 		VERSION=''									#   erase any existing value from this variable to prevent bugs
 		OPTFILE="$(echo "$NAME" | sed 's/^\[//;s/\]$//;s/.*|//')"			#   remove the brackets and store just the optional package (xorg.bin)
@@ -539,7 +540,7 @@ addDependency() {
 }
 
 
-# Usage syntax: deleteDependency ADJUST
+# Usage syntax: deleteDependency ADJUST [DELETE]
 # Overview:	deletes the top-most (last added) package from the stack of dependencies
 # Parameters:
 # ADJUST	[character] if the INDEX variable needs to be adjusted: (i)ncrease by 1, (d)ecrease by 1, blank makes no adjustments
@@ -1009,6 +1010,7 @@ downloadPackage() {
 #		this function is also used to perform package validation
 installPackage() {
 	local ITEM
+	local MODE_USE="$MODE"									# default to the mode set (by default/user)
 	local SOURCE=''
 	local TARGET=''
 	local TARGET_ROOT
@@ -1027,7 +1029,9 @@ installPackage() {
 		# NOTE: no removal of failed packages takes place any longer, and will now fall on the user to do so. Besides, nothing will be installed as long as the hash doesn't match the package.
 		return 1
 	}
-	showMsg 'step' " [${MODE}]" 'both' 0 0
+	[ "$FORCE" ] && ( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && MODE_USE='link'			# if we're forcing the (re-)installation of packages, then we need to check/update this since some dependencies may be symlinked from other package installs
+
+	showMsg 'step' " [${MODE_USE}]" 'both' 0 0
 
 	# since we have to do this step no matter what, lets setup and mount the package now
 	[ ! -d "${DIR_LOOP}/${BASENAME}" ] && /bin/mkdir -p "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1					# make the mounting directory if it doesn't exist
@@ -1065,7 +1069,8 @@ installPackage() {
 	# if we're booting the device -AND- not using -N then just issue a 'cp' command for speed
 	# NOTE: this can only occur during boot since package installation in a live system will need to determine a TARGET value (found in the 'else' portion of this 'if')
 	if [ "$BOOTING" ] && [ ! "$FILELIST" ]; then
-		[ "$MODE" = 'link' ] && TEMP="${TEMP}s"						# if we're symlinking, then add that switch to 'cp'
+# VER2 - use this unless validating or -N or if DIR_LIVE contains a trailing '.'
+		[ "$MODE_USE" = 'link' ] && TEMP="${TEMP}s"					# if we're symlinking, then add that switch to 'cp'
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -dpR${TEMP} \"${DIR_LOOP}/${BASENAME}/\"* \"/\"" >>"$LOG_DBUG"
 		[ ! "$DRYRUN" ] && ( cp -dpR${TEMP} "${DIR_LOOP}/${BASENAME}/"* "/" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# copy the file from the source directory
 			showMsg 'failure' "The package file copy failed (${ITEM})." 'log'
@@ -1136,14 +1141,14 @@ installPackage() {
 				[ ! "$DRYRUN" ] && [ ! "$FORCE" ] && [ ! "$VALIDATE" ] && [ -e "${TARGET}" ] && continue			#   if we're NOT forcing -AND- we're NOT validating -AND- the file does exist then go to the next file
 
 				# NOE: the PREFIX will already be part of DIRECTORY (assigned at the beginning of the script processing)
-				if ( [ "$INSTALL" ] || [ "$VALIDATE" = 'fix' ] || [ "$UNLOAD" = 'update2' ] ) && [ "$MODE" = 'copy' ]; then
+				if ( [ "$INSTALL" ] || [ "$VALIDATE" = 'fix' ] || [ "$UNLOAD" = 'update2' ] ) && [ "$MODE_USE" = 'copy' ]; then
 					# NOTE: if the package installation is done with root, the USER:GROUP ownership is preserved (e.g. when installing to /), otherwise it will default to the user and their default group (e.g. when installing to /Users/Public or $HOME)
 					[ $DEBUG -gt 0 ] && echo -e "\tCalling:    cp -dp${TEMP} \"${ITEM}\" \"${TARGET}\"" >>"$LOG_DBUG"
 					[ ! "$DRYRUN" ] && ( cp -dp${TEMP} "${ITEM}" "${TARGET}" 2>&1 | sed "s/^cp: can't preserve ownership.*//;/^$/d;s/^c/ \[failure\]\nc/" | tee -a "$LOG_ERRS" | grep -q ^'cp: ' ) && {	# copy the file from the source directory
 						showMsg 'failure' "The package file copy failed (${ITEM})." 'log'
 						return 1
 					}
-				elif ( [ "$INSTALL" ] || [ "$VALIDATE" = 'fix' ] || [ "$UNLOAD" = 'update2' ] ) && [ "$MODE" = 'link' ]; then
+				elif ( [ "$INSTALL" ] || [ "$VALIDATE" = 'fix' ] || [ "$UNLOAD" = 'update2' ] ) && [ "$MODE_USE" = 'link' ]; then
 					[ $DEBUG -gt 0 ] && echo -e "\tCalling:    ln -s${TEMP} \"${ITEM}\" \"${TARGET}\"" >>"$LOG_DBUG"
 					[ ! "$DRYRUN" ] && ( ln -s${TEMP} "${ITEM}" "${TARGET}" 2>&1 | sed 's/^l/ \[failure\]\nl/' | tee -a "$LOG_ERRS" | grep -q ^'ln: ' ) && {						# symlink the file from the source directory
 						showMsg 'failure' "The package file symlink failed (${ITEM})." 'log'
@@ -1151,7 +1156,7 @@ installPackage() {
 					}
 				elif [ ! "$INSTALL" ] && [ ! "$UNLOAD" ] && ( [ "$VALIDATE" = 'data' ] || [ "$VALIDATE" = 'hash' ] ); then
 					if [ -e "$TARGET" ]; then										# NOTE: the TARGET value will be altered in the 'if' block above
-						if [ "$MODE" = 'copy' ]; then
+						if [ "$MODE_USE" = 'copy' ]; then
 							if [ ! -L "$ITEM" ] && [ -L "$TARGET" ]; then
 								showMsg 'issue' " !symlink!" 'both' 0 0
 								showMsg 'file' ' [done]' 'both' 1 5
@@ -1163,7 +1168,7 @@ installPackage() {
 								# check the file permissions match those in the package
 								[ "$(stat -c %a "$ITEM" 2>/dev/null)" = "$(stat -c %a "$TARGET" 2>/dev/null)" ] && showMsg 'step' " [perm]" 'both' 0 0 || showMsg 'issue' " !perm!" 'both' 0 0
 							fi
-						elif [ "$MODE" = 'link' ]; then
+						elif [ "$MODE_USE" = 'link' ]; then
 							[ "$(readlink "${TARGET}")" = "$ITEM" ] && showMsg 'step' " [link]" 'both' 0 0 || showMsg 'issue' " !link!" 'both' 0 0			# if the symlink isn't pointing to the source file, then...
 							[ "$(stat -c %a "$TARGET" 2>/dev/null)" = '777' ] && showMsg 'step' " [perm]" 'both' 0 0 || showMsg 'issue' " !perm!" 'both' 0 0	# if the symlink permissions aren't correct, then...
 						fi
@@ -1201,7 +1206,7 @@ installPackage() {
 	[ -e "${DIR_TEMP}/filelist.${EXEID}" ] && rm -f "${DIR_TEMP}/filelist.${EXEID}" 2>>"$LOG_ERRS"
 
 	# unmount if we copied -OR- are doing a dryrun
-	( [ "$MODE" = 'copy' ] || [ "$DRYRUN" ] ) && ( /bin/mount | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }	# NOTE: we test for mouting in case we're doing a dryrun and the package is remote (which it wouldn't be if that's true)
+	( [ "$MODE_USE" = 'copy' ] || [ "$DRYRUN" ] ) && ( /bin/mount | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && { sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || return 1; }	# NOTE: we test for mouting in case we're doing a dryrun and the package is remote (which it wouldn't be if that's true)
 
 	# update the "install" list
 	# if the package needs to be added to a list (e.g. PACKLIST != none) -AND- we are NOT booting -AND- NOT validating -AND- installing a requested package (vs a dependency with a preceeding '+') -AND- the package isn't already in the LIST, then add the package to the LIST file
@@ -1363,8 +1368,8 @@ unloadPackage() {
 		MODE='link'
 		[ $DEBUG -gt 0 ] && echo -e "\tPackage is symlinked...\n\tCalling:    sudo /bin/umount -d \"${DIR_LOOP}/${BASENAME}\"" >>"$LOG_DBUG"
 		if [ ! "$DRYRUN" ]; then
-			sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >>"$LOG_ERRS" 2>&1 || {							#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
-				showMsg 'warning' " [active]" 'both' 0 0
+			sudo /bin/umount -d "${DIR_LOOP}/${BASENAME}" >/dev/null 2>&1 || {							#   umount the squashfs file to make sure no contents are being used by other software (thanks Marco Caminati)
+				showMsg 'warn' " [active]" 'both' 0 0
 				return 0
 			}
 		fi
@@ -1382,8 +1387,10 @@ unloadPackage() {
 	( [ ! "$DRYRUN" ] || ( [ "$DRYRUN" ] && [ "$MODE" = 'copy' ] ) ) && { sudo /bin/mount "${SOURCE}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro >>"$LOG_ERRS" 2>&1 || return 1; }	# now mount it for processing
 	if [ ! "$DRYRUN" ] && [ "$MODE" = 'copy' ]; then
 		for FILE in $(find "${DIR_LOOP}/${BASENAME}" ! -type d 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||"); do			# scan to make sure that no software in the package is being used
+			[ "$PACKAGE" = 'pax' ] && [ "$FILE" = '/bin/pax' ] && continue		# this allows the pax package to be updated (since the pax script would obviously be in use)
+
 			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && {					#   if one of the files in the package is currently in use, then exit this function
-				showMsg 'warning' " [active]" 'both' 0 0			#   https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/
+				showMsg 'warn' " [active]" 'both' 0 0				#   https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/
 				return 0							#   http://unix.stackexchange.com/questions/60492/whats-the-difference-between-lsof-and-fuser-uvm
 			}
 		done
@@ -1597,7 +1604,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #		delete: same as unlist, but deletes the package files from REPO_SOURCE, REPO_OPTION, REPO_SYSTEM, leaving /etc files
 #		purge : same as delete, but also removes /etc files
 	echo '	-u   uninstall package(s): update, unload, unlist, delete, purge'
-	echo "	-v   validate package(s) info: data, deep, deps, fix"				# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
+	echo "	-v   validate package(s) info: data, hash, deps, fix"				# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
 #	echo '	-w   '
 #	echo '	-x   '
 #	echo '	-y   '
@@ -1669,15 +1676,17 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	       files as well"
 	echo "	     - When updating packages, you need to be in the directory that"
 	echo "	       contains the updates before starting this script"
+	echo "	The '-u' ACTION will default to '-D all' unless specified otherwise"
+	echo "	     to keep the system as tidy as possible."
 	echo "	The '-v' ACTION can perform various package integrity checks:"
 	echo "	     - data: ownership, permissions, {symlink source|file size}"
 	echo "	     - deps: verifies the package dependencies are all installed"
 	echo "	     - fix : resolves any issues detected"
 	echo "	     - hash: same as 'data' but md5sum hashes instead of file size"
 	echo "	The '-D' OPTION will search for dependencies in the following manner:"
-	echo "	     - none: no searching, file must be in the specified location"
+	echo "	     - none: no dependency processing at all"
 	echo "	     - default: searches in REPO_SOURCE, REPO_OPTION, REPO_SYSTEM"
-	echo "	     - all: same as 'default'"
+	echo "	     - all: same as 'default', but includes optional packages"
 	echo "	     - source: all dependencies must be in the specified location"
 	echo "	The '-I' OPTION value must be comma separated."
 	echo "	The '-N' OPTION takes a comma separated list of filenames, or a quoted"
@@ -1694,8 +1703,6 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	The '-T' OPTION can only be used once per call, so all the packages"
 	echo "	     need to be of the same type. Alternatively, you can skip using"
 	echo "	     this option and specify the full name of each package."
-	echo "	The '-U' OPTION will default to '-D all' unless specified otherwise"
-	echo "	     to keep the system as tidy as possible."
 	echo "	When using the '-V' OPTION, you can only list one package at a time."
 	echo
 	echo "	The PACKAGE(S) value can be:"
@@ -1705,7 +1712,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	The DIRECTORY as the last parameter must be:"
 	echo "	     - a full path: /tmp/pax/"
 	echo "	     - or a relative path: ./pax"
-	echo "	     - or have a trailing slash: pax/"
+	echo "	       with a trailing slash: pax/"
 	echo
 	echo "	The presence of a REPO_PREFIX/${FLAG_COPY} file will indicate that"
 	echo "	     all packages will be copied instead of symlinked."
@@ -2624,7 +2631,7 @@ for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process 
 		[ $DEBUG -gt 0 ] && echo -e "\tCalling:    unsquashfs -f -d \"$DIRECTORY\" \"${SOURCE}/${FILENAME}\"" >>"$LOG_DBUG"
 		[ ! "$DRYRUN" ] && { unsquashfs -f -d "$DIRECTORY" "${SOURCE}/${FILENAME}" 1>/dev/null 2>>"$LOG_ERRS" || exitGracefully 3 'both' 6 'failure'; }
 	#elif [ "$FIND" ]; then									# if we are finding file(s) in packages, then...
-		# this is handled in the package processing above
+		# this is handled in the package processing above (won't enter here; processDependencies() is never called)
 	elif [ "$INSTALL" ]; then								# if we're installing package(s), then...
 		[ ! -e "${DIR_LIST}/${BASENAME}" ] && showMsg 'step' " [install]" 'both' 0 0
 		[ -e "${DIR_LIST}/${BASENAME}" ] && showMsg 'step' " [update]" 'both' 0 0
@@ -2642,15 +2649,15 @@ for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process 
 		fi
 		installPackage || exitGracefully 4 'screen' 5 'step'
 	#elif [ "$LIST" ]; then									# if we are listing the installed packages, then...
-		# this is handled in the final processing below
+		# this is handled in the final processing below (won't enter here; processDependencies() is never called)
 	#elif [ "$MAKE" ]; then									# if we are creating a package for distribution, then...
-		# this is handled in the package processing above
+		# this is handled in the package processing above (won't enter here; processDependencies() is never called)
 	#elif [ "$OPEN" ]; then
-		# this is handled in the final processing below
+		# this is handled in the final processing below (won't enter here; processDependencies() is never called)
 	#elif [ "$TREE" ]; then									# if we are showing the dependency tree, then...
-		# this is handled in the final processing below
+		# this is handled in the final processing below (may enter here; processDependencies() may be called)
 	#elif [ "$UNLOAD" ]; then								# if we're unloading package(s), then...
-		# this is handled in the final processing below
+		# this is handled in the final processing below (won't enter here; processDependencies() writes to a file for this action)
 	elif [ "$VALIDATE" ]; then								# if we're validating package(s), then...
 		# NOTE: this was put here in case some packages are symlinked and some are copied
 		( /bin/mount 2>>"$LOG_ERRS" | grep -q "${DIR_LOOP}/${BASENAME} type squashfs" ) && MODE='link' || MODE='copy'			# store the package installation mode: symlinked or copied
@@ -2973,15 +2980,26 @@ if ( [ "$INSTALL" ] || [ "$UNLOAD" ] ) && [ "$FOLLOWUP" ]; then
 	showMsg 'action' "Executing follow-up calls..." 'both' 1 4
 
 	# now process the dependencies obtained from the above segment!
-	for INDEX in $(seq 1 $TOTAL); do								# while we have a dependency to process (via the TOTAL value set by addDependency())
-		eval DEPENDENCY="\$DEP${INDEX}"								#   set the dependency to process each iteration
-		( echo "$DEPENDENCY" | grep -q ^'+' ) && continue					#   if we're dealing with a dependency, then iterate
+	if [ "$INSTALL" ]; then
+		for INDEX in $(seq 1 $TOTAL); do						# while we have a dependency to process (via the TOTAL value set by addDependency())
+			eval DEPENDENCY="\$DEP${INDEX}"						#   set the dependency to process each iteration
+			( echo "$DEPENDENCY" | grep -q ^'+' ) && continue			#   if we're dealing with a dependency, then iterate
 
-		splitName "$DEPENDENCY"
+			splitName "$DEPENDENCY"
 
-		[ $DEBUG -gt 0 ] && eval echo -e "\tCalling:    ${FOLLOWUP}" >>"$LOG_DBUG"
-		eval $FOLLOWUP 2>&1 | tee -a "$LOG_ERRS"
-	done
+			[ $DEBUG -gt 0 ] && eval echo -e "\tCalling:    ${FOLLOWUP}" >>"$LOG_DBUG"
+			eval $FOLLOWUP 2>&1 | tee -a "$LOG_ERRS"
+		done
+	else
+		for DEPENDENCY in $(cat "${DIR_TEMP}/unload.${EXEID}"); do			# for each package remaining in the list for removal...
+			( echo "$DEPENDENCY" | grep -q ^'+' ) && continue			#   if we're dealing with a dependency, then iterate
+
+			splitName "$DEPENDENCY"
+
+			[ $DEBUG -gt 0 ] && eval echo -e "\tCalling:    ${FOLLOWUP}" >>"$LOG_DBUG"
+			eval $FOLLOWUP 2>&1 | tee -a "$LOG_ERRS"
+		done
+	fi
 fi
 
 

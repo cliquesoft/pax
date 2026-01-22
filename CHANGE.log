@@ -466,3 +466,10 @@
 - Added a FOLLOWUP variable to execute distro specific
 - Added the ability to retain the stack in deleteDependency()
 
+2026/01/22
+- Updated the follow-up code to correctly process with -u
+- Tested on both editions of TinyCore Linux
+- Updated installPackage() to test for MODE with -F
+- Updated the --help output
+- Added a 'warn' showMsg() value to remain inline
+
