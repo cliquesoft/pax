@@ -1,14 +1,14 @@
 name:		pax
-title:		A very robust and efficient package manager for Linux distros
-version:	2026.01.21.1
-git:		
-packaged:	2026.01.21
-released:	2026.01.21
+title:		A very robust and versatile package manager for Linux distros
+version:	2026.01.22.1
+git:		https://github.com/cliquesoft/pax/commit/8c709d554413293d28a7a0267641612576c470a3
+packaged:	2026.01.22
+released:	2026.01.22
 authors:	Cliquesoft
 homepage:	https://www.cliquesoft.org
 download:	https://www.cliquesoft.org/official/vanilla/1.0/pax
 filename:	stable.soft
-builder:
+builder:	
 category:	system
 interface:	cli
 license:	CPLv2
@@ -37,6 +37,7 @@ comments:	This is a more feature full and efficient package manager than
 		- A graphical interface
 		- Automated package checking/downloading/updating
 		- Ability to search online repos (including server-side)
+		- A centralized update server
 		- A network server to push/manipulate packages to/on clients
 		- Ability to process .deb (and other) package types
 		Feature requests can be sent to: service@cliquesoft.org

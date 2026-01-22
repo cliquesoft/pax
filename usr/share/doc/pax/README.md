@@ -8,9 +8,12 @@
 	larger set of TODO, the below is a priority short-list.
 
 		TODO
-		- implement package building using 'builder'
-		- enable database queries alongside filenames
+		- create a graphical user interface
+		- create an update server
+		- create an admin server for network clients using fifo's
 		- optional automated package update checks/downloads/installs
+		- enable package searches using databases or filenames
+		- implement package building using 'builder'
 
 	WARNING: currently this software is limited in use to only XiniX or
 	TinyCore (using a config file) Linux distros. We will expand beyond
@@ -44,15 +47,17 @@
 		o Copy or symlink package contents to filesystem
 		o Copying packages to another folder or (storage) device
 		o Extract package contents
-		o Find which package files d
+		o Find which package requested files belong to
 		o Create a software package, with optional compiling
 		o Create restore points allowing for restoration
 		o List installed packages
-		o List package dependency tree
+		o List package dependency trees
 		o Installation of version specific packages
 		o Unload installed packages
-		o Validate package data integrity and dependency tree
+		o Validate package data integrity and dependencies
 		o Can proxy actions from offline to online device
+		o Defined installation locations for packages
+		o Client control using fifo
 
 
 
