@@ -14,6 +14,8 @@
 		- optional automated package update checks/downloads/installs
 		- enable package searches using databases or filenames
 		- implement package building using 'builder'
+		- update the code to reduce reliance on coreutils
+		- update the code to rely on squashfs-tools ondemand
 
 	WARNING: currently this software is limited in use to only XiniX or
 	TinyCore (using a config file) Linux distros. We will expand beyond

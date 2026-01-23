@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/22 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/23 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -65,9 +65,9 @@ FLAG_COPY='copy_all.flag'									# the flag file indicating ALL packages need t
 FLAG_FIRM='copy_sys.flag'									# the flag file indicating ALL firmware packages (REPO_SYSTEM|LIST_BOOT) need to be copied instead of symlinked
 
 DIR_CONF='/etc/pax'										# directory containing any alternate/personalized configuration
-DIR_LIST='/var/cache/software/catalog'								# directory containing the total list of installed applications
-DIR_INIT='/var/cache/software/services'								# directory containing daemon/service scripts
-DIR_INST='/var/cache/software/scripts'								# directory containing other software scripts (taken from /etc/envars)
+DIR_LIST='/var/cache/software/catalog'		# VER2 - merge with DIR_INST			# directory containing the total list of installed applications
+DIR_INIT='/var/cache/software/services'		# VER2 - change to /etc/init.d (works inconjunction with DIR_LIVE)			# directory containing daemon/service scripts
+DIR_INST='/var/cache/software/scripts'		# VER2 - remove the '/scripts' dir		# directory containing other software scripts (taken from /etc/envars)
 DIR_LIVE='/Users/Public/.'									# directory to install by default after bootup	NOTE: this needs to end with a '/' or '.' (so that the packages files can be (un)installed from home directories)
 DIR_LOGS='/var/log'
 DIR_LOOP='/Mounts/.software'									# directory that symlinked software needs to use as mountpoint
@@ -1387,7 +1387,7 @@ unloadPackage() {
 	( [ ! "$DRYRUN" ] || ( [ "$DRYRUN" ] && [ "$MODE" = 'copy' ] ) ) && { sudo /bin/mount "${SOURCE}/${FILENAME}" "${DIR_LOOP}/${BASENAME}" -t squashfs -o loop,ro >>"$LOG_ERRS" 2>&1 || return 1; }	# now mount it for processing
 	if [ ! "$DRYRUN" ] && [ "$MODE" = 'copy' ]; then
 		for FILE in $(find "${DIR_LOOP}/${BASENAME}" ! -type d 2>>"$LOG_ERRS" | sed "s|^${DIR_LOOP}/${BASENAME}||"); do			# scan to make sure that no software in the package is being used
-			[ "$PACKAGE" = 'pax' ] && [ "$FILE" = '/bin/pax' ] && continue		# this allows the pax package to be updated (since the pax script would obviously be in use)
+			[ "$PACKAGE" = 'pax' ] && ( [ "$FILE" = '/bin/pax' ] || [ "$FILE" = '/usr/local/bin/pax' ] ) && continue		# this allows the pax package to be updated (since the pax script would obviously be in use)
 
 			fuser "$FILE" >>"$LOG_ERRS" 2>&1 && {					#   if one of the files in the package is currently in use, then exit this function
 				showMsg 'warn' " [active]" 'both' 0 0				#   https://liquidat.wordpress.com/2015/08/26/short-tip-show-processes-accessing-a-file-fuser-lsof/
@@ -1542,9 +1542,9 @@ uninstallPackage() {
 
 # LOAD VARIABLE PERSONALIZATION
 
-[ -e "${DIR_CONF}/config" ] && . "${DIR_CONF}/config"						# overwrite any of the variables set above by reading in a global config file
+[ -e "${DIR_CONF}/config" ] && . "${DIR_CONF}/config"												# overwrite any default variable values set at the top
 [ -e "${HOME}/.$(echo "${DIR_CONF}" | tail -c +2)/config" ] && . "${HOME}/.$(echo "${DIR_CONF}" | tail -c +2)/config"				# same using a personalized config file - using XSB
-[ -e "${HOME}/.${DIR_CONF##*/}/config" ] && . "${HOME}/.${DIR_CONF##*/}/config"			# same using a personalized config file - using LSB
+[ -e "${HOME}/.${DIR_CONF##*/}/config" ] && . "${HOME}/.${DIR_CONF##*/}/config"									# same using a personalized config file - using LSB
 
 
 
@@ -1578,7 +1578,10 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #	have a more concise listing too: Type|Name		Version
 	echo '	-l   list all currently installed packages'
 	echo '	-m   make a new package (requires DIRECTORY)'					# this makes a new .soft package tarball based on the passed directory; 	NOTE: you can just have the .make file call builder to do all the heavy lifting
+# VER2 - run as (n)etwork server: updates (for acting as a central package server for the network; every client needs to relay their packages here), manager (to manipulate software on network clients using fifo), both (performs both roles)
 #	echo '	-n   '
+# VER2 - allow these options: 'fifo' (current setup), 'ssh' (obtains a remote text file with command; secured with a key or un/pw), 'http' (obtains a remote text file with command; less secure [e.g. grandma needs help])		the latter two use -S for connection
+#	maybe move to -r(emote administration method)
 	echo '	-o   open a fifo for (remote) communication'					# this will allow remote administration; uses DIR_TEMP/input
 # VER2 - check for updates to installed packages (compare the version numbers in the local .list files vs ones dl'ed from repo server); use cron to do this regularly
 #	echo '	-p   process updates for installed packages'
@@ -1604,7 +1607,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #		delete: same as unlist, but deletes the package files from REPO_SOURCE, REPO_OPTION, REPO_SYSTEM, leaving /etc files
 #		purge : same as delete, but also removes /etc files
 	echo '	-u   uninstall package(s): update, unload, unlist, delete, purge'
-	echo "	-v   validate package(s) info: data, hash, deps, fix"				# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
+	echo '	-v   validate package(s) info: data, hash, deps, fix'				# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
 #	echo '	-w   '
 #	echo '	-x   '
 #	echo '	-y   '
@@ -1632,7 +1635,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-L   the list to adjust: none, boot, live'					# this only is useful when installing
 	echo '	-M   defines the package install mode: copy, link (default)'			# if the OS is run from RAM, then the 'copy' value will copy into RAM, if it is on a disk, then it copies to the disk
 	echo '	-N   do NOT install all files in the package, just those specified'		# allows users to install desired file(s) from a package so all the contents don't get installed (to keep the system as small as possible); keeps attack vector to a minimum
-# VER2 - implement the 'html' values
+# VER2 - implement the 'html' and 'json' values
 	echo '	-O   display output format: fifo, text, xml, xmLive'
 	echo '	-P   prompt before taking action'
 # VER2 - 'default' just shows the final action (without the header), verbose shows the current 'default', 'none' shows everything - duplicates, etc	-OR- add a 'brief' value to just show the final action
@@ -1645,6 +1648,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-V   the specific version of a package to install'
 #	echo '	-W'
 # VER2 - proxy other actions via ssh so that administrators can push software to clients, or reinstall/delete software that's currently installed
+#	enable the scripts to be ssh'ed to Internet connected devices?
 	echo '	-X   obtain packages via proxy using another device'				# Can be used when one location has little or no Internet access. For example, @home has bad internet connection, but work is good, can dl @work for @home.
 	echo '	-Y   performs a dry run of the action'
 	echo '	-Z   add color to the output'
@@ -1706,12 +1710,13 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "	When using the '-V' OPTION, you can only list one package at a time."
 	echo
 	echo "	The PACKAGE(S) value can be:"
+	echo "	     - a space separated list of package names"
 	echo "	     - a file containing a list (one package per line)"
-	echo "	     - directory containing the package(s)"
-	echo "	     - or a space separated list of package names"
+	echo "	     - or directory containing the package(s)"
 	echo "	The DIRECTORY as the last parameter must be:"
 	echo "	     - a full path: /tmp/pax/"
 	echo "	     - or a relative path: ./pax"
+	echo "	       containing a slash: dir/pax"
 	echo "	       with a trailing slash: pax/"
 	echo
 	echo "	The presence of a REPO_PREFIX/${FLAG_COPY} file will indicate that"
@@ -2266,6 +2271,7 @@ if ( [ "$DOWNLOAD" ] || [ "$INSTALL" ] ) && ( [ "$DIRECTORY" = '/' ] || ( [ ! "$
 	touch "${REPO_SYSTEM}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) is not writable." 'screen'; exit 1; }
 	rm "${REPO_SYSTEM}/writable" >/dev/null 2>&1
 
+# VER2 - replace the below 'stat' calls with something else to reduce the dependency on coreutils
 	[ "$(stat -c %a "$REPO_SYSTEM" 2>/dev/null)" != "$PRM_SYSTEM" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid permissions." 'screen'; exit 1; }
 	[ "$(stat -c %U "$REPO_SYSTEM" 2>/dev/null)" != "${OWN_SYSTEM%:*}" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid owner ownership." 'screen'; exit 1; }
 	[ "$(stat -c %G "$REPO_SYSTEM" 2>/dev/null)" != "${OWN_SYSTEM#*:}" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid group ownership." 'screen'; exit 1; }
@@ -2445,6 +2451,7 @@ for PARAMETER in $@; do
 		TEMP="${TEMP}${PARAMETER}|"							#   adding to the regex statement
 		continue
 	elif [ "$MAKE" ]; then									# if we are creating a package for distribution, then...
+# VER2 - update this section to use builder so we can remove the squashfs-tools dependency; this can simply check 'which builder' and call it if present, exit otherwise; worst case, we install squashfs-tools ondemand if this action is executed
 		if [ -e "./${BASENAME}.${EXT_MAKE}" ] && [ -x "./${BASENAME}.${EXT_MAKE}" ]; then						# if a compile script exists (and is executable), then lets run that first!
 			showMsg 'action' "Compiling the '${PACKAGE}' package..." 'both' 1 4							# NOTE: so that the compile script can output if desired
 			./${BASENAME}.${EXT_MAKE} >${BASENAME}.${EXT_MAKE}.log 2>&1 || exitGracefully 4 'both' 6 'action'

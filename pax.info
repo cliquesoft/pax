@@ -40,6 +40,8 @@ comments:	This is a more feature full and efficient package manager than
 		- A centralized update server
 		- A network server to push/manipulate packages to/on clients
 		- Ability to process .deb (and other) package types
+		- Update the code to reduce reliance on coreutils
+		- Update the code to rely on squashfs-tools ondemand
 		Feature requests can be sent to: service@cliquesoft.org
 		  [OTHER PROJECTS]
 		Feel free to check out some of our other projects. If they are

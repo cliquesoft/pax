@@ -1,0 +1,578 @@
+.\"Man page for pax, by Dave Henderson.
+.TH pax 1 "2026 January 22"
+.SH NAME
+\fIpax\fR - package manager
+
+
+.SH SYNOPSIS
+.B pax [OPTIONS] ACTION {PACKAGE(S)|FILELIST} [DIRECTORY]
+
+ACTIONS:
+  -c   copy local packages to another directory
+  -d   download package(s) only
+  -e   extract local package(s) contents
+  -f   find which local package(s) a file belongs to
+  -i   install package(s)
+  -l   list all currently installed packages
+  -m   make a new package (requires DIRECTORY)					# this makes a new .soft package tarball based on the passed directory; 	NOTE: you can just have the .make file call builder to do all the heavy lifting
+  -o   open a fifo for (remote) communication					# this will allow remote administration; uses DIR_TEMP/input
+  -t   show the dependency trees of package(s): relies, reliant
+# DEV NOTE: you must be in the directory that contains the updates when doing '-u update' so that the -S and DIRECTORY values will still work; -S for where the existing installed package file is (in case it is not in REPO_OPTION); pwd is used to install from
+#		update: uninstalls the existing package (creating a restore point unless told not to)
+#		unload: unloads the application (and all possible dependencies) from the file system, leaving the package in the optional.list file
+#		unlist: does the same as 'unload' but also removes the packages from optional.list
+#		delete: same as unlist, but deletes the package files from REPO_SOURCE, REPO_OPTION, REPO_SYSTEM, leaving /etc files
+#		purge : same as delete, but also removes /etc files
+  -u   uninstall package(s): update, unload, unlist, delete, purge
+  -v   validate package(s) info: data, hash, deps, fix				# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
+  -z   populates DIR_LIST with package files'
+
+  --help      shows this screen
+  --install   installs pax as the default package manager
+  --uninstall uninstalls pax as the default package manager
+  --version   displays the software version
+
+OPTIONS:
+  -B   indicates we are currently booting the system				# use this to indicate everything gets installed to root (PREFIX=/) and obtain files from REPO_SYSTEM
+  -C   specifies an alternative CPU architecture: i32, i64, r32, r64		# this allows for alternative CPU software downloads		r01 (raspi 0 and 1), r23 (raspi 2 and 3)
+# DEV NOTE: a 'source' value indicates that all dependencies need to come from a single source location (specified by -S or the default action location); this will prevent the ability to use 'all'; 'none' would only take from the specified location anyways, and 'default' grabs from wherever the package can be found
+  -D   dependency handling: none, default, all, source
+  -E   include extra package files: all, code, cpio, info, list, make		# not installed by default to keep size down
+  -F   force the ACTION to take place						# NOTE: this ignores the package installed status on the existing system so if we need to download packages to another device (e.g. installing XiniX to other media) we can do so
+  -I   list of dependencies to ignore						# for example, web.de can be listed for theme uninstalls
+  -K   specifies an alternative kernel name (4.1.6_xinix)			# this allows for alternative kernel software downloads
+  -L   the list to adjust: none, boot, live					# this only is useful when installing
+  -M   defines the package install mode: copy, link (default)			# if the OS is run from RAM, then the 'copy' value will copy into RAM, if it is on a disk, then it copies to the disk
+  -N   do NOT install all files in the package, just those specified		# allows users to install desired file(s) from a package so all the contents don't get installed (to keep the system as small as possible); keeps attack vector to a minimum
+  -O   display output format: fifo, text, xml, xmLive
+  -P   prompt before taking action
+  -Q   quiets the output: all, errors, default, verbose, none
+  -R   the action applies to restore points
+  -S   changes the source directory/repo to obtain software from			# mainly used when creating installation media to pull the files from an existing BOOT instead of an online repo
+  -T   specifies the package type: bin, dev, doc, drv, gir, lib, loc
+# DEV NOTE: can use -S and DIRECTORY to validate files on a separate hard drive (e.g. diagnostics using one computer for another computers' hard drive via USB)
+  -V   the specific version of a package to install
+  -X   obtain packages via proxy using another device				# Can be used when one location has little or no Internet access. For example, @home has bad internet connection, but work is good, can dl @work for @home.
+  -Y   performs a dry run of the action
+  -Z   add color to the output
+
+
+.SH TOC
+1.  DESCRIPTION
+2.  CONFIG
+3.  PARAMETERS
+4.  ACTIONS
+5.  OPTIONS
+6.  SOCKET
+7.  BUGS
+8.  ACKNOWLEDGEMENTS
+9.  COPYRIGHT
+10. AUTHORS
+
+
+
+.SH DESCRIPTION
+.I pax
+is a lightweight, robust, and versatile package manager for Linux distros.
+While not quite as feature rich as the apt/dpkg Debian system, pax also is
+a fraction of its size (almost a 10th at 200kb)! The development of this
+project will continue so that all commonly used functions will eventually
+be incorporated, along with several that are unique. There are also plans
+to have this package manager work with non-native package formats such as
+.deb and .rpm, allowing users and admins another (standardized) option in
+their network of devices.
+
+Currently this project can perform a variety of operations including:
+  o Copying packages (and dependencies) from one location to another
+  o Extracting packages (and dependencies) to a specified location
+  o Downloading packages (and dependencies) to a specified location
+  o Finding local packages that one or more files belong to
+  o (Un)installing packages (and dependencies)
+  o (Un)installing different versions of packages
+  o List installed packages
+  o Make and package software for distribution
+  o Open a fifo for network client operation
+  o Display dependency trees for packages
+  o Validate and repair installed software
+  o Output can be displayed in various formats
+  o Proxy several actions from an offline to an online device
+
+Common outstanding features include:
+  o Ability to search online repos
+  o Automated package checking/downloading/updating
+  o A graphical user interface
+
+Unique outstanding features include:
+  o Ability to process .deb (and other) package types
+  o Expand output to include an 'html' and 'json' option
+  o More proxy actions
+  o A centralized update server
+  o A network server to manipulate packages on clients
+
+
+.SH CONFIG
+There are a variety of values that can be modified so that pax can work
+with any Linux distro. This ranges from package storage locations and
+operational directories, to package extensions and schemas. Each value
+will be covered below, but first lets discuss config file placements.
+There are three locations that pax searches for its configuration. The
+first is the system-wide settings found in /etc/pax/config. The second
+and third locations are for personal configurations and are found in
+~/.etc/pax/config (XSB) and ~/.pax/config (LSB). The search order is
+completed by the passed values during execution, each instance taking
+precedence over its predecessor.
+
+To summarize:
+  o The search order: /etc/pax, ~/.[etc/]pax, passed values
+
+We will now cover each variable available for adjustment in the config
+file.
+
+.I Local Repo Values
+
+.B REPO_PREFIX
+This directory contains the file lists (LIST_BOOT and LIST_LIVE) as well
+as the directories containing your downloaded software packages. So just
+as the name suggests, its the prefix to your local repo.
+
+.B REPO_OPTION
+A sub-directory of REPO_PREFIX, this directory stores all the optional
+software that is added to a basic operating system.
+
+.B REPO_SYSTEM
+Like the previous variable, this one also stores additional software.
+However, this directory would contain packages to expand a default OS.
+For example, XiniX VE stores all the X11 packages in here to load during
+the device bootup. This can also contain packages like NTFS so that
+filesystems of that type are available for usage. Basically any software
+that the base operating system would need, should be added here. Also of
+note, this is the default directory processed when the -B switch is
+passed.
+
+.B REPO_RESTOR
+Specific to pax, this package manager creates restore points when a user
+uninstalls software by issuing a '-u delete', '-u purge', or '-u update'
+switch.
+
+.I Directory Values
+
+.B DIR_INIT
+This directory contains the daemon service scripts.
+
+.B DIR_INST
+This directory contains the package installation scripts.
+
+.B DIR_LIST
+This directory contains the additional package files for installed
+software.
+
+.B DIR_LIVE
+Once a device has booted, this is the default directory where packages
+get installed. On most distro's this will simply be root (/). However,
+XiniX defaults to the /Users/Public directory (which is similar to the
+/usr tree in LSB). An interesting feature of this variable allows its
+value to end with a dot (.) that will replace the initial slash of
+the packaged files. So, for example, if a package contains a file in
+the /etc directory, it would then become /Users/Public/.etc in the
+XiniX OS (or any other using that notation).
+
+.B DIR_LOGS
+This directory contains the softwares logs.
+
+.B DIR_LOOP
+This directory contains the mount points for symlinked packages.
+
+.B DIR_TEMP
+This directory contains temp files used by the software.
+
+.I Package Extensions
+
+.B EXT_CORE
+[text file] Used to mark a package as part of the base OS
+
+.B EXT_CODE
+[tgz file] The file extension used for a packages' source code
+
+.B EXT_DEPS
+[text file] The file extension used for the package dependency list
+
+.B EXT_HASH
+[text file] The file extension used for the package validation hash
+
+.B EXT_INFO
+[text file] The file extension used for the package details info
+
+.B EXT_LIST
+[text file] The file extension used for the package manifest info
+
+.B EXT_MAKE
+[text file] The file extension used for the package make commands
+
+.B EXT_SOFT
+[mksquashfs file] The file extension of the actual packaged software
+
+.I Log Files
+
+.B LOG_DBUG
+The log file for debug output
+
+.B LOG_ERRS
+The log file for (error) output
+
+.I Ownership and Permissions
+
+.B OWN_GROUP
+The default group that all users are members of
+
+.B OWN_SYSTEM
+The full ownership (user and group) of REPO_SYSTEM directory
+
+.B PRM_SYSTEM
+The permissions that the REPO_SYSTEM directory must have (for security)
+
+.I Ownership and Permissions
+
+.B FIFO_SERVER
+The default name for the -o action fifo
+
+.B ARCH_VALUES
+The valid values for the -C option
+
+.I Schema Values
+
+.B ARCH_SCHEMA
+The command executed to determine which CPU architecture the device falls
+under, and relates to one of the values in ARCH_VALUES. This should be
+encapsulated with double quotes (").
+
+.B FILE_SCHEMA
+This is the schema for the package filenames and should be encapsulated in
+single quotes ('). This value can contain any of the following variables:
+  ${PACKAGE} - the package name
+  ${ARCH}    - the devices' CPU architecture
+  ${TYPE}    - package type
+  ${VERSION} - any included package version
+
+.B KRNL_SCHEMA
+The currently used kernel string that gets appended to Linux kernel driver
+packages. Typically this is just "$(uname -r)".
+
+.B REPO_SCHEMA
+This is the URL for the distro's online repo. Like FILE_SCHEMA is should
+be enclosed with single quotes (') and can also use any of the variables
+listed.
+
+.B VERS_SCHEMA='${PACKAGE}'		# specific version source package name
+.B VERT_SCHEMA='${PACKAGE}_${VERSION}'	# specific version local package name
+					# NOTES:
+					# - enclose value in single quotes!!!
+					# - enclose variables in {} characters
+					# - ${PACKAGE} is package name
+
+
+.SH PARAMETERS
+To maintain consistency, there are several parameters to note. The first
+that we'll cover is PACKAGE(S). Normally this value will consist of a
+space separated list of package names. However, a text file containing
+one package per line can also be used as an alternative. This can come
+in handy if automating any process by moving a variable list of packages
+into a text file while calling a uniformed pax command.
+
+The final value that can be used is a directory itself, and will process
+all contained packages. The downside to this is that the DIRECTORY value
+can no longer be used. An alternative to this method while retaining the
+ability to use the DIRECTORY value, is to use -S for the source location.
+
+To summarize, the PACKAGE(S) value can be:
+  o A space separated list of package names
+  o A file containing a list (one package per line)
+  o Or directory containing the package(s)
+
+The last parameter pax can accept is DIRECTORY. Typically it operates as
+the target location for the passed action (with the exception outlined
+above), and is optional. To provide flexibility for the user, there are
+several different syntaxes that are permitted. Both full and relative
+paths are permissible, but the value must contain a forward slash (/) to
+indicate it's a directory instead of a package name. This will not be a
+problem with full paths as they obviously start with one. Relative paths
+can either begin with a './', end with a '/', or contain a slash within
+the value (e.g. 'some/dir').
+
+To summarize, the DIRECTORY value can be:"
+  o A full path: /tmp/pax/
+  o Or a relative path: ./pax
+    Containing a slash: dir/pax
+    With a trailing slash: pax/
+
+
+.SH SWITCHES
+As a way to provide additional functionality, fxWM can also accept
+several command line switches. An expanded description of each will
+be covered below. It is important to note that in addition to these
+switches, there are several additional parameters that can be modified
+by editing the config.h file in the source code and recompiling,
+although most users would not be interested in having those values
+changed.
+
+Mandatory switches
+
+.B -S[upervisor]
+Since fxWM does not include any means for starting any programs (e.g.
+from a menu or taskbar), this switch is mandatory and will load the
+desired software that will enable this functionality. All the other
+switches are optional.
+NOTE: this app can not be closed with hotkeys or an 'X' titlebar icon.
+
+Supervisor switches
+
+.B -C[ursor] #
+There may be times when a specific cursor should be used when the
+supervisor has focus. Using this switch will enable that functionality
+by simply passing a numeric value for the desired cursor.
+
+.B -BG
+If you would like to make sure that the supervisor always remains in
+the background (unless manipulated via a socket or window manager
+controller such as wmctrl), then pass this switch.
+
+.B -FG
+Similar to the background switch above, this performs the same action
+but will keep the supervisor in the foreground instead.
+
+.B -E[xecute]
+In some instances, the supervisor might require some other software to
+load before it will work (e.g. webserver and web.ui).  It is important
+to remember that this call is NOT backgrounded due to fxWM checking if
+the call has success or failure.  Typically this value would be for a
+wrapper script that calls the actual binary in the background and then
+verifies things to make sure everything is working accordingly before
+returning success or failure.
+
+.B -F[ullscreen]
+This causes the supervisor to run in fullscreen mode (without a
+titlebar), so it will consume the entire screen, or whatever has
+been specified as the screen size via the -g switch.
+
+.B -M[aximized]
+Just like the -F switch, this causes the supervisor to fill the
+entire screen, but will give the supervisor a titlebar with only
+a minimize button.
+
+Operational switches
+
+.B -h[elp]
+Shows the help screen and exits the program.
+
+.B -V[ersion]
+Shows the version number and exists the program.
+
+.B -d[isplay] host:#.#
+Sets the X display and screen for fxWM to manage. Since X11 is based
+on a client/server model, this option can work with local or remote
+displays. Examples include:
+   -d 0:0.0 (default)
+   -d 0:1.0 (first additional display locally)
+   -d localhost:0.0 (another default)
+   -d 192.168.0.10:0.0 (first display for the device @ 192.168.0.10)
+
+.B -v[isual] #
+Visual number to use (probably only works for non-color-mapped ones)
+
+.B -g[eometry] WxH+X+Y
+When this option has been passed, fxWM will act as though the screen
+is only as large as the values specified by 'W' and 'H' (in pixels),
+and will constrain windows within this area. The 'X' and 'Y' values
+correspond to the offset from the upper left-hand corner of the screen
+designating the top and left boundries where the it begins. Using the
+-l or -o switches, you can further restrict the size and placement of
+application windows within the geometry specified. Starting fxWM
+without this switch will cause it to use the entire screen.
+
+.B -l[imit] WxH
+This switch takes a width and height value (in pixels) and is used as
+a way to limit the area of the screen that application windows can use,
+even when they are maximized. Unlike the -o switch, this area of the
+screen will be centered which makes it useful if the supervisor needs
+to have fixed "toolbars" exposed that will never be covered by windows.
+This would typically be used when the resolution is known and will not
+be adjusted without modifying this value was well (e.g. in a device with
+an embedded display). Without specifying this switch (or -o), the entire
+size of the screen will be used. Also remember that this switch can NOT
+be used in conjunction with -o!
+
+.B -o[ffset] T:R:B:L
+Similar to -l[imit], this switch also limits the size of maximized
+application windows, but instead of setting the dimensions, the full
+screen resolution is used with the offset being reduced from the
+specified edge(s). This is useful when the resolution of the display is
+unknown or could change at any time and also if the supervisor program
+needs any fixed "toolbars" exposed on one or more sides. A '0' value for
+any side will prevent adjustment for that edge. This can NOT be used
+in conjunction with the -l switch!
+
+.B -c[onfine]
+If the -l or -o switches have been passed, you can use this value in
+conjunction so that windows can not be dragged outside the bounds set by
+either of those values.
+
+.B -f[ullscreen]
+Unlike all the other switches, this one does not take a complementary
+value and specifies that all application windows will operate in
+fullscreen mode (no titlebar). This is helpful when fxWM is used as the
+window manager on smaller devices such as smart phones and tablets that
+do not allow windows to be dragged around the screen.
+
+.B -m[aximized]
+As the name suggests, this switch will force each application window to
+run in a maximized state. The difference between this switch and -f is
+that each application window will contain a titlebar.
+
+.B -i[con] DIR
+When the user presses the Alt+Tab buttons, a window will popup showing
+all the running applications. Using this switch, you can let fxWM know
+the directory that should be used to locate the appropriate application
+icon. By default, a sub-directory with the requested icon size (rounded
+up) is checked and if no matching icon is found, it will check in the
+root of the DIR directory for a match. In the absense of that icon, a
+generic icon will be used in its place. So, for example, if the icon
+size was specified as 90px, then the window manager will check for a
+"128x128/?.png" graphic (since 128x128 is the closest, rounded up size)
+and then for a "./?.png" file. If neither exist, then a generic icon
+will be used as a last resort.
+
+.B -s[ocket] FILE
+By default, a socket file to manipulate this window manager is created
+and found at /tmp/.fxwm-control. If you would like to use a different
+path and filename, you can use this switch to specify that information.
+
+.B -p[ipe] FILE
+Similar to the socket file mentioned above, this fifo enables you to
+monitor the window manager for events that get triggered by the user
+so that the system can optionally perform certain desired tasks. Using
+this switch, you can control the location and name of the file which
+is /tmp/.fxwm-monitor by default.
+
+
+.SH SOCKET
+
+This window manager does allow interaction through the use of sockets
+and will allow you manipulate various aspects of the environment using
+software like socat or netcat. We will cover all the available actions
+below but wanted to demonstrate two examples:
+	echo 'list' | ncat -U /tmp/.fxwm-control
+	echo 'activate 0x80024c' | socat - /tmp/.fxwm-control
+
+Single Actions
+
+.B list
+Passing this action will provide a list of all the software currently
+opened in the graphical environment and will be in the following format
+that is separated by tabs:
+
+<Window ID>[<Active>] <Desktop ID> <Host> <Binary> <Window Title>
+
+It is important to note that the active window will have an asterisk
+character (*) following its <Window ID>.
+
+.B activate <Window ID>
+To bring a desired window into the foreground with focus, pass this
+action through the current socket file.
+
+.B close <Window ID>
+As the name suggests, this will close the window associated with the
+passed ID.
+
+.B resize <Window ID> WxH
+Resize any window with this command while passing the new width and
+height desired.
+
+.B move <Window ID> 0+0
+This action will allow you to move a window around the screen via the
+X and Y coordinates passed.
+
+.B BG <Window ID>
+Issuing this command will keep the specified window in the background.
+
+.B FG <Window ID>
+This action works just like the 'BG' command, but will foreground.
+
+.B chrome
+To update chrome adjustments without having to restart fxWM, simply
+issue this command to the socket.
+
+.B disable
+Used to disable all window manager functionality (e.g. screen locking).
+
+.B enable
+Re-enables all the window manager functionality from a 'disable' call.
+
+.B alert "Closable|Icon Path|App Name|Alert Title|Alert Message|Command"
+Sends a popup notification to the user so they can be informed of events
+or to quickly perform some type of pre-defined action. It is important
+to note that you can pass null values to prevent usage or to use default
+values. Also, valid 'closable' values are: 0 or false, 1 or true.
+
+Multi-Actions
+
+.B get/set offset [<0:0:0:0>]
+Allows you to get or set the global window offset.
+
+.B get/set limit [<WxH>]
+To limit the screen area available for windows, issue this action.
+
+.B get/set confine [<0,1>]
+Used to get or set the confine parameter.
+
+.B get/set <Window ID> title [<String>]
+To get or set a windows title, use this action. If you are setting the
+title, you will need to pass the last value shown above.
+
+.B get/set <Window ID> icon [<Path+Filename>]
+Gets or sets the titlebar icon of the desired window.
+
+.B get/set <Window ID> titlebar [<Path+Filename> <String>]
+You can get or set both of the afore mentioned actions in a single
+attempt with this command.
+
+.B get/set <Window ID> state [<String>]
+State changes are accomplished using this command. Possible values are
+minimized, maximized, unmaximized, and fullscreen.
+
+
+.SH BUGS
+
+There are no known bugs as of January 2026.
+
+Please visit our website for the latest list of opened bug reports for
+this software project - http://www.cliquesoft.org.
+
+
+.SH ACKNOWLEDGEMENTS
+
+This program is based on the various package managers currently in use
+for the many Linux distros available today. We use them as a guide to
+incorporate new features to expand the project.
+
+
+.SH COPYRIGHT
+
+Copyright (C) 2016-2026 Cliquesoft
+
+Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
+device, this software is licensed under the Cliquesoft Public License (CPLv2)
+as found on the Cliquesoft website at www.cliquesoft.org.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the appropriate Cliquesoft License for details.
+
+You should have received a copy of the Cliquesoft Public License v2 with the
+software itself; if not, please visit our website for the complete document:
+
+   https://www.cliquesoft.org
+
+
+.SH AUTHORS
+
+Dave Henderson
+

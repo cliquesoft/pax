@@ -22,7 +22,7 @@ ln -sf tc-install.sh install
 ln -sf tc-uninstall.sh uninstall
 ln -sf tc.conf config
 cd - >/dev/null
-mksquashfs "./" "../pax.tcz" >>"$LOG" 2>&1 || exit 1
+mksquashfs "./" "../pax.tcz" -b 4096 >>"$LOG" 2>&1 || exit 1
 cd ..
 md5sum "${PROJECT}.${EXT_SOFT}" >"${PROJECT}.${EXT_HASH}" 2>>"$LOG" || exit 1
 cd - >/dev/null

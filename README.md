@@ -1,1 +1,1 @@
-usr/share/doc/pax/README.md
+usr/local/share/doc/pax/README.md

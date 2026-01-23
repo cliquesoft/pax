@@ -473,3 +473,8 @@
 - Updated the --help output
 - Added a 'warn' showMsg() value to remain inline
 
+2026/01/23
+- Started creating the man page
+- Updated the unloadPackage() to also check /usr/local/bin/pax
+- Updated the --help output
+
