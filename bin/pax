@@ -1577,12 +1577,12 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 # VER2 - ability to show packages that are downloaded, but not installed (e.g. -l -Q none > *package_name [* indicating is downloaded but not installed]); also '-l -Q default' just lists: package, version; '-l -Q verbose' lists the current way with all the package info
 #	have a more concise listing too: Type|Name		Version
 	echo '	-l   list all currently installed packages'
-	echo '	-m   make a new package (requires DIRECTORY)'					# this makes a new .soft package tarball based on the passed directory; 	NOTE: you can just have the .make file call builder to do all the heavy lifting
+	echo '	-m   make a new package (requires DIRECTORY)'
 # VER2 - run as (n)etwork server: updates (for acting as a central package server for the network; every client needs to relay their packages here), manager (to manipulate software on network clients using fifo), both (performs both roles)
 #	echo '	-n   '
 # VER2 - allow these options: 'fifo' (current setup), 'ssh' (obtains a remote text file with command; secured with a key or un/pw), 'http' (obtains a remote text file with command; less secure [e.g. grandma needs help])		the latter two use -S for connection
 #	maybe move to -r(emote administration method)
-	echo '	-o   open a fifo for (remote) communication'					# this will allow remote administration; uses DIR_TEMP/input
+	echo '	-o   open a fifo for (remote) communication'
 # VER2 - check for updates to installed packages (compare the version numbers in the local .list files vs ones dl'ed from repo server); use cron to do this regularly
 #	echo '	-p   process updates for installed packages'
 #			check		one-time check for updates and notifies
@@ -2452,6 +2452,7 @@ for PARAMETER in $@; do
 		continue
 	elif [ "$MAKE" ]; then									# if we are creating a package for distribution, then...
 # VER2 - update this section to use builder so we can remove the squashfs-tools dependency; this can simply check 'which builder' and call it if present, exit otherwise; worst case, we install squashfs-tools ondemand if this action is executed
+#	calls builder if a .bldr file is present
 		if [ -e "./${BASENAME}.${EXT_MAKE}" ] && [ -x "./${BASENAME}.${EXT_MAKE}" ]; then						# if a compile script exists (and is executable), then lets run that first!
 			showMsg 'action' "Compiling the '${PACKAGE}' package..." 'both' 1 4							# NOTE: so that the compile script can output if desired
 			./${BASENAME}.${EXT_MAKE} >${BASENAME}.${EXT_MAKE}.log 2>&1 || exitGracefully 4 'both' 6 'action'

@@ -478,3 +478,11 @@
 - Updated the unloadPackage() to also check /usr/local/bin/pax
 - Updated the --help output
 
+2026/01/26
+- Continued creating the man page
+
+2026/01/27
+- Continued creating the man page
+- Removed some comments from within pax now that the man page is being created
+- Updated the .info file with new values
+

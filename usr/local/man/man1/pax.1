@@ -4,6 +4,8 @@
 \fIpax\fR - package manager
 
 
+
+
 .SH SYNOPSIS
 .B pax [OPTIONS] ACTION {PACKAGE(S)|FILELIST} [DIRECTORY]
 
@@ -57,17 +59,20 @@ OPTIONS:
   -Z   add color to the output
 
 
+
+
 .SH TOC
 1.  DESCRIPTION
 2.  CONFIG
 3.  PARAMETERS
 4.  ACTIONS
 5.  OPTIONS
-6.  SOCKET
+6.  SOCKET			examples?
 7.  BUGS
 8.  ACKNOWLEDGEMENTS
 9.  COPYRIGHT
 10. AUTHORS
+
 
 
 
@@ -108,6 +113,8 @@ Unique outstanding features include:
   o More proxy actions
   o A centralized update server
   o A network server to manipulate packages on clients
+
+
 
 
 .SH CONFIG
@@ -230,7 +237,7 @@ The full ownership (user and group) of REPO_SYSTEM directory
 .B PRM_SYSTEM
 The permissions that the REPO_SYSTEM directory must have (for security)
 
-.I Ownership and Permissions
+.I Value Definitions
 
 .B FIFO_SERVER
 The default name for the -o action fifo
@@ -240,34 +247,118 @@ The valid values for the -C option
 
 .I Schema Values
 
+Since schema's are used as templates, these values can incorporate the
+use of several variables. When using these variables, be sure to use
+them in the fashion they are shown below. With the exception of the
+ARCH_SCHEMA and KRNL_SCHEMA values, all the others should be enclosed
+with single quotes (') as they are interprited at specific times instead
+of once during the initial execution of the script. The variables are:
+  ${PACKAGE} - the package name
+  ${ARCH}    - the devices' CPU architecture
+  ${TYPE}    - package type
+  ${VERSION} - any included package version
+
 .B ARCH_SCHEMA
 The command executed to determine which CPU architecture the device falls
 under, and relates to one of the values in ARCH_VALUES. This should be
 encapsulated with double quotes (").
 
 .B FILE_SCHEMA
-This is the schema for the package filenames and should be encapsulated in
-single quotes ('). This value can contain any of the following variables:
-  ${PACKAGE} - the package name
-  ${ARCH}    - the devices' CPU architecture
-  ${TYPE}    - package type
-  ${VERSION} - any included package version
+This is the schema for the local package filenames and should be enclosed
+in single quotes ('). This value should NOT include a file extension!
 
 .B KRNL_SCHEMA
 The currently used kernel string that gets appended to Linux kernel driver
 packages. Typically this is just "$(uname -r)".
 
 .B REPO_SCHEMA
-This is the URL for the distro's online repo. Like FILE_SCHEMA is should
-be enclosed with single quotes (') and can also use any of the variables
-listed.
+This is the URL for the distro's online repo, and should be within single
+quotes ('). This value should include the 'http' prefix!
 
-.B VERS_SCHEMA='${PACKAGE}'		# specific version source package name
-.B VERT_SCHEMA='${PACKAGE}_${VERSION}'	# specific version local package name
-					# NOTES:
-					# - enclose value in single quotes!!!
-					# - enclose variables in {} characters
-					# - ${PACKAGE} is package name
+.B VERS_SCHEMA
+This variable indicates the package naming convention within the online
+source repo, using the schema variables to provide the most flexibility
+for the distro. For example, if the distro wants to place all associated
+files in a single package directory, they can utilize multiple variables
+to do so. Contrarily, if the distro wants to separate the various packages
+by different URL's, then they can do so as well by using the REPO_SCHEMA
+variable. Of course, both values can be simultaneously used for even
+greater flexibility. This value should be enclosed with single quotes (')
+and WITHOUT a file extension!
+
+.B VERT_SCHEMA
+Working alongside VERS_SCHEMA, this variable indicates the target filename
+that should be used locally. The '${VERSION}' schema variable usually is
+part of this value, but is not mandatory. This value should NOT include a
+file extension!
+
+.I Lists and Flags
+
+There are two package lists and four flag files that define which packages
+are loaded at the different stages of device operation. The lists should
+be considered which packages are desired, whereas the flag files designate
+which packages are forbidden - even if they are dependencies of packages
+in the list files! Each of these variables should have their values
+encapsulated in single quotes (') as they are interprited ondemand.
+
+These variables also have access to a shell function called 'getBootcode'
+that allows the value to change depending on the passage of a value from
+the boot loader such as grub or syslinux. This way a user can define an
+alternative value to use, or the distro default otherwise. An example of
+a value could be:
+  '$( V=$(getBootcode code); [ "$V" ] && echo $V || echo default )'
+
+.B LIST_BOOT
+This list defines which packages are loaded during the device bootup. A
+unique feature of pax is that the package loading can be split into two
+phases to speed up this process. Packages contained within this list
+get loaded in the foreground, causing the bootup to wait until all have
+been loaded before continuing. For this reason, kernel drivers and other
+necessary packages should be placed here. User applications like an email
+and an office suite should be placed in LIST_LIVE.
+To enable this dual-phase process, this file must exist, even if it is
+blank. Its absense will indicate that all packages need to be processed
+in the traditional way, with a longer bootup.
+
+.B LIST_LIVE
+A value for this list is mandatory. Unlike LIST_BOOT, this file must
+exist as it is used to load packages whether the dual-stage booting is
+enabled or not. In fact, to manually switch to a single-stage bootup,
+simply move the packages from LIST_BOOT into this list and erase the
+other file. And unless an alternate list is specified with the -L
+switch, this one is used to know which packages need to be loaded by
+default versus which ones should be reserved for ondemand loading.
+
+.B FLAG_BOOT
+The complement flag file to LIST_BOOT that contains packages that should
+not be loaded during bootup. The list can even contain dependency files.
+In essence, this is a blacklist to LIST_BOOT.
+
+.B FLAG_LIVE
+The complement flag file to LIST_LIVE that contains packages that should
+skipped during the processing of automatically loaded software. This is a
+blacklist to LIST_LIVE.
+
+.B FLAG_COPY
+Unlike the prior two flag files, the mere presence of this file is the
+only requirement to indicate that ALL packages need to be copied instead
+of symlinked. This can be overwritten by passing the '-M link' switch when
+calling pax though.
+
+.B FLAG_FIRM
+Also indicating that packages need to be copied instead of symlinked, but
+this flag only pertains to the base OS packages found in REPO_SYSTEM and
+LIST_BOOT.
+
+.I Miscellaneous Definitions
+
+.B FOLLOWUP
+This variable includes any unique command for the distro that needs to be
+called after all packages are loaded. If the value contains the variable
+${PACKAGE}, then it will be called once for every package passed into pax.
+In its absence, the command will be called once.
+
+
 
 
 .SH PARAMETERS
@@ -305,25 +396,126 @@ To summarize, the DIRECTORY value can be:"
     With a trailing slash: pax/
 
 
-.SH SWITCHES
-As a way to provide additional functionality, fxWM can also accept
-several command line switches. An expanded description of each will
-be covered below. It is important to note that in addition to these
-switches, there are several additional parameters that can be modified
-by editing the config.h file in the source code and recompiling,
-although most users would not be interested in having those values
-changed.
 
-Mandatory switches
 
-.B -S[upervisor]
-Since fxWM does not include any means for starting any programs (e.g.
-from a menu or taskbar), this switch is mandatory and will load the
-desired software that will enable this functionality. All the other
-switches are optional.
-NOTE: this app can not be closed with hotkeys or an 'X' titlebar icon.
+.SH ACTIONS
+As with virtually all software, switches can be passed to modify its
+operation. The below section covers each switch in detail, separating
+the actions from the options. It is important to note that the options
+actually need to proceed the actions when calling pax.
 
-Supervisor switches
+.B --help
+Shows helpful information about the program
+
+.B --install
+Installs pax as the default package manager in non-XiniX Linux distros. In
+this process, there is an option to configure dual or single-stage device
+bootup that can speed up the time it takes to get into the OS. See the
+'Lists and Flags' section above for more information.
+
+.B --uninstall
+Uninstalls pax as the default package manager in non-XiniX Linux distros.
+
+.B --version
+Displays the software version and exits.
+
+.B -c
+Users can simply use a graphical file manager, or the 'cp' command at a
+shell prompt to copy files. However, this would require manually tracing
+dependency trees to copy all the necessary packages required to make a
+program work correctly. This action reduces all that work into a single,
+convenient command. If no PACKAGE(S) value is passed, then all packages
+in the DIR_OPTION (or -S location) will be processed.
+
+.B -d
+There may be times when a package just needs to be downloaded so it can
+be processed in the future. This could include network update servers,
+software testing, or even pre-installed ondemand software for (device)
+deployment scenarios. Using this action allows the packages to be
+obtained before they are required.
+
+.B -e
+Similar to the -d ACTION, this switch will extract the contents of one or
+more packages to a specified location. This can be useful in situations
+where packages need to be (forensically) compared, imaging devices, or any
+other situation requiring the extraction of package files. Without passing
+a PACKAGE(S) value, all packages in the DIR_OPTION (or -S location) will
+be processed.
+It is important to note that this action will always overwrite data due to
+the underlying binary being used.
+
+.B -f
+While not a routine task, there may be times when it is useful to find the
+package that a particular file belongs to. This action will allow you to
+enter one or more files and search which local packages contains them.
+
+.B -i
+The cornerstone of all packages managers, this switch performs the actual
+installation of packages so that users don't have to find, compile, and
+install software themselves. The packages, or dependencies, can be local
+or remote. If no PACKAGE(S) value is passed, then all packages in the
+DIR_OPTION (or -S location) will be processed.
+If speed is a necessity, and all packages and their dependencies are in
+source directory, a '-D none' switch can be included to skip that check.
+
+.B -l
+To list the packages currently installed, use this switch. Currently the
+output uses a verbose 2 line per package layout containing a plethora of
+information about each package - provided the .info files are also present
+in the DIR_INST directory. Users can pass specific packages to list, or
+process all installed software without a PACKAGE(S) value.
+NOTE: There are plans to reduce this to one line in a future version.
+
+.B -m
+This switch can be used to create a package file for distribution and will
+bundle all the files in a passed directory. With the presence of a .make
+file, pax will execute it to compile software before the packaging phase
+takes place. This will enable package maintainers to include their .make
+file alongside the packaged software so anyone can easily build from
+source.
+Unlike other switches, this one can only process one package at a time. If
+no .make file is present, then the passed directory will be considered the
+root level for the package. If a .make file will be used, then it needs to
+be placed directly inside the passed directory.  The source code directory
+name is of no value to pax since that will be handled by the .make script.
+However, that script must install the software its compiled into a staging
+directory named 'project' alongside the .make file and source code.
+NOTE: There are plans to incorporate builder profiles in a future version.
+
+.B -o
+While there is not a package server manager yet, this switch will be used
+by client devices to enable remote administration of packages. This will
+enable network admins to remotely manage packages installed on devices
+under their control, including the (un)installation, updating, and repair
+of any software.
+To give the fifo a different name, you can either modify the FIFO_SERVER
+value in the config file, or pass a new name as a value to the -o switch.
+In the event that a fifo was left behind due to some type of error, a
+cleanup can be made by passing a trailing 'clear' to the pax command.
+
+.B -t
+Sometimes it is helpful to see dependency trees to packages. This switch
+enables two different views to help determine which dependency tree you
+desire. A value of 'relies' will display the tree that the package(s)
+passed rely on. Contrarily, a value of 'reliant' will show all the ones
+that rely on the package(s) passed.
+
+# DEV NOTE: you must be in the directory that contains the updates when doing '-u update' so that the -S and DIRECTORY values will still work; -S for where the existing installed package file is (in case it is not in REPO_OPTION); pwd is used to install from
+#		update: uninstalls the existing package (creating a restore point unless told not to)
+#		unload: unloads the application (and all possible dependencies) from the file system, leaving the package in the optional.list file
+#		unlist: does the same as 'unload' but also removes the packages from optional.list
+#		delete: same as unlist, but deletes the package files from REPO_SOURCE, REPO_OPTION, REPO_SYSTEM, leaving /etc files
+#		purge : same as delete, but also removes /etc files
+.B -u   uninstall package(s): update, unload, unlist, delete, purge
+
+.B -v   validate package(s) info: data, hash, deps, fix				# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
+
+.B -z   populates DIR_LIST with package files'
+
+
+
+
+.SH OPTIONS
 
 .B -C[ursor] #
 There may be times when a specific cursor should be used when the
