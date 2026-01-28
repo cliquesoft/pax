@@ -16,17 +16,11 @@ ACTIONS:
   -f   find which local package(s) a file belongs to
   -i   install package(s)
   -l   list all currently installed packages
-  -m   make a new package (requires DIRECTORY)					# this makes a new .soft package tarball based on the passed directory; 	NOTE: you can just have the .make file call builder to do all the heavy lifting
-  -o   open a fifo for (remote) communication					# this will allow remote administration; uses DIR_TEMP/input
+  -m   make a new package (requires DIRECTORY)
+  -o   open a fifo for (remote) communication
   -t   show the dependency trees of package(s): relies, reliant
-# DEV NOTE: you must be in the directory that contains the updates when doing '-u update' so that the -S and DIRECTORY values will still work; -S for where the existing installed package file is (in case it is not in REPO_OPTION); pwd is used to install from
-#		update: uninstalls the existing package (creating a restore point unless told not to)
-#		unload: unloads the application (and all possible dependencies) from the file system, leaving the package in the optional.list file
-#		unlist: does the same as 'unload' but also removes the packages from optional.list
-#		delete: same as unlist, but deletes the package files from REPO_SOURCE, REPO_OPTION, REPO_SYSTEM, leaving /etc files
-#		purge : same as delete, but also removes /etc files
   -u   uninstall package(s): update, unload, unlist, delete, purge
-  -v   validate package(s) info: data, hash, deps, fix				# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
+  -v   validate package(s) info: data, hash, deps, fix
   -z   populates DIR_LIST with package files'
 
   --help      shows this screen
@@ -35,26 +29,24 @@ ACTIONS:
   --version   displays the software version
 
 OPTIONS:
-  -B   indicates we are currently booting the system				# use this to indicate everything gets installed to root (PREFIX=/) and obtain files from REPO_SYSTEM
-  -C   specifies an alternative CPU architecture: i32, i64, r32, r64		# this allows for alternative CPU software downloads		r01 (raspi 0 and 1), r23 (raspi 2 and 3)
-# DEV NOTE: a 'source' value indicates that all dependencies need to come from a single source location (specified by -S or the default action location); this will prevent the ability to use 'all'; 'none' would only take from the specified location anyways, and 'default' grabs from wherever the package can be found
+  -B   indicates we are currently booting the system
+  -C   specifies an alternative CPU architecture: i32, i64, r32, r64
   -D   dependency handling: none, default, all, source
-  -E   include extra package files: all, code, cpio, info, list, make		# not installed by default to keep size down
-  -F   force the ACTION to take place						# NOTE: this ignores the package installed status on the existing system so if we need to download packages to another device (e.g. installing XiniX to other media) we can do so
-  -I   list of dependencies to ignore						# for example, web.de can be listed for theme uninstalls
-  -K   specifies an alternative kernel name (4.1.6_xinix)			# this allows for alternative kernel software downloads
-  -L   the list to adjust: none, boot, live					# this only is useful when installing
-  -M   defines the package install mode: copy, link (default)			# if the OS is run from RAM, then the 'copy' value will copy into RAM, if it is on a disk, then it copies to the disk
-  -N   do NOT install all files in the package, just those specified		# allows users to install desired file(s) from a package so all the contents don't get installed (to keep the system as small as possible); keeps attack vector to a minimum
+  -E   include extra package files: all, code, cpio, info, list, make
+  -F   force the ACTION to take place
+  -I   list of dependencies to ignore
+  -K   specifies an alternative kernel name (4.1.6_xinix)
+  -L   the list to adjust: none, boot, live
+  -M   defines the package install mode: copy, link (default)
+  -N   do NOT install all files in the package, just those specified
   -O   display output format: fifo, text, xml, xmLive
   -P   prompt before taking action
   -Q   quiets the output: all, errors, default, verbose, none
   -R   the action applies to restore points
-  -S   changes the source directory/repo to obtain software from			# mainly used when creating installation media to pull the files from an existing BOOT instead of an online repo
+  -S   changes the source directory/repo to obtain software from
   -T   specifies the package type: bin, dev, doc, drv, gir, lib, loc
-# DEV NOTE: can use -S and DIRECTORY to validate files on a separate hard drive (e.g. diagnostics using one computer for another computers' hard drive via USB)
   -V   the specific version of a package to install
-  -X   obtain packages via proxy using another device				# Can be used when one location has little or no Internet access. For example, @home has bad internet connection, but work is good, can dl @work for @home.
+  -X   obtain packages via proxy using another device
   -Y   performs a dry run of the action
   -Z   add color to the output
 
@@ -316,6 +308,7 @@ get loaded in the foreground, causing the bootup to wait until all have
 been loaded before continuing. For this reason, kernel drivers and other
 necessary packages should be placed here. User applications like an email
 and an office suite should be placed in LIST_LIVE.
+
 To enable this dual-phase process, this file must exist, even if it is
 blank. Its absense will indicate that all packages need to be processed
 in the traditional way, with a longer bootup.
@@ -389,7 +382,7 @@ problem with full paths as they obviously start with one. Relative paths
 can either begin with a './', end with a '/', or contain a slash within
 the value (e.g. 'some/dir').
 
-To summarize, the DIRECTORY value can be:"
+To summarize, the DIRECTORY value can be:
   o A full path: /tmp/pax/
   o Or a relative path: ./pax
     Containing a slash: dir/pax
@@ -441,10 +434,11 @@ where packages need to be (forensically) compared, imaging devices, or any
 other situation requiring the extraction of package files. Without passing
 a PACKAGE(S) value, all packages in the DIR_OPTION (or -S location) will
 be processed.
+
 It is important to note that this action will always overwrite data due to
 the underlying binary being used.
 
-.B -f
+.B -f FILES
 While not a routine task, there may be times when it is useful to find the
 package that a particular file belongs to. This action will allow you to
 enter one or more files and search which local packages contains them.
@@ -466,23 +460,34 @@ in the DIR_INST directory. Users can pass specific packages to list, or
 process all installed software without a PACKAGE(S) value.
 NOTE: There are plans to reduce this to one line in a future version.
 
-.B -m
+.B -m NAME DIRECTORY
 This switch can be used to create a package file for distribution and will
 bundle all the files in a passed directory. With the presence of a .make
 file, pax will execute it to compile software before the packaging phase
 takes place. This will enable package maintainers to include their .make
 file alongside the packaged software so anyone can easily build from
 source.
-Unlike other switches, this one can only process one package at a time. If
-no .make file is present, then the passed directory will be considered the
-root level for the package. If a .make file will be used, then it needs to
-be placed directly inside the passed directory.  The source code directory
-name is of no value to pax since that will be handled by the .make script.
-However, that script must install the software its compiled into a staging
-directory named 'project' alongside the .make file and source code.
-NOTE: There are plans to incorporate builder profiles in a future version.
 
-.B -o
+Unlike other switches, this one can only process one package at a time,
+with the PACKAGE(S) value being used as the name of the created package.
+This value can still be given in a text file, but only one name can be
+included per execution. The other mandatory value is a DIRECTORY (or -S)
+value to indicate the location of the files/source code to process.
+
+If no .make file is present, then the passed directory will be considered
+the root level for the package being created. If a .make file does exist,
+then it needs to be named using the FILE_SCHEMA syntax with a .make file
+extension, and placed directly inside the passed directory. Likewise, the
+source code directory needs to be in the same location. Its name, however,
+if of no value to pax since that will be handled by the .make script. The
+compile process must install the created software into a staging directory
+named 'project'. The layout should look like:
+   /tmp/staging/
+           PACKAGE.make
+           PACKAGE-source-code-dir/
+           project/
+
+.B -o [NAME] [clear]
 While there is not a package server manager yet, this switch will be used
 by client devices to enable remote administration of packages. This will
 enable network admins to remotely manage packages installed on devices
@@ -493,119 +498,192 @@ value in the config file, or pass a new name as a value to the -o switch.
 In the event that a fifo was left behind due to some type of error, a
 cleanup can be made by passing a trailing 'clear' to the pax command.
 
-.B -t
+.B -t VALUE
 Sometimes it is helpful to see dependency trees to packages. This switch
-enables two different views to help determine which dependency tree you
-desire. A value of 'relies' will display the tree that the package(s)
-passed rely on. Contrarily, a value of 'reliant' will show all the ones
-that rely on the package(s) passed.
+offers two different modes to show you this information. Using a value of
+'relies' will display the dependencies that the passed package(s) rely on.
+Contrarily, a value of 'reliant' will show all the packages that rely on
+the ones passed.
 
-# DEV NOTE: you must be in the directory that contains the updates when doing '-u update' so that the -S and DIRECTORY values will still work; -S for where the existing installed package file is (in case it is not in REPO_OPTION); pwd is used to install from
-#		update: uninstalls the existing package (creating a restore point unless told not to)
-#		unload: unloads the application (and all possible dependencies) from the file system, leaving the package in the optional.list file
-#		unlist: does the same as 'unload' but also removes the packages from optional.list
-#		delete: same as unlist, but deletes the package files from REPO_SOURCE, REPO_OPTION, REPO_SYSTEM, leaving /etc files
-#		purge : same as delete, but also removes /etc files
-.B -u   uninstall package(s): update, unload, unlist, delete, purge
+.B -u VALUE
+This action offers a range of uninstallation modes to handle your needs.
+The first mode, 'unload', simply uninstalls the software files from your
+device, leaving behind the config and package files for a quick reinstall.
+The 'unlist' value performs the same tasks as 'unload', but additionally
+removes the package from the LIST_LIVE (or -L list). If the software will
+no longer be used, passing a 'delete' command will unlist and delete the
+associated package files, leaving the configs untouched. To remove even
+the package config files, use a 'purge' value to completely remove all
+traces of the software from the device. Keep in mind that none of these
+commands affect any data generated by the software, only the software
+itself.
 
-.B -v   validate package(s) info: data, hash, deps, fix				# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
+The last mode, is 'update', and as the name implies it's for updating
+currently installed software to a new version. Unless overwritten, a
+restore point is generated for the old version before the new one gets
+installed. When performing this action, you need to be in the directory
+containing the update so that the -S and DIRECTORY values can operate
+as designed (the former being where the existing package file is located
+and the latter being the path were the package is installed to).
 
-.B -z   populates DIR_LIST with package files'
+To summarize:
+  o 'unload' - removes application files
+  o 'unlist' - unloads and removes LIST_LIVE (or -L) entry
+  o 'delete' - unlists and removes package files
+  o 'purge'  - deletes and removes config files
+  o 'update' - unloads current version, installs new version
+
+.B -v VALUE
+There may be times when validating package data is necessary, especially
+if software is malfunctioning. This action will enable you to validate the
+package dependencies are installed by issuing a 'deps' value. It can also
+validate that the files in a package are installed, have the appropriate
+ownership/permissions, and either symlinked to the correct target, or that
+each installed file is legitimate. Both tasks can be accomplished with a
+'data' value, however, using 'hash' will extend validation of each copied
+(not symlinked) file via hashes instead of the quicker comparison using
+file sizes. The latter mode will take a bit longer to complete. If any
+issues are found, you can use a 'fix' value to resolve them.
+
+.B -z
+This action is only useful when pax is installed in a distro using several
+package managers, but it's not configured as the exclusive default. This
+switch will sync the necessary cache files so that it can operate properly
+in the OS. Even with this switch, alternating between various managers is
+highly discouraged outside of testing environments.
 
 
 
 
 .SH OPTIONS
+To adjust the behavior of actions, you can pass one or more options with
+each execution of pax. Remember that these actually need to proceed the
+action switch!
 
-.B -C[ursor] #
-There may be times when a specific cursor should be used when the
-supervisor has focus. Using this switch will enable that functionality
-by simply passing a numeric value for the desired cursor.
+.B -B
+Used to indicate the device is booting so that packages can be processed
+as configured using either a single or dual-phase installation. This also
+sets DIRECTORY='/' and checks only REPO_SYSTEM. Users should never pass
+this flag in a live environment.
 
-.B -BG
-If you would like to make sure that the supervisor always remains in
-the background (unless manipulated via a socket or window manager
-controller such as wmctrl), then pass this switch.
+.B -C VALUE
+Specifies an alternative CPU architecture to process. This could be useful
+for mixed 32/64 bit environments, or for building the OS for a different
+target device.
 
-.B -FG
-Similar to the background switch above, this performs the same action
-but will keep the supervisor in the foreground instead.
+.B -D VALUE
+This switch controls how dependencies are processed. A value of 'none'
+will prevent this step and affect only the packages pax is instructed to
+process via a list, file, or directory. The 'default' value is the normal
+mode of operation and will process dependencies. Some packages have
+optional dependencies (e.g. documentation) that will also be processed by
+using 'all' as the value. There is an additional mode, 'source', which
+will work like 'default', but mandates that all the dependencies reside
+in the passed -S location. It is impossible to combine the functionality
+of 'all' and 'source' - at least presently.
 
-.B -E[xecute]
-In some instances, the supervisor might require some other software to
-load before it will work (e.g. webserver and web.ui).  It is important
-to remember that this call is NOT backgrounded due to fxWM checking if
-the call has success or failure.  Typically this value would be for a
-wrapper script that calls the actual binary in the background and then
-verifies things to make sure everything is working accordingly before
-returning success or failure.
+To list packages as optional in the .deps file, use the following syntax:
+   [OPTIONAL.EXT_SOFT|INSTALLLED.EXT_SOFT]
 
-.B -F[ullscreen]
-This causes the supervisor to run in fullscreen mode (without a
-titlebar), so it will consume the entire screen, or whatever has
-been specified as the screen size via the -g switch.
+Unless '-D none' is used, the search order for dependencies is:
+   REPO_SOURCE (-S), REPO_OPTION, REPO_SYSTEM, [REPO_SCHEMA]
 
-.B -M[aximized]
-Just like the -F switch, this causes the supervisor to fill the
-entire screen, but will give the supervisor a titlebar with only
-a minimize button.
+.B -E VALUE[,VALUE,...]
+In some cases a user might want more than the package files necessary
+for an installation. For example, they may want a .make file to build
+the package from source, or the .cpio file to include as part of the
+base OS. Even downloading the .info file will provide extra package
+info when using the -l action. Possible values include:
+   all  - download all additional package files
+   code - package source code
+   cpio - initial ramdisk inclusion file
+   info - package information
+   list - package manifest listing
+   make - package compile script
 
-Operational switches
+.B -F
+Be careful with the inclusion of this option as it will force the action
+to take place, even if dire consequences result!
 
-.B -h[elp]
-Shows the help screen and exits the program.
+.B -I VALUE[,VALUE,...]
+In rare cases, there may be a need to ignore a dependency from getting
+processed. For example, there may be a dependency that is still desired
+to retain after another program that relies on it has been uninstalled.
+Instead of adding a package to a flag file, this value can be passed
+during the execution of pax.
 
-.B -V[ersion]
-Shows the version number and exists the program.
+.B -K VALUE
+During normal operation, this flag would never be used since it changes
+the kernel string attached to driver packages. However, if a kernel update
+or an OS build for another device were required, this switch would become
+useful.
 
-.B -d[isplay] host:#.#
-Sets the X display and screen for fxWM to manage. Since X11 is based
-on a client/server model, this option can work with local or remote
-displays. Examples include:
-   -d 0:0.0 (default)
-   -d 0:1.0 (first additional display locally)
-   -d localhost:0.0 (another default)
-   -d 192.168.0.10:0.0 (first display for the device @ 192.168.0.10)
+.B -L VALUE
+When installing a package, the default process adds the package to the
+LIST_LIVE list. This can be foregone with a value of 'none', or placed
+in the LIST_BOOT with a 'boot' value.
 
-.B -v[isual] #
-Visual number to use (probably only works for non-color-mapped ones)
+.B -M VALUE
+Sets the mode for the installation of the package contents. The only two
+values are 'copy' and 'link', with the latter referring to maintaining a
+loopback mount to the package and symlinking its contents into the OS.
+There are several advantages with this method including conservation of
+storage space and the inability to manipulate a readonly file system.
+This doesn't mean malicious activity can't take place, since symlinks can
+be redirected, or replaced with an actual binary. But it does add some
+more barriers.
 
-.B -g[eometry] WxH+X+Y
-When this option has been passed, fxWM will act as though the screen
-is only as large as the values specified by 'W' and 'H' (in pixels),
-and will constrain windows within this area. The 'X' and 'Y' values
-correspond to the offset from the upper left-hand corner of the screen
-designating the top and left boundries where the it begins. Using the
--l or -o switches, you can further restrict the size and placement of
-application windows within the geometry specified. Starting fxWM
-without this switch will cause it to use the entire screen.
+If speed of operation is your primary goal, then you would want to use
+the 'copy' value here, which is the default. If the OS uses a ramdisk,
+then the speed is even greater than with attached storage.
 
-.B -l[imit] WxH
-This switch takes a width and height value (in pixels) and is used as
-a way to limit the area of the screen that application windows can use,
-even when they are maximized. Unlike the -o switch, this area of the
-screen will be centered which makes it useful if the supervisor needs
-to have fixed "toolbars" exposed that will never be covered by windows.
-This would typically be used when the resolution is known and will not
-be adjusted without modifying this value was well (e.g. in a device with
-an embedded display). Without specifying this switch (or -o), the entire
-size of the screen will be used. Also remember that this switch can NOT
-be used in conjunction with -o!
+.B -N VALUE[,VALUE,...]
+For instances where storage space is at a premium, security is critical
+(by miniming the attack vectors), or those that simply want the smallest
+footprint possible, this option will allow only desired files to be
+installed instead of the entire package.
 
-.B -o[ffset] T:R:B:L
-Similar to -l[imit], this switch also limits the size of maximized
-application windows, but instead of setting the dimensions, the full
-screen resolution is used with the offset being reduced from the
-specified edge(s). This is useful when the resolution of the display is
-unknown or could change at any time and also if the supervisor program
-needs any fixed "toolbars" exposed on one or more sides. A '0' value for
-any side will prevent adjustment for that edge. This can NOT be used
-in conjunction with the -l switch!
+This can also be implemented within the .deps files themselves using the
+following syntax:
+   PACKAGE.EXT_SOFT{file1,file2,file3,...}
 
-.B -c[onfine]
-If the -l or -o switches have been passed, you can use this value in
-conjunction so that windows can not be dragged outside the bounds set by
-either of those values.
+.B -O VALUE
+Another unique feature of pax is that the output can be more than just the
+default 'text'. Currently there are three other options with two of them
+related to XML. The first is just 'xml' and will display the entire result
+of the call at the end of execution. This means that the output will be
+inside either a '<s>' (success) or '<f>' (failure) tag. The second is the
+'xmLive' value that will display output as it is being processed, adding a
+'<failure>' tag in the event of a problem being encountered.
+
+The third additional option is 'fifo' that will output text to a named
+pipe file. The long term goal is to build a server/client framework for
+networks so that devices can be managed by an admin team.
+
+There are plans to also add 'json' and 'html' values in a future release.
+
+.B -P
+This switch simply prompts the user before implementing the requested
+action, showing what is going to occur in the existing output.
+
+.B -Q VALUE
+Like most software that has the option to control verbosity, this switch
+modifies the quietness of the output. Therefore, a value of 'all' will
+actually produce no output, whereas a value of 'none' would make it the
+most verbose it could be. Use 'errors' to reduce the output to only show
+encountered problems, or 'verbose' to show slightly more than the default.
+
+.B -R
+
+  -R   the action applies to restore points
+  -S   changes the source directory/repo to obtain software from			# mainly used when creating installation media to pull the files from an existing BOOT instead of an online repo
+  -T   specifies the package type: bin, dev, doc, drv, gir, lib, loc
+# DEV NOTE: can use -S and DIRECTORY to validate files on a separate hard drive (e.g. diagnostics using one computer for another computers' hard drive via USB)
+  -V   the specific version of a package to install
+#		dependency.i32.lib.soft[1.2.3]
+  -X   obtain packages via proxy using another device				# Can be used when one location has little or no Internet access. For example, @home has bad internet connection, but work is good, can dl @work for @home.
+  -Y   performs a dry run of the action
+  -Z   add color to the output
 
 .B -f[ullscreen]
 Unlike all the other switches, this one does not take a complementary
@@ -643,6 +721,8 @@ monitor the window manager for events that get triggered by the user
 so that the system can optionally perform certain desired tasks. Using
 this switch, you can control the location and name of the file which
 is /tmp/.fxwm-monitor by default.
+
+
 
 
 .SH SOCKET
@@ -731,6 +811,8 @@ State changes are accomplished using this command. Possible values are
 minimized, maximized, unmaximized, and fullscreen.
 
 
+
+
 .SH BUGS
 
 There are no known bugs as of January 2026.
@@ -739,11 +821,15 @@ Please visit our website for the latest list of opened bug reports for
 this software project - http://www.cliquesoft.org.
 
 
+
+
 .SH ACKNOWLEDGEMENTS
 
 This program is based on the various package managers currently in use
 for the many Linux distros available today. We use them as a guide to
 incorporate new features to expand the project.
+
+
 
 
 .SH COPYRIGHT
@@ -762,6 +848,8 @@ You should have received a copy of the Cliquesoft Public License v2 with the
 software itself; if not, please visit our website for the complete document:
 
    https://www.cliquesoft.org
+
+
 
 
 .SH AUTHORS

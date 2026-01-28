@@ -63,6 +63,7 @@ FLAG_BOOT='${LIST_BOOT%.*}.flag'								# the flag file that blacklists included
 FLAG_LIVE='${LIST_LIVE%.*}.flag'								# the flag file that blacklists included packages
 FLAG_COPY='copy_all.flag'									# the flag file indicating ALL packages need to be copied instead of symlinked
 FLAG_FIRM='copy_sys.flag'									# the flag file indicating ALL firmware packages (REPO_SYSTEM|LIST_BOOT) need to be copied instead of symlinked
+#FLAG_PERM=''					# VER2						# this flag indicates the packages are not reinstalled each device bootup, but have permanence between reboots (like traditional Linux installations)
 
 DIR_CONF='/etc/pax'										# directory containing any alternate/personalized configuration
 DIR_LIST='/var/cache/software/catalog'		# VER2 - merge with DIR_INST			# directory containing the total list of installed applications
@@ -853,6 +854,7 @@ copyPackage() {
 	fi
 
 	if [ "$EXTRA" ]; then
+# VER2 - expand this to be a comma separated list: if ( echo "$EXTRA" | grep -qE '^(all|code)$' ); then
 		if [ "$EXTRA" = 'all' ] || [ "$EXTRA" = 'code' ]; then
 			if [ -e "${SOURCE}/${BASENAME}.${EXT_CODE}" ]; then
 				showMsg 'file' " [code]" 'both' 0 0
@@ -1563,54 +1565,50 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo "  Usage: ${TEMP} [OPTIONS] ACTION {PACKAGE(S)|FILELIST} [DIRECTORY]"
 	echo
 	echo '  ACTIONS:'
-#	echo '	-a   '
-#	echo '	-b   '
+	#echo '	-a   '
+	#echo '	-b   '
 	echo '	-c   copy local packages to another directory'
 	echo '	-d   download package(s) only'
 	echo '	-e   extract local package(s) contents'
 	echo '	-f   find which local package(s) a file belongs to'
-#	echo '	-g   '
-#	echo '	-h   '
+	#echo '	-g   '
+	#echo '	-h   '
 	echo '	-i   install package(s)'
-#	echo '	-j   '
-#	echo '	-k   '
+	#echo '	-j   '
+	#echo '	-k   '
 # VER2 - ability to show packages that are downloaded, but not installed (e.g. -l -Q none > *package_name [* indicating is downloaded but not installed]); also '-l -Q default' just lists: package, version; '-l -Q verbose' lists the current way with all the package info
 #	have a more concise listing too: Type|Name		Version
 	echo '	-l   list all currently installed packages'
+# VER2 - if a -E value is passed with a make,bldr,code value(s), pax will download that file from the online repo (or -S) and use locally
 	echo '	-m   make a new package (requires DIRECTORY)'
 # VER2 - run as (n)etwork server: updates (for acting as a central package server for the network; every client needs to relay their packages here), manager (to manipulate software on network clients using fifo), both (performs both roles)
-#	echo '	-n   '
+	#echo '	-n   '
 # VER2 - allow these options: 'fifo' (current setup), 'ssh' (obtains a remote text file with command; secured with a key or un/pw), 'http' (obtains a remote text file with command; less secure [e.g. grandma needs help])		the latter two use -S for connection
-#	maybe move to -r(emote administration method)
+#	maybe move to -r(emote administration method); or '-n client'?
 	echo '	-o   open a fifo for (remote) communication'
 # VER2 - check for updates to installed packages (compare the version numbers in the local .list files vs ones dl'ed from repo server); use cron to do this regularly
-#	echo '	-p   process updates for installed packages'
+#	maybe institute a config variable that will limit which of these values are permissible for network security
 #			check		one-time check for updates and notifies
 #			download	one-time check and download of updates
 #			install		one-time check, download, and install of updates	  just calls 'pax -p' for the first two steps, then 'pax -u update' for the install
 #			checks(etup)	installs a cron job to routinely check and notify
 #			downloads(etup)	installs a cron job to routinely check and download
 #			installs(etup)	installs a cron job to routinely do everything
-#			deletes(etup)	deletes any existing update cron job
-#	echo '	-q   '
-#	echo '	-r   '
+#			delete		deletes any existing update cron job
+	#echo '	-p   process updates: check(s), download(s), install(s), delete'
+	#echo '	-q   '
+	#echo '	-r   '
 # VER2 - implement the below; it's like apt-search; this needs to work with both directory structure and URL submissions; make it so you can search for packages (names) or files (within a package, like the -f action but for all packages in the repo)
 #		maybe create a php file that can be used in TC repo to allow this
-#	echo '	-s   search the repo to find matches of passed term(s)'
 #		non-db queries will need to download all the manifest files and grep them to find the file
 #		db queries will need to utilize another variable REPO_QUERY specifying the URI of the script to submit the search to
+	#echo '	-s   search the repo to find matches of passed term(s)'
 	echo '	-t   show the dependency trees of package(s): relies, reliant'
-# DEV NOTE: you must be in the directory that contains the updates when doing '-u update' so that the -S and DIRECTORY values will still work; -S for where the existing installed package file is (in case it is not in REPO_OPTION); pwd is used to install from
-#		update: uninstalls the existing package (creating a restore point unless told not to)
-#		unload: unloads the application (and all possible dependencies) from the file system, leaving the package in the optional.list file
-#		unlist: does the same as 'unload' but also removes the packages from optional.list
-#		delete: same as unlist, but deletes the package files from REPO_SOURCE, REPO_OPTION, REPO_SYSTEM, leaving /etc files
-#		purge : same as delete, but also removes /etc files
 	echo '	-u   uninstall package(s): update, unload, unlist, delete, purge'
-	echo '	-v   validate package(s) info: data, hash, deps, fix'				# makes sure all data files/dirs from packages are installed, all the dependencies are installed, validate contents md5sum checks, ownership and permissions are correct; data=files,dirs,hash,owner,perms
-#	echo '	-w   '
-#	echo '	-x   '
-#	echo '	-y   '
+	echo '	-v   validate package(s) info: data, hash, deps, fix'
+	#echo '	-w   '
+	#echo '	-x   '
+	#echo '	-y   '
 	echo '	-z   populates DIR_LIST with package files'
 	echo
 	echo '	--help      shows this screen'
@@ -1619,37 +1617,36 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	--version   displays the software version'
 	echo
 	echo '  OPTIONS:'
-# VER2 - implement
-#	echo '	-A   approval code/key from the server when making purchases'			# so after the software is purchased, the code/key can be passed as authentication to download the software package(s)
-	echo '	-B   indicates we are currently booting the system'				# use this to indicate everything gets installed to root (PREFIX=/) and obtain files from REPO_SYSTEM
-	echo '	-C   specifies an alternative CPU architecture: i32, i64, r32, r64'		# this allows for alternative CPU software downloads		r01 (raspi 0 and 1), r23 (raspi 2 and 3)
-# DEV NOTE: a 'source' value indicates that all dependencies need to come from a single source location (specified by -S or the default action location); this will prevent the ability to use 'all'; 'none' would only take from the specified location anyways, and 'default' grabs from wherever the package can be found
+# VER2 - implement: so after the software is purchased, the code/key can be passed as authentication to download the software package(s)
+	#echo '	-A   approval code/key from the server when making purchases'
+	echo '	-B   indicates we are currently booting the system'
+	echo "	-C   specifies an alternative CPU architecture: $(echo "$ARCH_VALUES" | sed 's/|/, /g')"
 	echo '	-D   dependency handling: none, default, all, source'
-	echo '	-E   include extra package files: all, code, cpio, info, list, make'		# not installed by default to keep size down
-	echo '	-F   force the ACTION to take place'						# NOTE: this ignores the package installed status on the existing system so if we need to download packages to another device (e.g. installing XiniX to other media) we can do so
-#	echo '	-G   '
-#	echo '	-H   '
-	echo '	-I   list of dependencies to ignore'						# for example, web.de can be listed for theme uninstalls
-#	echo '	-J'
-	echo '	-K   specifies an alternative kernel name (4.1.6_xinix)'			# this allows for alternative kernel software downloads
-	echo '	-L   the list to adjust: none, boot, live'					# this only is useful when installing
-	echo '	-M   defines the package install mode: copy, link (default)'			# if the OS is run from RAM, then the 'copy' value will copy into RAM, if it is on a disk, then it copies to the disk
-	echo '	-N   do NOT install all files in the package, just those specified'		# allows users to install desired file(s) from a package so all the contents don't get installed (to keep the system as small as possible); keeps attack vector to a minimum
+# VER2 - add .bldr as an option to -E
+	echo '	-E   include extra package files: all, code, cpio, info, list, make'
+	echo '	-F   force the ACTION to take place'
+	#echo '	-G   '
+	#echo '	-H   '
+	echo '	-I   list of dependencies to ignore'
+	#echo '	-J'
+	echo '	-K   specifies an alternative kernel name (4.1.6_xinix)'
+	echo '	-L   the list to adjust: none, boot, live'
+	echo '	-M   defines the package install mode: copy, link (default)'
+	echo '	-N   do NOT install all files in the package, just those specified'
 # VER2 - implement the 'html' and 'json' values
 	echo '	-O   display output format: fifo, text, xml, xmLive'
 	echo '	-P   prompt before taking action'
 # VER2 - 'default' just shows the final action (without the header), verbose shows the current 'default', 'none' shows everything - duplicates, etc	-OR- add a 'brief' value to just show the final action
 	echo '	-Q   quiets the output: all, errors, default, verbose, none'
 	echo '	-R   the action applies to restore points'
-	echo '	-S   changes the source directory/repo to obtain software from'			# mainly used when creating installation media to pull the files from an existing BOOT instead of an online repo
+	echo '	-S   changes the source directory/repo to obtain software from'
 	echo '	-T   specifies the package type: bin, dev, doc, drv, gir, lib, loc'
-#	echo '	-U   '
-# DEV NOTE: can use -S and DIRECTORY to validate files on a separate hard drive (e.g. diagnostics using one computer for another computers' hard drive via USB)
+	#echo '	-U   '
 	echo '	-V   the specific version of a package to install'
-#	echo '	-W'
+	#echo '	-W'
 # VER2 - proxy other actions via ssh so that administrators can push software to clients, or reinstall/delete software that's currently installed
 #	enable the scripts to be ssh'ed to Internet connected devices?
-	echo '	-X   obtain packages via proxy using another device'				# Can be used when one location has little or no Internet access. For example, @home has bad internet connection, but work is good, can dl @work for @home.
+	echo '	-X   obtain packages via proxy using another device'
 	echo '	-Y   performs a dry run of the action'
 	echo '	-Z   add color to the output'
 	echo
