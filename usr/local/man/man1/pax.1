@@ -35,7 +35,7 @@ OPTIONS:
   -E   include extra package files: all, code, cpio, info, list, make
   -F   force the ACTION to take place
   -I   list of dependencies to ignore
-  -K   specifies an alternative kernel name (4.1.6_xinix)
+  -K   specifies an alternative kernel name
   -L   the list to adjust: none, boot, live
   -M   defines the package install mode: copy, link (default)
   -N   do NOT install all files in the package, just those specified
@@ -59,7 +59,7 @@ OPTIONS:
 3.  PARAMETERS
 4.  ACTIONS
 5.  OPTIONS
-6.  SOCKET			examples?
+6.  EXAMPLES
 7.  BUGS
 8.  ACKNOWLEDGEMENTS
 9.  COPYRIGHT
@@ -351,6 +351,16 @@ called after all packages are loaded. If the value contains the variable
 ${PACKAGE}, then it will be called once for every package passed into pax.
 In its absence, the command will be called once.
 
+.B DEBUG
+To see everything that takes place while pax is being executed, set this
+value to 1. A pax.debug log will be produced containing a plethora of
+information. Setting this value to 2 will additional prompt before any
+actual system changes take place.
+
+.B COLORS
+If you like colored output, then set this to 'TRUE' and avoid having to
+pass the -Z switch every time.
+
 
 
 
@@ -490,9 +500,12 @@ named 'project'. The layout should look like:
 .B -o [NAME] [clear]
 While there is not a package server manager yet, this switch will be used
 by client devices to enable remote administration of packages. This will
-enable network admins to remotely manage packages installed on devices
+be accomplished by using a value similar to:
+   FIFO_SERVER='/sshfs/directory/device_NIC_MAC'
+to enable network admins to remotely manage packages installed on devices
 under their control, including the (un)installation, updating, and repair
 of any software.
+
 To give the fifo a different name, you can either modify the FIFO_SERVER
 value in the config file, or pass a new name as a value to the -o switch.
 In the event that a fifo was left behind due to some type of error, a
@@ -551,6 +564,11 @@ package managers, but it's not configured as the exclusive default. This
 switch will sync the necessary cache files so that it can operate properly
 in the OS. Even with this switch, alternating between various managers is
 highly discouraged outside of testing environments.
+
+If there are packages whose contents are installed some place other than
+root, home, or DIR_LIVE, and have no installation marker, then make sure
+to enter the root-level directory containing those files before executing
+this action so that the packages can be properly processed.
 
 
 
@@ -641,7 +659,9 @@ then the speed is even greater than with attached storage.
 For instances where storage space is at a premium, security is critical
 (by miniming the attack vectors), or those that simply want the smallest
 footprint possible, this option will allow only desired files to be
-installed instead of the entire package.
+installed instead of the entire package. Using this switch will imply a
+'-D none' value, so make sure that any lib packages necessary for the
+desired files are also installed.
 
 This can also be implemented within the .deps files themselves using the
 following syntax:
@@ -658,7 +678,14 @@ inside either a '<s>' (success) or '<f>' (failure) tag. The second is the
 
 The third additional option is 'fifo' that will output text to a named
 pipe file. The long term goal is to build a server/client framework for
-networks so that devices can be managed by an admin team.
+networks so that devices can be managed by an admin team using this
+interface. Please note, that when using this value, the fifo must be
+managed by the calling script or binary, and must use DIR_TEMP/output as
+its location. This may be updated in future versions.
+
+Since there may be a race condition while processing parameters, this one
+should always be the first in the list to ensure the output is in the
+format desired.
 
 There are plans to also add 'json' and 'html' values in a future release.
 
@@ -673,142 +700,167 @@ actually produce no output, whereas a value of 'none' would make it the
 most verbose it could be. Use 'errors' to reduce the output to only show
 encountered problems, or 'verbose' to show slightly more than the default.
 
-.B -R
+Since there may be a race condition while processing parameters, this one
+should always be the first or second (if -O is also passed) in the list to
+ensure the output is in the format desired.
 
-  -R   the action applies to restore points
-  -S   changes the source directory/repo to obtain software from			# mainly used when creating installation media to pull the files from an existing BOOT instead of an online repo
-  -T   specifies the package type: bin, dev, doc, drv, gir, lib, loc
-# DEV NOTE: can use -S and DIRECTORY to validate files on a separate hard drive (e.g. diagnostics using one computer for another computers' hard drive via USB)
-  -V   the specific version of a package to install
-#		dependency.i32.lib.soft[1.2.3]
-  -X   obtain packages via proxy using another device				# Can be used when one location has little or no Internet access. For example, @home has bad internet connection, but work is good, can dl @work for @home.
-  -Y   performs a dry run of the action
-  -Z   add color to the output
+.B -R VALUE
+Without this flag, whatever action is passed works with the active local
+or remote repo for packages. There may be instances where packages from
+the restore points are desired. For example, lets say that a package got
+updated on the device and now there's an issue. Until that issue can be
+resolved, the user may want to rollback to their prior installation. To
+accomplish this, the user simply needs to run pax with an appropriate -R
+restore point value and the '-u update' action.
 
-.B -f[ullscreen]
-Unlike all the other switches, this one does not take a complementary
-value and specifies that all application windows will operate in
-fullscreen mode (no titlebar). This is helpful when fxWM is used as the
-window manager on smaller devices such as smart phones and tablets that
-do not allow windows to be dragged around the screen.
+Another example may be where a user (accidentally) deleted software from
+their device and now needs it replaced. This can be reversed by issuing
+the -R switch with the corresponding restore point name and the -i action.
 
-.B -m[aximized]
-As the name suggests, this switch will force each application window to
-run in a maximized state. The difference between this switch and -f is
-that each application window will contain a titlebar.
+To view all the restore points use "-R '*' -l". To view the list within a
+date, specify "-R 'YYYY-MM-DD' -l", or to see the packages contained in a
+certain restore point, use "-R 'YYYY-MM-DD/Restore Point Name' -l". To
+remove certain restore points, use the '-u {delete|purge}' action with the
+date or complete path value for -R, to delete a group or individual point
+respectively.
 
-.B -i[con] DIR
-When the user presses the Alt+Tab buttons, a window will popup showing
-all the running applications. Using this switch, you can let fxWM know
-the directory that should be used to locate the appropriate application
-icon. By default, a sub-directory with the requested icon size (rounded
-up) is checked and if no matching icon is found, it will check in the
-root of the DIR directory for a match. In the absense of that icon, a
-generic icon will be used in its place. So, for example, if the icon
-size was specified as 90px, then the window manager will check for a
-"128x128/?.png" graphic (since 128x128 is the closest, rounded up size)
-and then for a "./?.png" file. If neither exist, then a generic icon
-will be used as a last resort.
+To summarize:
+   o This option works with the -i, -l, and -u actions.
+   o The prevent creating a restore point use '-R none' with -u
+   o The format with -i is: 'YYYY-MM-DD/Restore Point Name'
+   o The format with -l is: '*' or 'YYYY-MM-DD[/Restore Point Name]'
+   o The format with -u is: 'YYYY-MM-DD[/Restore Point Name]'
 
-.B -s[ocket] FILE
-By default, a socket file to manipulate this window manager is created
-and found at /tmp/.fxwm-control. If you would like to use a different
-path and filename, you can use this switch to specify that information.
+.B -S VALUE
+This switch changes the source location where the action obtains the
+necessary packages. Depending on the action, this value may be a local
+or network directory, or a remote repo (beginning with 'http' or 'ftp').
 
-.B -p[ipe] FILE
-Similar to the socket file mentioned above, this fifo enables you to
-monitor the window manager for events that get triggered by the user
-so that the system can optionally perform certain desired tasks. Using
-this switch, you can control the location and name of the file which
-is /tmp/.fxwm-monitor by default.
+An interesting use of the -V, -S, and DIRECTORY values may be to perform
+dianostics on an attached hard drive from another device.
+
+.B -T VALUE
+To prevent typing the full name of each package, this switch will fill in
+this portion of the package name automatically. For example, lets say you
+want to install the alsa-lib package. You can do so by using either the
+full package name '-i alsa-lib' or '-T lib -i alsa'. This switch becomes
+more pratical for a longer list of package names. Please note that all
+packages listed must be of the same type.
+
+.B -V VALUE
+Sometimes unknown bugs are discovered once software is released to the
+public, causing productivity issues. In this instance it is helpful to be
+able to install a prior version, even temporarily until the problem can be
+resolved. Using this switch will accomplish that task. The value to pass
+will vary between distros as some may use actual software version numbers,
+others may use values corresponding to releases of their OS. And like the
+-m action, this one can also only process one package at a time.
+
+This can also be implemented within the .deps files themselves using the
+following syntax:
+   PACKAGE.EXT_SOFT[1.2.3]
+
+.B -X VALUE
+Another unique feature of pax is the ability to proxy certain actions from
+one device to another. This may be useful in situations where there is an
+air gap between devices for security, or this may come in handy where the
+Internet connection at a location is slow or intermittent but better at
+another one.
+
+This switch requires a value corresponding to the removable media mount
+point so the pax command can be executed on another device. Once written,
+plug the media in the other device and execute the 'proxy.sh' script found
+in the 'pax' directory. Please note that the other device needs to also be
+running Linux, or have the ability to process shell scripts. After running
+the script, take the media back to the original device and run that same
+script again. This will install the desired packages automatically.
+
+Currently this switch can only work with the -c, -d, and -i actions.
+
+.B -Y
+If you want to see exactly what is going to take place before running the
+actual command, use this switch to perform a dryrun. To get a complete log
+of what will take place, add the '-Q none' switch and/or set DEBUG=1 in
+the config file.
+
+.B -Z
+This switch simply adds color to the output.
 
 
 
 
-.SH SOCKET
+.SH EXAMPLES
 
-This window manager does allow interaction through the use of sockets
-and will allow you manipulate various aspects of the environment using
-software like socat or netcat. We will cover all the available actions
-below but wanted to demonstrate two examples:
-	echo 'list' | ncat -U /tmp/.fxwm-control
-	echo 'activate 0x80024c' | socat - /tmp/.fxwm-control
+The below list shows various examples for using pax. This list is not
+exhaustive and does not indicate modifications using any options.
 
-Single Actions
+Performing action with all packages [to current directory]:
+     ${TEMP} -{ceilt}
+Performing action with specific packages [to current directory]:
+     ${TEMP} -{cdeilt} package1 package2
+Performing action with package list [to current directory]:
+     ${TEMP} -{cdeilt} packages.txt
+Performing action with specific packages to/in a specified directory:
+     ${TEMP} -{cdeilt} package1 package2 /target/path
+Performing action with a package list to/in a specified directory:
+     ${TEMP} -{cdeilt} packages.txt /target/path
+Performing action with specific packages from/in a specified directory:
+     ${TEMP} -S {URL|/source/path} -{cdeilt} package1 package2
+Performing action with a package list from/in a specified directory:
+     ${TEMP} -S {URL|/source/path} -{cdeilt} packages.txt
+Performing action with all packages between specified directories:
+     ${TEMP} -S {URL|/source/path} -{cdei} /target/path
+Performing action with a package list between specified directories:
+     ${TEMP} -S {URL|/source/path} -{cdei} packages.txt /target/path
 
-.B list
-Passing this action will provide a list of all the software currently
-opened in the graphical environment and will be in the following format
-that is separated by tabs:
-
-<Window ID>[<Active>] <Desktop ID> <Host> <Binary> <Window Title>
-
-It is important to note that the active window will have an asterisk
-character (*) following its <Window ID>.
-
-.B activate <Window ID>
-To bring a desired window into the foreground with focus, pass this
-action through the current socket file.
-
-.B close <Window ID>
-As the name suggests, this will close the window associated with the
-passed ID.
-
-.B resize <Window ID> WxH
-Resize any window with this command while passing the new width and
-height desired.
-
-.B move <Window ID> 0+0
-This action will allow you to move a window around the screen via the
-X and Y coordinates passed.
-
-.B BG <Window ID>
-Issuing this command will keep the specified window in the background.
-
-.B FG <Window ID>
-This action works just like the 'BG' command, but will foreground.
-
-.B chrome
-To update chrome adjustments without having to restart fxWM, simply
-issue this command to the socket.
-
-.B disable
-Used to disable all window manager functionality (e.g. screen locking).
-
-.B enable
-Re-enables all the window manager functionality from a 'disable' call.
-
-.B alert "Closable|Icon Path|App Name|Alert Title|Alert Message|Command"
-Sends a popup notification to the user so they can be informed of events
-or to quickly perform some type of pre-defined action. It is important
-to note that you can pass null values to prevent usage or to use default
-values. Also, valid 'closable' values are: 0 or false, 1 or true.
-
-Multi-Actions
-
-.B get/set offset [<0:0:0:0>]
-Allows you to get or set the global window offset.
-
-.B get/set limit [<WxH>]
-To limit the screen area available for windows, issue this action.
-
-.B get/set confine [<0,1>]
-Used to get or set the confine parameter.
-
-.B get/set <Window ID> title [<String>]
-To get or set a windows title, use this action. If you are setting the
-title, you will need to pass the last value shown above.
-
-.B get/set <Window ID> icon [<Path+Filename>]
-Gets or sets the titlebar icon of the desired window.
-
-.B get/set <Window ID> titlebar [<Path+Filename> <String>]
-You can get or set both of the afore mentioned actions in a single
-attempt with this command.
-
-.B get/set <Window ID> state [<String>]
-State changes are accomplished using this command. Possible values are
-minimized, maximized, unmaximized, and fullscreen.
+Find files in available packages:
+     ${TEMP} -f file1 file2
+Find files in available packages from a filelist:
+     ${TEMP} -f files.txt
+Find files in packages within a specified directory:
+     ${TEMP} -f file1 file2 /source/path
+     ${TEMP} -S /source/path -f file1 file2
+Install a specific version:
+     ${TEMP} -V 1.2.3 -i package
+Install a package from a valid restore point:
+     ${TEMP} -R 'YYYY-MM-DD/Restore Point' -i package
+List all restore points:
+     ${TEMP} -R '*' -l
+List all restore points in a valid date:
+     ${TEMP} -R 'YYYY-MM-DD' -l
+List all packages in a valid restore point:
+     ${TEMP} -R 'YYYY-MM-DD/Restore Point' -l
+Make a package for distribution:
+     ${TEMP} -m package /path/containing/{package|source}
+     ${TEMP} -S /path/containing/{package|source} -m package
+     ${TEMP} -S /path/containing/{package|source} -m file
+Open a fifo to operate pax:
+     ${TEMP} -o
+Open a fifo to operate pax in a specified directory:
+     ${TEMP} -o /path/to/fifo
+     ${TEMP} -S /path/to/fifo -o
+Open a fifo to operate pax using a specific fifo:
+     ${TEMP} -o name
+Open a fifo to operate pax, clearing a prior failure:
+     ${TEMP} -o clear
+Open a fifo to operate pax, clearing and using specific fifo:
+     ${TEMP} -o name clear
+Proxy a download:
+     ${TEMP} -X /mnt/sdb1 -d package1 package2
+Proxy an install:
+     ${TEMP} -X /mnt/sdb1 -i package1 package2
+Unload a package:
+     ${TEMP} -u unload package
+Uninstall a package, leaving configs:
+     ${TEMP} -u delete package
+Uninstall a package, including configs too:
+     ${TEMP} -u purge package
+Uninstall a package, without a restore point:
+     ${TEMP} -R none -u delete package
+Update a package (uninstall old, install new):
+     ${TEMP} -u update package
+Delete a restore point(s):
+     ${TEMP} -R 'DATE[/Restore Point]' -u {delete|purge}
 
 
 

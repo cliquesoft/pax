@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/23 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/29 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -46,13 +46,6 @@
 
 
 
-# PREVENT CONTAMINATION
-
-unset COPY DOWNLOAD EXTRACT FIND INSTALL LIST MAKE OPEN TREE UNLOAD VALIDATE BOOTING ARCH DEPS EXTRA FORCE IGNORE KERNEL PACKLIST MODE FILELIST OUTPUT PROMPT QUIET RESTORE REPO_SOURCE TYPE VERSION PROXY DRYRUN
-
-
-
-
 # DEFAULT VARIABLE DEFINITIONS
 
 DEBUG=0												# NOTE: making this a '2' will enable prompts
@@ -89,12 +82,12 @@ LOG_ERRS="${DIR_LOGS}/pax.log"									# the log file for error output
 OWN_GROUP='staff'										# the default 'everyone' group that all non-admin users belong (used for default group ownership on package files/dirs)
 OWN_SYSTEM='root:root'										# the ownership of the REPO_SYSTEM directory
 PRM_SYSTEM='770'										# the permissions of the REPO_SYSTEM directory
-						# DEV NOTE - document the below as being able to connect to a "pax server" for remote administration (e.g. FIFO_SERVER='/sshfs/directory/device_nic_mac')
+
 FIFO_SERVER="input"										# defines the default name that the -o action should attach for (remote) commands
 ARCH_VALUES='i32|i64|a32|a64'									# the valid values for the -C option
 
 ARCH_SCHEMA="$(uname -m | sed -r 's/i386|i686/i32/;s/x86_64/i64/;s/armv7l/r32/')"		# this can be used so the .deps files can be universal - bash.ARCH.bin.soft
-FILE_SCHEMA='${PACKAGE}.${TYPE}.${ARCH}'							# the format for the package filenames		NOTE: encase in single quotes so variables are NOT expanded yet
+FILE_SCHEMA='${PACKAGE}.${TYPE}.${ARCH}'	# VER2 - add in optional (e.g. ${PACKAGE}[-${TYPE}])	# the format for the package filenames		NOTE: encase in single quotes so variables are NOT expanded yet
 KRNL_SCHEMA="$(uname -r | sed 's/-/_/g')"							# store the currently used kernel version (substituting '-' for '_')
 REPO_SCHEMA='http://repo.cliquesoft.org/vanilla/1.0/${PACKAGE/_${KERNEL}}'			# the format for remote repo package access	NOTE: save as above
 VERS_SCHEMA='${VERSION}.${TYPE}.${ARCH}'							# the format of the versioned package name in the source remote repo (when -V is used)
@@ -170,24 +163,24 @@ OPEN=''
 TREE=''
 UNLOAD=''
 VALIDATE=''
-					# DEV NOTE: document these variable names so they can be used in scripting (or config file naming conventions)
+
 # [options]
 BOOTING=''
-ARCH=''												# stores the value of the ARCH_SCHEMA
+ARCH=''												# NOTE: stores the value of the ARCH_SCHEMA
 DEPS=''
 EXTRA=''
 FORCE=''
 IGNORE=''
-KERNEL=''											# stores the currently used kernel string
+KERNEL=''
 PACKLIST=''
-MODE=''												# the install mode: (sym)link, copy	NOTE: this is auto configured in the body
+MODE=''												# NOTE: this is auto configured in the body
 FILELIST=''
-OUTPUT='text'											# the output format to display: fifo, text, xml, xmLive
+OUTPUT='text'
 PROMPT=''
-QUIET='default'											# the verbosity of the output: none, errors, default, verbose, all
+QUIET='default'
 RESTORE=''
-REPO_SOURCE=''											# if the user passed a new source via -S; defaults to REPO_OPTION if not passed			NOTE: we can NOT define a default value here since it may be different in a config file
-TYPE='bin'											# the package type: bin dev doc drv gir lib loc	  NOTE: we're specifying the default value here
+REPO_SOURCE=''											# NOTE: we can NOT define a default value here since it may be different in a config file
+TYPE='bin'
 VERSION=''
 PROXY=''
 DRYRUN=''
@@ -640,8 +633,7 @@ processDependencies() {
 	if [ ! "$BOOTING" ] && ( grep -qwE ^"${PACKAGE}|${FILENAME}"$ "${REPO_PREFIX}/${FLAG_LIVE}" 2>/dev/null ); then				# if the package (by its PACKAGE name -or- complete FILENAME) IS listed as being flagged to not load, then...
 		showMsg 'dependency' "[ flagged ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		showMsg 'failure' "The package is flagged from being loaded." 'log'
-# DEV NOTE: you can force an install to just skip processing the overall request
-		if [ "$FORCE" ]; then
+		if [ "$FORCE" ]; then														# NOTE: you can force an action to prevent the script from exiting with failure
 			return 0
 		else
 			showMsg 'failure' "The package is flagged from being loaded." 'log'
@@ -707,7 +699,6 @@ processDependencies() {
 		showMsg 'dependency' "[ account ] {COLOR}(${FILETYPE}) ${INDENT}${PACKAGE}" 'both' 1 1
 		return 0															# NOTE: we don't exit with failure since this could just be a dependency and left installed
 	}
-# DEV NOTE: the REPO_OPTION directory can no longer contain 0-byte REPO_SYSTEM files; everything needs to go into REPO_LIST/BASENAME[.list|info|hash|deps]
 	# if we're unloading, but not updating -AND- we're not forcing (e.g. pax --uinstall) -AND- the package has a 'base os' marker (e.g. TinyCore) -OR- ( the package exists in DIR_LIST -AND- we're working in REPO_OPTION -AND- the package does NOT exist there (since it would be in REPO_SYSTEM), then...
 	[ "$UNLOAD" ] && [ "$UNLOAD" != 'update' ] && [ ! "$FORCE" ] && ( [ -e "${DIR_LIST}/${BASENAME}.${EXT_CORE}" ] || ( [ -e "${DIR_LIST}/${BASENAME}" ] && [ "$DIRECTORY" = "$REPO_OPTION" ] && [ ! -e "${REPO_OPTION}/${FILENAME}" ] ) ) && {
 		[ $DEBUG -gt 0 ] && echo -e "\tWARNING:    The package is part of the core OS and can't be modified." >>"$LOG_DBUG"
@@ -1604,6 +1595,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #		db queries will need to utilize another variable REPO_QUERY specifying the URI of the script to submit the search to
 	#echo '	-s   search the repo to find matches of passed term(s)'
 	echo '	-t   show the dependency trees of package(s): relies, reliant'
+# LEFT OFF - make sure the "-R '...' -u update" will restore the packages from a restore point
 	echo '	-u   uninstall package(s): update, unload, unlist, delete, purge'
 	echo '	-v   validate package(s) info: data, hash, deps, fix'
 	#echo '	-w   '
@@ -1629,12 +1621,12 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	#echo '	-H   '
 	echo '	-I   list of dependencies to ignore'
 	#echo '	-J'
-	echo '	-K   specifies an alternative kernel name (4.1.6_xinix)'
+	echo '	-K   specifies an alternative kernel name'
 	echo '	-L   the list to adjust: none, boot, live'
 	echo '	-M   defines the package install mode: copy, link (default)'
 	echo '	-N   do NOT install all files in the package, just those specified'
 # VER2 - implement the 'html' and 'json' values
-	echo '	-O   display output format: fifo, text, xml, xmLive'
+	echo '	-O   display output format: fifo, text (default), xml, xmLive'
 	echo '	-P   prompt before taking action'
 # VER2 - 'default' just shows the final action (without the header), verbose shows the current 'default', 'none' shows everything - duplicates, etc	-OR- add a 'brief' value to just show the final action
 	echo '	-Q   quiets the output: all, errors, default, verbose, none'
@@ -1835,7 +1827,7 @@ else
 	# PROCESS PASSED PARAMETERS
 
 	TEMP=0
-	while getopts BcC:dD:eE:fFiI:K:lL:mM:N:oO:PQ:R:S:t:T:u:v:V:X:YzZ OPTION; do		# NOTE: the 'V:' indicates that the '-V' parameter requires a value!
+	while getopts BcC:dD:eE:fFiI:K:lL:mM:N:oO:PQ:R:S:t:T:u:v:V:X:YzZ OPTION; do		# NOTE: the ':' indicates that the parameter requires a value!
 		( echo $OPTION | grep -qe '[a-z]' ) && TEMP=1					# if we've reached an ACTION, then...
 		if [ $TEMP -gt 0 ] && ( echo $OPTION | grep -qe '[A-Z]' ); then			# if an ACTION was already processed -AND- we've reached an OPTION, then...
 			showMsg 'failure' "All OPTIONS must preceed the ACTION." 'screen'
@@ -1908,7 +1900,6 @@ else
 				exit 1
 			   }
 			   QUIET="$OPTARG" ;;
-# DEV NOTE: -R acts in place of -S; '*' means show all
 			R) ( echo "${OPTARG}" | grep -qe ^'\-.' ) && {				# checks if something like 'pax -R -l' was entered
 				showMsg 'failure' "You must provide a proper value to the -R option." 'screen'
 				exit 1
@@ -1953,8 +1944,6 @@ else
 			   }
 			   PROXY="$OPTARG" ;;
 			Y) DRYRUN=TRUE ;;
-# DEV NOTE: -z must be called for any non-consecutive package manager call to make sure the files represent an up-to-date system (e.g. if pax is used to install something, then tce-load is, the catalog list with become out-of-sync and pax could malfunction)
-#	if a package is in a non-standard directory (e.g. HOME, LIVE, ROOT), then cd into the directory containing those files to be picked up by this action (since we can't process DIRECTORY here)
 			z) # we're booting the device -AND- there's a single package repo (e.g. TinyCore), then make a marker file indicating the package is part of the core OS
 			   if [ "$BOOTING" ] && [ "$REPO_SYSTEM" = "$REPO_OPTION" ]; then
 				for BASENAME in $(ls -1 "$DIR_LIST"); do
@@ -1971,6 +1960,7 @@ else
 			   showMsg 'action' "Clearing any prior -z action contents:" 'screen' 0 3
 			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_HASH}
 			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_DEPS}
+			   [ ! "$DRYRUN" ] && rm -f "${DIR_LIST}/"*.${EXT_INFO}
 			   showMsg 'action' " [done]" 'screen' 1 5
 
 			   # (re-)sync the package contents
@@ -2033,9 +2023,8 @@ else
 	done
 
 
-# DEV NOTE: indicate that this can be set via config file (COLORS=TRUE) to always show
 	# PROCESS COLORS
-	if [ "$COLORS" ] && [ "$OUTPUT" = 'text' ]; then
+	if [ "$COLORS" ] && [ "$OUTPUT" = 'text' ]; then					# NOTE: the COLORS variable is a config file setting
 		NORMAL="\e[0m"
 		BLINK="\e[5m"
 		INVERSE="\e[7m"
@@ -3020,6 +3009,7 @@ exitGracefully 0 'both' 6 'success'
 #	dependency.i32.lib.soft[=1.2.3] or [1.2.3!]	(implemented)	package requires this exact version of this dependency and will fail if not currently installed; useful for upgrading web.de themes to make sure web.de itself is at a certain version for compatibility
 #	dependency.i64.bin.soft|dependency2.i64.bin.soft|...		package requires any of these dependencies (e.g. thttpd,apache,paged,...)	NOTE: should be in order of preference by OEM; (e.g. TC - size to keep overall size of system down)
 #	dependency.i64.bin.soft{file1,file2,file3,...}			package requires only certain files from the dependency
+#	[dependency.r64.drv.soft|optional.i64.bin.soft] > dependency.r64.drv.soft(optional.i64.bin.soft)	update the syntax for optional
 
 # ask where to install: system (/), everyone (/Users/Public/.{bin|sbin|lib|...}), personal (/Users/$USER/.{bin|sbin|lib|...})		NOTE: there are no sbin's any more; also /Users/Public is for system-wide usage WITHOUT having elevated installation credentials (compared to system installations to /)
 # implement a personal list/repo where individual users can have their software loaded upon logging in (and unloaded upon logging out)

@@ -490,3 +490,10 @@
 - Continued creating the man page
 - Updated the --help output
 
+2026/01/29
+- Continued creating the man page
+- Removed some comments from within pax now that the man page is being created
+- Removed unsetting of variables at the top since all are initialized anyways
+- Updated the --help output
+- Adjusted a file deletion with the -z action
+
