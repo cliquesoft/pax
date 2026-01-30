@@ -2,7 +2,7 @@
 # pax		the package installation script for pax in TinyCore Linux
 #
 # created	2026/01/13 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/16 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/30 by Dave Henderson (support@cliquesoft.org)
 
 
 # Usage syntax: getBootcode CODE
@@ -17,6 +17,7 @@ getBootcode() {
 
 # read in a config file(s)
 [ -e "/etc/pax/config" ] && . "/etc/pax/config"							# read in a global config file
+[ -e "/usr/local/etc/pax/config" ] && . "/usr/local/etc/pax/config"				# read in a global config file
 [ -e "${HOME}/.pax/config" ] && . "${HOME}/.pax/config"						# read in a personalized config file - using LSB
 [ -e "${HOME}/.etc/pax/config" ] && . "${HOME}/.etc/pax/config"					# read in a personalized config file - using XSB
 

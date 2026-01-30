@@ -1,10 +1,11 @@
 name:		pax
-title:		A very robust and versatile package manager for Linux distros
+title:		The XiniX Package Manager
+description:	A lightweight, versatile package manager
 authors:	Cliquesoft
 homepage:	https://www.cliquesoft.org
-packaged:	2026.01.22
-released:	2026.01.22
-version:	2026.01.22.1
+packaged:	2026.01.30
+released:	2026.01.30
+version:	2026.01.30.1
 git:		https://github.com/cliquesoft/pax/
 commit:		8c709d554413293d28a7a0267641612576c470a3
 download:	https://www.cliquesoft.org/official/vanilla/1.0/pax
@@ -13,13 +14,14 @@ source:		stable.code
 builder:	stable.bldr
 compile:	stable.make
 category:	system
+rating:		g
 interface:	cli
 license:	CPLv2
 licenseURI:	https://www.cliquesoft.org/#Licenses
 maintainer:	wysiwyg
 tags:		pax package manager copy extract download dependency trees fifo client find proxy actions install uninstall unload unlist validate
-overview:	A very robust and versatile package manager for Linux distros
-		that enables a user to perform various operations such as:
+overview:	A lightweight, versatile package manager for Linux distros that
+		enables a user to perform various operations such as:
 		copy, extract, download, find which package a file belongs to,
 		install/uninstall/unload (different package versions) to
 		specified locations, list installed packages, make packages
@@ -35,7 +37,7 @@ comments:	This is a more feature full and efficient package manager than
 		added. Patches or donations are welcome and will expedite
 		future updates. Features include:
 		- Concise package listing (instead of current 2 line)
-		- An 'html' output option
+                - A 'json' and 'html' output option
 		- More proxy actions
 		- A graphical interface
 		- Automated package checking/downloading/updating

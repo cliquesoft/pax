@@ -497,3 +497,11 @@
 - Updated the --help output
 - Adjusted a file deletion with the -z action
 
+2026/01/30
+- Added the ability to use /usr/local/DIR_CONF/config
+- Updated the install script to check for the new config location
+- Updated the tc-install script to check for the new config location
+- Updated the tc-uninstall script to check for the new config location
+- Created the TinyCore .info file
+- Added several fields to the XiniX .info file
+

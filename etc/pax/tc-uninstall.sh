@@ -2,7 +2,7 @@
 # tc-uninstall	the uninstallation script for pax in TinyCore Linux
 #
 # created	2026/01/13 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/16 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/30 by Dave Henderson (support@cliquesoft.org)
 
 
 # Usage syntax: getBootcode CODE
@@ -17,6 +17,7 @@ getBootcode() {
 
 # read in a global config file
 [ -e "/etc/pax/config" ] && . "/etc/pax/config"
+[ -e "/usr/local/etc/pax/config" ] && . "/usr/local/etc/pax/config"
 
 # obtain list values
 eval LIST_BOOT="$LIST_BOOT"

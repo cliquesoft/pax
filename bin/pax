@@ -3,7 +3,7 @@
 #		(pre-compiled) software packages for the (XiniX) OS
 #
 # created	2016/08/08 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/29 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/01/30 by Dave Henderson (support@cliquesoft.org)
 #
 # Unless a valid Cliquesoft Private License (CPLv1) has been purchased for your
 # device, this software is licensed under the Cliquesoft Public License (CPLv2)
@@ -1535,9 +1535,10 @@ uninstallPackage() {
 
 # LOAD VARIABLE PERSONALIZATION
 
-[ -e "${DIR_CONF}/config" ] && . "${DIR_CONF}/config"												# overwrite any default variable values set at the top
-[ -e "${HOME}/.$(echo "${DIR_CONF}" | tail -c +2)/config" ] && . "${HOME}/.$(echo "${DIR_CONF}" | tail -c +2)/config"				# same using a personalized config file - using XSB
-[ -e "${HOME}/.${DIR_CONF##*/}/config" ] && . "${HOME}/.${DIR_CONF##*/}/config"									# same using a personalized config file - using LSB
+[ -e "${DIR_CONF}/config" ] && . "${DIR_CONF}/config"												# System-wide config, overwriting any default variable values set at the top
+[ -e "/usr/local/${DIR_CONF}/config" ] && . "/usr/local/${DIR_CONF}/config"									# ditto as alternate location
+[ -e "${HOME}/.$(echo "${DIR_CONF}" | tail -c +2)/config" ] && . "${HOME}/.$(echo "${DIR_CONF}" | tail -c +2)/config"				# ditto as personalized config file - using XSB
+[ -e "${HOME}/.${DIR_CONF##*/}/config" ] && . "${HOME}/.${DIR_CONF##*/}/config"									# ditto as personalized config file - using LSB
 
 
 
@@ -2257,7 +2258,6 @@ if ( [ "$DOWNLOAD" ] || [ "$INSTALL" ] ) && ( [ "$DIRECTORY" = '/' ] || ( [ ! "$
 	touch "${REPO_SYSTEM}/writable" >/dev/null 2>&1 || { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) is not writable." 'screen'; exit 1; }
 	rm "${REPO_SYSTEM}/writable" >/dev/null 2>&1
 
-# VER2 - replace the below 'stat' calls with something else to reduce the dependency on coreutils
 	[ "$(stat -c %a "$REPO_SYSTEM" 2>/dev/null)" != "$PRM_SYSTEM" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid permissions." 'screen'; exit 1; }
 	[ "$(stat -c %U "$REPO_SYSTEM" 2>/dev/null)" != "${OWN_SYSTEM%:*}" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid owner ownership." 'screen'; exit 1; }
 	[ "$(stat -c %G "$REPO_SYSTEM" 2>/dev/null)" != "${OWN_SYSTEM#*:}" ] && { showMsg 'failure' "The system package storage directory (REPO_SYSTEM) has invalid group ownership." 'screen'; exit 1; }
@@ -2416,6 +2416,7 @@ for PARAMETER in $@; do
 		showMsg 'action' "Searching for '${PACKAGE}' in packages..." 'both' 1 4		# NOTE: we store to the log so if any error occurs, we know what it relates to (the rest of this section can just show to the screen)
 		for FILE in $(ls -1 *.${EXT_SOFT}); do
 			[ $(stat -c %s $FILE) -eq 0 ] && continue				#   skip all 0 byte files (since they can just be placeholders); this really shouldn't come into play in this location, but better safe than sorry
+# VER2 - maybe mount the package and search instead of unsquashfs (to remove dependency)
 			unsquashfs -ll $FILE | tail -n +5 | grep -v ^d | sed 's:.*/::' | grep -q "$PACKAGE" && {
 				showMsg 'package' "   $FILE" 'screen' 1 4 1
 				showMsg 'file' "$(unsquashfs -ll "$FILE" | tail -n +5 | grep -v ^d | sed 's/.*squashfs-root/      /' | grep "$PACKAGE")" 'screen' 1 2 1
@@ -2457,6 +2458,7 @@ for PARAMETER in $@; do
 
 		showMsg 'step' "   [2/4] Creating the .${EXT_SOFT} file:" 'both' 0 3
 		[ -d "${DIRECTORY}/package" ] && TEMP='package' || TEMP='./'			# if the compiled software call above created a 'package' directory then use it to create the packages below, otherwise use the directory that was passed
+# VER2 - check for mksquashfs before performing this action and alert the user if it's not found - to remove dependency?
 		mksquashfs "${TEMP}" "${FILENAME}" >>"$LOG_ERRS" 2>&1 || exitGracefully 4 'both' 5 'step'
 		showMsg 'step' " [done]" 'both' 1 5
 

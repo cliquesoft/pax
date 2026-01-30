@@ -4,29 +4,60 @@
 # created	2026/01/14 by Dave Henderson (support@cliquesoft.org)
 # updated	2026/01/15 by Dave Henderson (support@cliquesoft.org)
 
-EXT_SOFT='tcz'
+EXT_DEPS='tcz.dep'
 EXT_HASH='tcz.md5.txt'
+EXT_INFO='tcz.info'
 EXT_LIST='tcz.list'
+EXT_SOFT='tcz'
 PROJECT='pax'
 STAGING='/tmp/package'
 LOG=/tmp/package.log
 
+[ $(id -u) -gt 0 ] && {
+	echo
+	echo "ERROR: You need to run this script with 'sudo' or as root."
+	echo
+	exit
+}
+
+echo -n 'Creating staging directory:'
 [ ! -d "$STAGING" ] && mkdir "$STAGING"
 rm -Rf "${STAGING}/"*
+echo ' [done]'
 
-cp -dpR bin etc usr "$STAGING"
-#sudo chown -R 0:50 "${STAGING}/"*		can't perform this step as the user
+echo -n 'Copying package files:'
+cp pax.tcz.* "${STAGING}/.."			# NOTE: the trailing '/..' goes one level higher
+cp -dpR usr "$STAGING"				# copy the /usr directory over
+cp -dpR bin etc "${STAGING}/usr/local"		# place these two directories inside /usr/local for TC compliance
+echo ' [done]'
+
+echo -n 'Making package adjustments:'
+chown -R 0:50 "${STAGING}/"*			# NOTE: can't perform this step as the user, so this script needs to be run as root
 cd "$STAGING"
-cd etc/pax
+cd usr/local/etc/pax				# NOTE: this is a separate command so we can use 'cd -'
 ln -sf tc-install.sh install
 ln -sf tc-uninstall.sh uninstall
 ln -sf tc.conf config
+echo ' [done]'
+
+echo -n 'Making the various packages:'
 cd - >/dev/null
-mksquashfs "./" "../pax.tcz" -b 4096 >>"$LOG" 2>&1 || exit 1
+mksquashfs "./" "../pax.${EXT_SOFT}" -b 4096 >>"$LOG" 2>&1 || exit 1
+echo -n ' [soft]'
+
+find "./" -not -type d 2>>"$LOG" | sed "s|^./||" >../"${PROJECT}.${EXT_LIST}" 2>>"$LOG" || exit 1
+echo -n ' [list]'
+
 cd ..
 md5sum "${PROJECT}.${EXT_SOFT}" >"${PROJECT}.${EXT_HASH}" 2>>"$LOG" || exit 1
-cd - >/dev/null
-find "./" -not -type d 2>>"$LOG" | sed "s|^./||" >../"${PROJECT}.${EXT_LIST}" 2>>"$LOG" || exit 1
+echo ' [hash] [done]'
+
+echo -n 'Making the email tarball:'
+tar czf pax.tar.gz pax.tcz*
+echo ' [done]'
+
+echo "Encrypting it; use the password 'tinycore' below..."
+bcrypt pax.tar.gz
 
 echo -e "\nThe package has been created!\nDon't forget to create/update the .deps and .info files!\n"
 
