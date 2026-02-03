@@ -7,17 +7,18 @@ packaged:	2026.01.30
 released:	2026.01.30
 version:	2026.01.30.1
 git:		https://github.com/cliquesoft/pax/
-commit:		8c709d554413293d28a7a0267641612576c470a3
+commit:		002b43725c2879675caccf749520cf5e5bbe91c3
 download:	https://www.cliquesoft.org/official/vanilla/1.0/pax
 package:	stable.soft
 source:		stable.code
 builder:	stable.bldr
 compile:	stable.make
+size:		106K
 category:	system
 rating:		g
 interface:	cli
 license:	CPLv2
-licenseURI:	https://www.cliquesoft.org/#Licenses
+document:	https://www.cliquesoft.org/#Licenses
 maintainer:	wysiwyg
 tags:		pax package manager copy extract download dependency trees fifo client find proxy actions install uninstall unload unlist validate
 overview:	A lightweight, versatile package manager for Linux distros that
@@ -45,7 +46,6 @@ comments:	This is a more feature full and efficient package manager than
 		- A centralized update server
 		- A network server to push/manipulate packages to/on clients
 		- Ability to process .deb (and other) package types
-		- Update the code to reduce reliance on coreutils
 		- Update the code to rely on squashfs-tools ondemand
 		Feature requests can be sent to: service@cliquesoft.org
 		  [OTHER PROJECTS]

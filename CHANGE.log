@@ -505,3 +505,7 @@
 - Created the TinyCore .info file
 - Added several fields to the XiniX .info file
 
+2026/02/03
+- Updated package script to make packages for XiniX, TC, and generic
+- Updated the default values for DIR_INIT and DIR_INST
+

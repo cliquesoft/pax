@@ -60,8 +60,8 @@ FLAG_FIRM='copy_sys.flag'									# the flag file indicating ALL firmware packag
 
 DIR_CONF='/etc/pax'										# directory containing any alternate/personalized configuration
 DIR_LIST='/var/cache/software/catalog'		# VER2 - merge with DIR_INST			# directory containing the total list of installed applications
-DIR_INIT='/var/cache/software/services'		# VER2 - change to /etc/init.d (works inconjunction with DIR_LIVE)			# directory containing daemon/service scripts
-DIR_INST='/var/cache/software/scripts'		# VER2 - remove the '/scripts' dir		# directory containing other software scripts (taken from /etc/envars)
+DIR_INIT='/etc/init.d'				# VER2 - works inconjunction with DIR_LIVE	# directory containing daemon/service scripts
+DIR_INST='/var/cache/software'									# directory containing other software scripts (taken from /etc/envars)
 DIR_LIVE='/Users/Public/.'									# directory to install by default after bootup	NOTE: this needs to end with a '/' or '.' (so that the packages files can be (un)installed from home directories)
 DIR_LOGS='/var/log'
 DIR_LOOP='/Mounts/.software'									# directory that symlinked software needs to use as mountpoint
@@ -1565,6 +1565,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 	echo '	-f   find which local package(s) a file belongs to'
 	#echo '	-g   '
 	#echo '	-h   '
+# VER2 - show the amount of drive space that will be used by installing the package(s) (which is only useful if not use '-M link'); also default to downloading the .info file by default since it's used pretty commonly
 	echo '	-i   install package(s)'
 	#echo '	-j   '
 	#echo '	-k   '
@@ -1596,6 +1597,7 @@ if [ "$1" = '--help' ]; then									# displays ACTION and OPTION help for this 
 #		db queries will need to utilize another variable REPO_QUERY specifying the URI of the script to submit the search to
 	#echo '	-s   search the repo to find matches of passed term(s)'
 	echo '	-t   show the dependency trees of package(s): relies, reliant'
+# VER2 - show the amount of drive space that will be freed (if '-M copy' and/or '-R none -u {delete|purge})'
 # LEFT OFF - make sure the "-R '...' -u update" will restore the packages from a restore point
 	echo '	-u   uninstall package(s): update, unload, unlist, delete, purge'
 	echo '	-v   validate package(s) info: data, hash, deps, fix'

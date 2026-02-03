@@ -2,23 +2,60 @@
 # package	the script to package pax for various Linux distros
 #
 # created	2026/01/14 by Dave Henderson (support@cliquesoft.org)
-# updated	2026/01/15 by Dave Henderson (support@cliquesoft.org)
+# updated	2026/02/03 by Dave Henderson (support@cliquesoft.org)
 
-EXT_DEPS='tcz.dep'
-EXT_HASH='tcz.md5.txt'
-EXT_INFO='tcz.info'
-EXT_LIST='tcz.list'
-EXT_SOFT='tcz'
+( [ ! "$1" ] || [ "$1" = '--help' ] ) && {
+	echo
+	echo "Usage: ${0##*/} DISTRO"
+	echo
+	echo "Specify the target Linux distro to package for: generic, tc, xinix"
+	echo
+	exit
+}
+
+[ $(id -u) -gt 0 ] && {
+	echo
+	echo "ERROR: This script needs to run with elevated privileges."
+	echo "       Try using the root account or running with 'sudo'."
+	echo
+	exit
+}
+
+( echo "$1" | grep -qE ^'(generic|tc|xinix)'$ ) || {
+	echo
+	echo "ERROR: The valid values for DISTRO are: generic, tc, xinix"
+	echo
+	exit
+}
+
+
+
+
+if [ "$1" = 'generic' ]; then
+	EXT_DEPS='deps'
+	EXT_HASH='hash'
+	EXT_INFO='info'
+	EXT_LIST='list'
+	EXT_SOFT='tgz'
+elif [ "$1" = 'tc' ]; then
+	EXT_DEPS='tcz.dep'
+	EXT_HASH='tcz.md5.txt'
+	EXT_INFO='tcz.info'
+	EXT_LIST='tcz.list'
+	EXT_SOFT='tcz'
+elif [ "$1" = 'xinix' ]; then
+	EXT_DEPS='bin.all.deps'
+	EXT_HASH='bin.all.hash'
+	EXT_INFO='bin.all.info'
+	EXT_LIST='bin.all.list'
+	EXT_SOFT='bin.all.soft'
+fi
 PROJECT='pax'
 STAGING='/tmp/package'
 LOG=/tmp/package.log
 
-[ $(id -u) -gt 0 ] && {
-	echo
-	echo "ERROR: You need to run this script with 'sudo' or as root."
-	echo
-	exit
-}
+
+
 
 echo -n 'Creating staging directory:'
 [ ! -d "$STAGING" ] && mkdir "$STAGING"
@@ -26,23 +63,47 @@ rm -Rf "${STAGING}/"*
 echo ' [done]'
 
 echo -n 'Copying package files:'
-cp pax.tcz.* "${STAGING}/.."			# NOTE: the trailing '/..' goes one level higher
-cp -dpR usr "$STAGING"				# copy the /usr directory over
-cp -dpR bin etc "${STAGING}/usr/local"		# place these two directories inside /usr/local for TC compliance
+if [ "$1" = 'generic' ] || [ "$1" = 'tc' ]; then
+	# NOTE: the trailing '/..' goes one level higher
+	[ "$1" = 'generic' ] && cp -pL ${PROJECT}.${EXT_DEPS} "${STAGING}/.."
+	[ "$1" = 'generic' ] && cp -pL ${PROJECT}.${EXT_INFO} "${STAGING}/.."
+	[ "$1" = 'tc' ] && cp -p ${PROJECT}.${EXT_SOFT}.* "${STAGING}/.."
+	cp -pLR usr "$STAGING"					# copy the /usr directory over
+	cp -pLR bin etc "${STAGING}/usr/local"			# place these two directories inside /usr/local for TC compliance
+elif [ "$1" = 'xinix' ]; then
+	cp ${PROJECT}.${EXT_DEPS} "${STAGING}/.."
+	cp ${PROJECT}.${EXT_INFO} "${STAGING}/.."
+	cp -dpR bin etc var "$STAGING"
+fi
 echo ' [done]'
 
 echo -n 'Making package adjustments:'
-chown -R 0:50 "${STAGING}/"*			# NOTE: can't perform this step as the user, so this script needs to be run as root
-cd "$STAGING"
-cd usr/local/etc/pax				# NOTE: this is a separate command so we can use 'cd -'
-ln -sf tc-install.sh install
-ln -sf tc-uninstall.sh uninstall
-ln -sf tc.conf config
+if [ "$1" = 'generic' ]; then
+	chown -R 1000:1000 "${STAGING}/"*			# NOTE: can't perform this step as the user, so this script needs to be run as root
+	cd "$STAGING"
+	cd usr/local/etc/${PROJECT}				# NOTE: this is a separate command so we can use 'cd -'
+	rm -f config
+	rm -f testing.conf
+elif [ "$1" = 'tc' ]; then
+	chown -R 0:50 "${STAGING}/"*
+	cd "$STAGING"
+	cd usr/local/etc/${PROJECT}
+	ln -sf tc-install.sh install
+	ln -sf tc-uninstall.sh uninstall
+	ln -sf tc.conf config
+elif [ "$1" = 'xinix' ]; then
+	#chown -R 0:90 "${STAGING}/"*				# LEFT OFF - implement this once XiniX gets its own users/groups
+	cd "$STAGING"
+	cd etc/${PROJECT}
+	ln -sf xinix.conf config				# LEFT OFF - this is only good while XiniX uses TC's package repo
+	rm -f t*
+fi
 echo ' [done]'
 
 echo -n 'Making the various packages:'
 cd - >/dev/null
-mksquashfs "./" "../pax.${EXT_SOFT}" -b 4096 >>"$LOG" 2>&1 || exit 1
+[ "$1" = 'generic' ] && ( tar czf "../${PROJECT}.${EXT_SOFT}" . >>"$LOG" 2>&1 || exit 1 )
+[ "$1" != 'generic' ] && ( mksquashfs "./" "../${PROJECT}.${EXT_SOFT}" -b 4096 >>"$LOG" 2>&1 || exit 1 )
 echo -n ' [soft]'
 
 find "./" -not -type d 2>>"$LOG" | sed "s|^./||" >../"${PROJECT}.${EXT_LIST}" 2>>"$LOG" || exit 1
@@ -52,12 +113,14 @@ cd ..
 md5sum "${PROJECT}.${EXT_SOFT}" >"${PROJECT}.${EXT_HASH}" 2>>"$LOG" || exit 1
 echo ' [hash] [done]'
 
-echo -n 'Making the email tarball:'
-tar czf pax.tar.gz pax.tcz*
-echo ' [done]'
+if [ "$1" = 'tc' ]; then
+	echo -n 'Making the email tarball:'
+	tar czf ${PROJECT}.tar.gz ${PROJECT}.${EXT_SOFT}*
+	echo ' [done]'
 
-echo "Encrypting it; use the password 'tinycore' below..."
-bcrypt pax.tar.gz
+	echo "Encrypting it; use the password 'tinycore' below..."
+	bcrypt ${PROJECT}.tar.gz
+fi
 
 echo -e "\nThe package has been created!\nDon't forget to create/update the .deps and .info files!\n"
 
